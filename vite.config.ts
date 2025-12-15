@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     minify: false,
     commonjsOptions: { transformMixedEsModules: true },
+    rollupOptions: { external: ["@privy-io/react-auth"] },
   },
   optimizeDeps: {
     include: [
@@ -39,5 +40,6 @@ export default defineConfig(({ mode }) => ({
       "os-browserify",
       "mersenne-twister",
     ],
+    exclude: ["@privy-io/react-auth"],
   },
 }));
