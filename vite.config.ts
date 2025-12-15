@@ -31,6 +31,10 @@ export default defineConfig(({ mode }) => ({
         manualChunks: (id) => {
           // Split node polyfills into separate chunk
           if (id.includes("node_modules")) {
+            // Keep React and React-DOM in vendor chunk to ensure they're available to all chunks
+            if (id.includes("react") || id.includes("react-dom")) {
+              return "vendor";
+            }
             if (
               id.includes("crypto-browserify") ||
               id.includes("stream-browserify") ||
@@ -63,6 +67,8 @@ export default defineConfig(({ mode }) => ({
   },
   optimizeDeps: {
     include: [
+      "react",
+      "react-dom",
       "buffer",
       "process",
       "crypto-browserify",
