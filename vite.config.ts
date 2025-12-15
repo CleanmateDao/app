@@ -27,11 +27,7 @@ export default defineConfig(({ mode }) => ({
     commonjsOptions: { transformMixedEsModules: true },
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      external: [
-        "@privy-io/react-auth",
-        "@walletconnect/utils",
-        "vm-browserify",
-      ],
+      external: ["@walletconnect/utils", "vm-browserify"],
       output: {
         manualChunks: (id) => {
           // Split node polyfills into separate chunk
