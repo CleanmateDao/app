@@ -25,12 +25,45 @@ export default defineConfig(({ mode }) => ({
   build: {
     minify: "esbuild",
     commonjsOptions: { transformMixedEsModules: true },
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       external: [
         "@privy-io/react-auth",
         "@walletconnect/utils",
         "vm-browserify",
       ],
+      output: {
+        manualChunks: (id) => {
+          // Split node polyfills into separate chunk
+          if (id.includes("node_modules")) {
+            if (
+              id.includes("crypto-browserify") ||
+              id.includes("stream-browserify") ||
+              id.includes("http-browserify") ||
+              id.includes("https-browserify") ||
+              id.includes("os-browserify") ||
+              id.includes("buffer") ||
+              id.includes("util")
+            ) {
+              return "polyfills";
+            }
+            // Split large UI libraries
+            if (id.includes("@radix-ui") || id.includes("@chakra-ui")) {
+              return "ui-libs";
+            }
+            // Split other large dependencies
+            if (
+              id.includes("@tiptap") ||
+              id.includes("recharts") ||
+              id.includes("framer-motion")
+            ) {
+              return "editor-charts";
+            }
+            // Default vendor chunk
+            return "vendor";
+          }
+        },
+      },
     },
   },
   optimizeDeps: {
