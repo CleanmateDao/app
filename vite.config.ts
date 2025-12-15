@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    minify: false,
+    minify: "esbuild",
     commonjsOptions: { transformMixedEsModules: true },
     rollupOptions: {
       external: [
