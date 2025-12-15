@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  User, 
-  MapPin, 
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  User,
+  MapPin,
   Wallet,
   ArrowRight,
   ArrowLeft,
@@ -11,101 +11,174 @@ import {
   Sparkles,
   Trophy,
   Target,
-  Leaf
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Badge } from '@/components/ui/badge';
+  Leaf,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { toast } from 'sonner';
-import africanPattern from '@/assets/african-pattern-decorative.jpg';
-import africanMask from '@/assets/african-mask.jpg';
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import africanPattern from "@/assets/african-pattern-decorative.jpg";
+import africanMask from "@/assets/african-mask.jpg";
+import { uploadOnboardingToIPFS } from "@/services/ipfs";
+import {
+  useSetOnboardingData,
+  useRegisterUser,
+  useRegisterWithReferral,
+} from "@/services/contracts/mutations";
+import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useSearchParams } from "react-router-dom";
+import { useUser } from "@/services/subgraph/queries";
 
 export interface OnboardingData {
   // Profile
   fullName: string;
   email: string;
   bio: string;
-  
+
   // Location
   country: string;
   city: string;
-  
+
   // Interests
   interests: string[];
-  
+
   // Wallet
   walletAddress: string;
-  
+
   // Referral
   referralCode: string;
-  
+
   // Terms
   agreeTerms: boolean;
 }
 
 const initialData: OnboardingData = {
-  fullName: '',
-  email: '',
-  bio: '',
-  country: '',
-  city: '',
+  fullName: "",
+  email: "",
+  bio: "",
+  country: "",
+  city: "",
   interests: [],
-  walletAddress: '',
-  referralCode: '',
+  walletAddress: "",
+  referralCode: "",
   agreeTerms: false,
 };
 
 const steps = [
-  { id: 1, title: 'Profile', icon: User, description: 'Tell us about yourself' },
-  { id: 2, title: 'Location', icon: MapPin, description: 'Where will you organize cleanups?' },
-  { id: 3, title: 'Wallet', icon: Wallet, description: 'Get rewarded for your impact' },
+  {
+    id: 1,
+    title: "Profile",
+    icon: User,
+    description: "Tell us about yourself",
+  },
+  {
+    id: 2,
+    title: "Location",
+    icon: MapPin,
+    description: "Where will you organize cleanups?",
+  },
+  {
+    id: 3,
+    title: "Wallet",
+    icon: Wallet,
+    description: "Get rewarded for your impact",
+  },
 ];
 
 const countries = [
-  'Nigeria', 'Kenya', 'South Africa', 'Ghana', 'Tanzania', 'Uganda', 'Ethiopia',
-  'Rwanda', 'Senegal', 'Cameroon', 'United States', 'United Kingdom', 'Germany',
-  'France', 'Canada', 'Australia', 'India', 'Brazil', 'Mexico', 'Other'
+  "Nigeria",
+  "Kenya",
+  "South Africa",
+  "Ghana",
+  "Tanzania",
+  "Uganda",
+  "Ethiopia",
+  "Rwanda",
+  "Senegal",
+  "Cameroon",
+  "United States",
+  "United Kingdom",
+  "Germany",
+  "France",
+  "Canada",
+  "Australia",
+  "India",
+  "Brazil",
+  "Mexico",
+  "Other",
 ];
 
 const interestOptions = [
-  'Beach Cleanup', 'Urban Cleanup', 'Nature Conservation', 'Recycling',
-  'Community Events', 'Wildlife Protection', 'Water Conservation',
-  'Tree Planting', 'Waste Management', 'Education & Awareness'
+  "Beach Cleanup",
+  "Urban Cleanup",
+  "Nature Conservation",
+  "Recycling",
+  "Community Events",
+  "Wildlife Protection",
+  "Water Conservation",
+  "Tree Planting",
+  "Waste Management",
+  "Education & Awareness",
 ];
 
 const achievements = [
-  { icon: Leaf, label: 'First Cleanup', description: 'Organize your first cleanup event' },
-  { icon: Target, label: '10 Participants', description: 'Have 10 people join your cleanup' },
-  { icon: Trophy, label: 'Impact Leader', description: 'Earn 1000 B3TR tokens' },
+  {
+    icon: Leaf,
+    label: "First Cleanup",
+    description: "Organize your first cleanup event",
+  },
+  {
+    icon: Target,
+    label: "10 Participants",
+    description: "Have 10 people join your cleanup",
+  },
+  {
+    icon: Trophy,
+    label: "Impact Leader",
+    description: "Earn 1000 B3TR tokens",
+  },
 ];
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const walletAddress = useWalletAddress();
   const [currentStep, setCurrentStep] = useState(1);
-  const [data, setData] = useState<OnboardingData>(initialData);
+  const [data, setData] = useState<OnboardingData>(() => {
+    // Check for referral code in URL
+    const refCode = searchParams.get("ref");
+    return { ...initialData, referralCode: refCode || "" };
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const { data: existingUser } = useUser(walletAddress);
+  const userExists = !!existingUser;
+
+  const setOnboardingDataMutation = useSetOnboardingData();
+  const registerUserMutation = useRegisterUser();
+  const registerWithReferralMutation = useRegisterWithReferral();
 
   const progress = (currentStep / steps.length) * 100;
 
   const updateData = (updates: Partial<OnboardingData>) => {
-    setData(prev => ({ ...prev, ...updates }));
+    setData((prev) => ({ ...prev, ...updates }));
   };
 
   const toggleInterest = (interest: string) => {
     if (data.interests.includes(interest)) {
-      updateData({ interests: data.interests.filter(i => i !== interest) });
+      updateData({ interests: data.interests.filter((i) => i !== interest) });
     } else {
       updateData({ interests: [...data.interests, interest] });
     }
@@ -113,33 +186,105 @@ export default function Onboarding() {
 
   const handleNext = () => {
     if (currentStep < steps.length) {
-      setCurrentStep(prev => prev + 1);
+      setCurrentStep((prev) => prev + 1);
     }
   };
 
   const handleBack = () => {
     if (currentStep > 1) {
-      setCurrentStep(prev => prev - 1);
+      setCurrentStep((prev) => prev - 1);
     }
   };
 
   const handleComplete = async () => {
+    if (!walletAddress) {
+      toast.error("Wallet not connected");
+      return;
+    }
+
+    // Validate required fields
+    if (!data.fullName || !data.email || !data.agreeTerms) {
+      toast.error("Please fill in all required fields");
+      return;
+    }
+
     setIsSubmitting(true);
-    
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    localStorage.setItem('onboardingComplete', 'true');
-    localStorage.setItem('userProfile', JSON.stringify(data));
-    
-    toast.success('Welcome, Cleanup Champion! Start organizing your first cleanup.');
-    setIsSubmitting(false);
-    navigate('/dashboard');
+
+    try {
+      // Prepare user metadata (for contract)
+      const userMetadata = JSON.stringify({
+        fullName: data.fullName,
+        bio: data.bio,
+        country: data.country,
+        city: data.city,
+        interests: data.interests,
+      });
+
+      // Step 1: Register user on blockchain (only one contract call)
+      if (userExists) {
+        toast.error(
+          "User already registered. Please use Settings to update your profile."
+        );
+        return;
+      }
+
+      toast.info("Registering on blockchain...");
+      if (data.referralCode) {
+        await registerWithReferralMutation.mutateAsync({
+          metadata: userMetadata,
+          email: data.email,
+          referralCode: data.referralCode,
+        });
+      } else {
+        await registerUserMutation.mutateAsync({
+          metadata: userMetadata,
+          email: data.email,
+        });
+      }
+
+      // Step 2: Upload onboarding data to IPFS (only after successful registration)
+      toast.info("Uploading onboarding data to IPFS...");
+      const onboardingData = {
+        fullName: data.fullName,
+        email: data.email,
+        bio: data.bio,
+        country: data.country,
+        city: data.city,
+        interests: data.interests,
+        walletAddress: data.walletAddress || walletAddress,
+        referralCode: data.referralCode,
+        agreeTerms: data.agreeTerms,
+      };
+
+      const ipfsHash = await uploadOnboardingToIPFS(onboardingData);
+
+      // Step 3: Save onboarding IPFS hash to contract
+      toast.info("Saving onboarding data...");
+      await setOnboardingDataMutation.mutateAsync(ipfsHash);
+
+      localStorage.setItem("onboardingComplete", "true");
+      localStorage.setItem("userProfile", JSON.stringify(data));
+
+      toast.success(
+        "Welcome, Cleanup Champion! Start organizing your first cleanup."
+      );
+      navigate("/dashboard");
+    } catch (error) {
+      console.error("Error completing onboarding:", error);
+      toast.error(
+        error instanceof Error
+          ? `Failed to complete onboarding: ${error.message}`
+          : "Failed to complete onboarding"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleSkip = () => {
-    localStorage.setItem('onboardingComplete', 'true');
-    toast.info('You can complete your profile anytime in Settings.');
-    navigate('/dashboard');
+    localStorage.setItem("onboardingComplete", "true");
+    toast.info("You can complete your profile anytime in Settings.");
+    navigate("/dashboard");
   };
 
   const canProceed = () => {
@@ -159,16 +304,16 @@ export default function Onboarding() {
     <div className="min-h-screen bg-background flex flex-col">
       {/* Header with African Pattern */}
       <header className="sticky top-0 z-50 mx-4 mt-4">
-        <div 
+        <div
           className="relative rounded-xl overflow-hidden"
-          style={{ 
+          style={{
             backgroundImage: `url(${africanPattern})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
+            backgroundSize: "cover",
+            backgroundPosition: "center",
           }}
         >
           <div className="absolute inset-0 bg-background/85 backdrop-blur-sm" />
-          
+
           <div className="relative max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
@@ -177,13 +322,17 @@ export default function Onboarding() {
               <div>
                 <div className="flex items-center gap-2">
                   <div className="w-1.5 h-6 bg-primary rounded-full" />
-                  <h1 className="text-lg font-semibold tracking-tight">Become a Cleanup Champion</h1>
+                  <h1 className="text-lg font-semibold tracking-tight">
+                    Become a Cleanup Champion
+                  </h1>
                 </div>
-                <p className="text-xs text-muted-foreground ml-3.5">Step {currentStep} of {steps.length}</p>
+                <p className="text-xs text-muted-foreground ml-3.5">
+                  Step {currentStep} of {steps.length}
+                </p>
               </div>
             </div>
-            <Button 
-              variant="ghost" 
+            <Button
+              variant="ghost"
               size="sm"
               onClick={handleSkip}
               className="text-muted-foreground hover:text-foreground"
@@ -197,34 +346,42 @@ export default function Onboarding() {
       {/* Compact Progress & Step Indicators */}
       <div className="max-w-4xl mx-auto px-6 py-3 w-full">
         <Progress value={progress} className="h-1.5" />
-        
+
         <div className="flex justify-between mt-3 gap-4">
           {steps.map((step) => {
             const Icon = step.icon;
             const isActive = step.id === currentStep;
             const isComplete = step.id < currentStep;
-            
+
             return (
               <button
                 key={step.id}
                 onClick={() => step.id < currentStep && setCurrentStep(step.id)}
                 className={`flex items-center gap-2 transition-all ${
-                  step.id <= currentStep ? 'cursor-pointer' : 'cursor-default'
+                  step.id <= currentStep ? "cursor-pointer" : "cursor-default"
                 }`}
                 disabled={step.id > currentStep}
               >
-                <div className={`w-5 h-5 flex items-center justify-center transition-all ${
-                  isComplete ? 'text-primary' : isActive ? 'text-primary' : 'text-muted-foreground'
-                }`}>
+                <div
+                  className={`w-5 h-5 flex items-center justify-center transition-all ${
+                    isComplete
+                      ? "text-primary"
+                      : isActive
+                      ? "text-primary"
+                      : "text-muted-foreground"
+                  }`}
+                >
                   {isComplete ? (
                     <Check className="w-4 h-4" />
                   ) : (
                     <Icon className="w-4 h-4" />
                   )}
                 </div>
-                <span className={`text-xs font-medium hidden sm:block ${
-                  isActive ? 'text-foreground' : 'text-muted-foreground'
-                }`}>
+                <span
+                  className={`text-xs font-medium hidden sm:block ${
+                    isActive ? "text-foreground" : "text-muted-foreground"
+                  }`}
+                >
                   {step.title}
                 </span>
               </button>
@@ -246,8 +403,12 @@ export default function Onboarding() {
             >
               {/* Step Header */}
               <div className="mb-8">
-                <h2 className="text-2xl font-semibold">{steps[currentStep - 1].title}</h2>
-                <p className="text-muted-foreground mt-1">{steps[currentStep - 1].description}</p>
+                <h2 className="text-2xl font-semibold">
+                  {steps[currentStep - 1].title}
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  {steps[currentStep - 1].description}
+                </p>
               </div>
 
               {/* Step 1: Profile */}
@@ -255,9 +416,9 @@ export default function Onboarding() {
                 <div className="space-y-6">
                   {/* Gamification Hero */}
                   <div className="relative rounded-2xl overflow-hidden">
-                    <img 
-                      src={africanMask} 
-                      alt="African art" 
+                    <img
+                      src={africanMask}
+                      alt="African art"
                       className="w-full h-32 object-cover"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
@@ -267,8 +428,12 @@ export default function Onboarding() {
                           <Trophy className="w-6 h-6 text-primary" />
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-foreground">Join 5,000+ organizers</p>
-                          <p className="text-xs text-muted-foreground">Making impact across Africa</p>
+                          <p className="text-sm font-medium text-foreground">
+                            Join 5,000+ organizers
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Making impact across Africa
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -282,7 +447,9 @@ export default function Onboarding() {
                           id="fullName"
                           placeholder="Your name"
                           value={data.fullName}
-                          onChange={(e) => updateData({ fullName: e.target.value })}
+                          onChange={(e) =>
+                            updateData({ fullName: e.target.value })
+                          }
                         />
                       </div>
 
@@ -293,7 +460,9 @@ export default function Onboarding() {
                           type="email"
                           placeholder="you@example.com"
                           value={data.email}
-                          onChange={(e) => updateData({ email: e.target.value })}
+                          onChange={(e) =>
+                            updateData({ email: e.target.value })
+                          }
                         />
                       </div>
 
@@ -309,16 +478,23 @@ export default function Onboarding() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="referralCode">Referral Code (Optional)</Label>
+                        <Label htmlFor="referralCode">
+                          Referral Code (Optional)
+                        </Label>
                         <Input
                           id="referralCode"
                           placeholder="Enter referral code"
                           value={data.referralCode}
-                          onChange={(e) => updateData({ referralCode: e.target.value.toUpperCase() })}
+                          onChange={(e) =>
+                            updateData({
+                              referralCode: e.target.value.toUpperCase(),
+                            })
+                          }
                           className="uppercase"
                         />
                         <p className="text-xs text-muted-foreground">
-                          Got a referral code from a friend? Enter it to earn bonus rewards!
+                          Got a referral code from a friend? Enter it to earn
+                          bonus rewards!
                         </p>
                       </div>
                     </CardContent>
@@ -331,7 +507,11 @@ export default function Onboarding() {
                         {interestOptions.map((interest) => (
                           <Badge
                             key={interest}
-                            variant={data.interests.includes(interest) ? 'default' : 'outline'}
+                            variant={
+                              data.interests.includes(interest)
+                                ? "default"
+                                : "outline"
+                            }
                             className="cursor-pointer transition-colors"
                             onClick={() => toggleInterest(interest)}
                           >
@@ -348,7 +528,9 @@ export default function Onboarding() {
                         <Checkbox
                           id="terms"
                           checked={data.agreeTerms}
-                          onCheckedChange={(checked) => updateData({ agreeTerms: checked === true })}
+                          onCheckedChange={(checked) =>
+                            updateData({ agreeTerms: checked === true })
+                          }
                         />
                         <div className="grid gap-1.5 leading-none">
                           <label
@@ -358,7 +540,8 @@ export default function Onboarding() {
                             I agree to the Terms of Service and Privacy Policy *
                           </label>
                           <p className="text-xs text-muted-foreground">
-                            By joining, you commit to organizing safe and impactful cleanup events.
+                            By joining, you commit to organizing safe and
+                            impactful cleanup events.
                           </p>
                         </div>
                       </div>
@@ -385,8 +568,12 @@ export default function Onboarding() {
                           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
                             <Icon className="w-5 h-5 text-primary" />
                           </div>
-                          <p className="text-xs font-medium">{achievement.label}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">{achievement.description}</p>
+                          <p className="text-xs font-medium">
+                            {achievement.label}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
+                            {achievement.description}
+                          </p>
                         </motion.div>
                       );
                     })}
@@ -398,7 +585,9 @@ export default function Onboarding() {
                         <Label htmlFor="country">Country *</Label>
                         <Select
                           value={data.country}
-                          onValueChange={(value) => updateData({ country: value })}
+                          onValueChange={(value) =>
+                            updateData({ country: value })
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select your country" />
@@ -422,7 +611,8 @@ export default function Onboarding() {
                           onChange={(e) => updateData({ city: e.target.value })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          We'll help you discover cleanups and participants nearby
+                          We'll help you discover cleanups and participants
+                          nearby
                         </p>
                       </div>
                     </CardContent>
@@ -434,12 +624,12 @@ export default function Onboarding() {
               {currentStep === 3 && (
                 <div className="space-y-6">
                   {/* Rewards Preview */}
-                  <div 
+                  <div
                     className="relative rounded-2xl overflow-hidden p-6"
-                    style={{ 
+                    style={{
                       backgroundImage: `url(${africanPattern})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: 'center'
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
                     }}
                   >
                     <div className="absolute inset-0 bg-primary/90" />
@@ -466,7 +656,9 @@ export default function Onboarding() {
                   <Card>
                     <CardContent className="pt-6 space-y-4">
                       <div className="text-center py-2">
-                        <h3 className="font-semibold mb-2">Connect Your Wallet</h3>
+                        <h3 className="font-semibold mb-2">
+                          Connect Your Wallet
+                        </h3>
                         <p className="text-sm text-muted-foreground mb-4">
                           Link a VeChain wallet to receive your B3TR rewards
                         </p>
@@ -481,7 +673,9 @@ export default function Onboarding() {
                           <span className="w-full border-t" />
                         </div>
                         <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-card px-2 text-muted-foreground">Or enter manually</span>
+                          <span className="bg-card px-2 text-muted-foreground">
+                            Or enter manually
+                          </span>
                         </div>
                       </div>
 
@@ -491,7 +685,9 @@ export default function Onboarding() {
                           id="walletAddress"
                           placeholder="0x..."
                           value={data.walletAddress}
-                          onChange={(e) => updateData({ walletAddress: e.target.value })}
+                          onChange={(e) =>
+                            updateData({ walletAddress: e.target.value })
+                          }
                           className="font-mono text-sm"
                         />
                         <p className="text-xs text-muted-foreground">
@@ -504,8 +700,11 @@ export default function Onboarding() {
                   <Card className="bg-primary/5 border-primary/20">
                     <CardContent className="pt-6">
                       <p className="text-sm text-center">
-                        <strong>You're ready to make an impact!</strong><br />
-                        <span className="text-muted-foreground">Complete setup to organize your first cleanup</span>
+                        <strong>You're ready to make an impact!</strong>
+                        <br />
+                        <span className="text-muted-foreground">
+                          Complete setup to organize your first cleanup
+                        </span>
                       </p>
                     </CardContent>
                   </Card>
@@ -548,7 +747,11 @@ export default function Onboarding() {
                 <>
                   <motion.div
                     animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}
+                    transition={{
+                      duration: 1,
+                      repeat: Infinity,
+                      ease: "linear",
+                    }}
                   >
                     <Sparkles className="w-4 h-4" />
                   </motion.div>

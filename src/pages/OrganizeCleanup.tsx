@@ -39,7 +39,12 @@ import africanPattern from '@/assets/african-pattern-decorative.jpg';
 import { RichTextEditor } from '@/components/ui/rich-text-editor';
 import { GoogleMap } from '@/components/ui/google-map';
 import { PlacesAutocomplete } from '@/components/ui/places-autocomplete';
-import { mockUserProfile } from '@/data/mockData';
+import { useUser } from '@/services/subgraph/queries';
+import { transformUserToProfile } from '@/services/subgraph/transformers';
+import { useWalletAddress } from '@/hooks/use-wallet-address';
+import { useMemo } from 'react';
+import { uploadFilesToIPFS } from '@/services/ipfs';
+import { useCreateCleanup } from '@/services/contracts/mutations';
 
 const steps = [
   { id: 1, title: 'Basic Info', icon: FileText, description: 'Cleanup title and description' },
@@ -92,13 +97,99 @@ export default function OrganizeCleanup() {
     }
   };
 
+  const walletAddress = useWalletAddress();
+  const createCleanupMutation = useCreateCleanup();
+
   const handleSaveDraft = () => {
     toast.success('Draft saved successfully');
   };
 
-  const handleSubmit = () => {
-    toast.success('Cleanup created successfully!');
-    navigate('/cleanups');
+  const handleSubmit = async () => {
+    if (!walletAddress) {
+      toast.error('Wallet not connected');
+      return;
+    }
+
+    try {
+      // Validate required fields
+      if (!formData.title || !formData.description || !formData.category) {
+        toast.error('Please fill in all required fields');
+        return;
+      }
+
+      if (!location.address || !location.city || !location.country) {
+        toast.error('Please select a location');
+        return;
+      }
+
+      if (!schedule.date || !schedule.startTime || !schedule.endTime || !schedule.maxParticipants) {
+        toast.error('Please fill in all schedule details');
+        return;
+      }
+
+      // Upload media files to Pinata IPFS
+      let mediaIpfsHashes: string[] = [];
+      if (media.length > 0) {
+        toast.info('Uploading media to IPFS...');
+        const files = media.map(item => item.file);
+        mediaIpfsHashes = await uploadFilesToIPFS(files);
+      }
+
+      // Create metadata JSON as plain string (not IPFS)
+      const metadata = {
+        title: formData.title,
+        description: formData.description,
+        category: formData.category,
+        media: mediaIpfsHashes.map((hash, index) => ({
+          ipfsHash: hash,
+          type: media[index].type,
+          name: media[index].file.name,
+        })),
+      };
+
+      // Convert metadata to JSON string (not uploading to IPFS)
+      const metadataJsonString = JSON.stringify(metadata);
+
+      // Convert date/time to timestamps
+      const dateTimestamp = Math.floor(new Date(schedule.date).getTime() / 1000);
+      const [startHour, startMinute] = schedule.startTime.split(':').map(Number);
+      const [endHour, endMinute] = schedule.endTime.split(':').map(Number);
+      const startDate = new Date(schedule.date);
+      startDate.setHours(startHour, startMinute, 0, 0);
+      const endDate = new Date(schedule.date);
+      endDate.setHours(endHour, endMinute, 0, 0);
+
+      const startTime = Math.floor(startDate.getTime() / 1000);
+      const endTime = Math.floor(endDate.getTime() / 1000);
+
+      // Submit to contract
+      toast.info('Creating cleanup on blockchain...');
+      await createCleanupMutation.mutateAsync({
+        metadata: metadataJsonString,
+        category: formData.category,
+        location: {
+          address_: location.address,
+          city: location.city,
+          country: location.country,
+          latitude: Math.round(location.latitude * 1e6) / 1e6, // Round to 6 decimal places
+          longitude: Math.round(location.longitude * 1e6) / 1e6,
+        },
+        date: dateTimestamp,
+        startTime,
+        endTime,
+        maxParticipants: parseInt(schedule.maxParticipants),
+      });
+
+      toast.success('Cleanup created successfully!');
+      navigate('/cleanups');
+    } catch (error) {
+      console.error('Error creating cleanup:', error);
+      toast.error(
+        error instanceof Error 
+          ? `Failed to create cleanup: ${error.message}` 
+          : 'Failed to create cleanup'
+      );
+    }
   };
 
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,8 +215,15 @@ export default function OrganizeCleanup() {
     setMedia(media.filter(m => m.id !== id));
   };
 
+  // Fetch user data
+  const { data: userData } = useUser(walletAddress);
+  const userProfile = useMemo(() => 
+    userData ? transformUserToProfile(userData, walletAddress || undefined) : null,
+    [userData, walletAddress]
+  );
+
   // Check if user has completed KYC
-  const isKycVerified = mockUserProfile.kycStatus === 'verified';
+  const isKycVerified = userProfile?.kycStatus === 'verified';
 
   if (!isKycVerified) {
     return (
@@ -405,12 +503,13 @@ export default function OrganizeCleanup() {
                         <Input
                           id="maxParticipants"
                           type="number"
+                          min="1"
                           placeholder="e.g., 50"
                           value={schedule.maxParticipants}
                           onChange={(e) => setSchedule({ ...schedule, maxParticipants: e.target.value })}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Set a limit to manage the cleanup effectively
+                          Set a limit to manage the cleanup effectively (includes you as the creator, minimum 1)
                         </p>
                       </div>
                     </CardContent>

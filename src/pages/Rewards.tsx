@@ -1,9 +1,21 @@
-import { useState } from 'react';
-import { motion } from 'framer-motion';
-import { Gift, ArrowUpRight, ArrowDownLeft, ExternalLink, Copy, Download, ChevronLeft, ChevronRight, Loader2, Coins, Building2 } from 'lucide-react';
-import africanMasksPattern from '@/assets/african-masks-pattern.jpg';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { useState, useMemo } from "react";
+import { motion } from "framer-motion";
+import {
+  Gift,
+  ArrowUpRight,
+  ArrowDownLeft,
+  ExternalLink,
+  Copy,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Coins,
+  Building2,
+} from "lucide-react";
+import africanMasksPattern from "@/assets/african-masks-pattern.jpg";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -11,28 +23,41 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { mockRewardTransactions, mockUserProfile, mockWallets, mockBankAccounts, currencyRates, WalletInfo, BankAccountInfo, CurrencyRate } from '@/data/mockData';
-import { toast } from 'sonner';
-import { Wallet, Check } from 'lucide-react';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { useIsMobile } from '@/hooks/use-mobile';
+} from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import {
+  defaultBankAccounts,
+  currencyRates,
+  BankAccountInfo,
+  CurrencyRate,
+} from "@/data/mockData";
+import { toast } from "sonner";
+import { Wallet, Check } from "lucide-react";
+import { useRewards, useUser } from "@/services/subgraph/queries";
+import {
+  transformReward,
+  transformUserToProfile,
+} from "@/services/subgraph/transformers";
+import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useCleanups } from "@/services/subgraph/queries";
+import { transformCleanup } from "@/services/subgraph/transformers";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   Drawer,
   DrawerContent,
@@ -41,7 +66,7 @@ import {
   DrawerHeader,
   DrawerTitle,
   DrawerTrigger,
-} from '@/components/ui/drawer';
+} from "@/components/ui/drawer";
 import {
   Dialog,
   DialogContent,
@@ -50,36 +75,91 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 
 const ITEMS_PER_PAGE_OPTIONS = [5, 10, 20, 50];
 
-type PaymentMethod = 'wallet' | 'bank';
+type PaymentMethod = "wallet" | "bank";
 
 export default function Rewards() {
   const isMobile = useIsMobile();
+  const walletAddress = useWalletAddress();
+
+  // Fetch user data
+  const { data: userData } = useUser(walletAddress);
+  const userProfile = useMemo(
+    () =>
+      userData
+        ? transformUserToProfile(userData, walletAddress || undefined)
+        : null,
+    [userData, walletAddress]
+  );
+
+  // Fetch cleanups to get cleanup metadata for rewards
+  const { data: cleanupsData } = useCleanups({ published: true, first: 1000 });
+  const cleanupsMap = useMemo(() => {
+    if (!cleanupsData) return new Map();
+    const map = new Map();
+    cleanupsData.forEach((c) => {
+      const transformed = transformCleanup(c);
+      map.set(c.id.toLowerCase(), transformed);
+    });
+    return map;
+  }, [cleanupsData]);
+
+  // Fetch rewards
+  const { data: rewardsData, isLoading: isLoadingRewards } = useRewards(
+    walletAddress || undefined,
+    { first: 1000 }
+  );
+  const rewardTransactions = useMemo(() => {
+    if (!rewardsData) return [];
+    return rewardsData.map((r) => {
+      const cleanup = cleanupsMap.get(r.cleanupId?.toLowerCase() || "");
+      return transformReward(r, { title: cleanup?.title });
+    });
+  }, [rewardsData, cleanupsMap]);
+
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
-  const [typeFilter, setTypeFilter] = useState<'all' | 'earned' | 'claimed'>('all');
-  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
-  const [claimAmount, setClaimAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('wallet');
-  const [selectedWalletId, setSelectedWalletId] = useState<string>(
-    mockWallets.find(w => w.isDefault)?.id || mockWallets[0]?.id || ''
+  const [typeFilter, setTypeFilter] = useState<"all" | "earned" | "claimed">(
+    "all"
   );
+  const [claimDialogOpen, setClaimDialogOpen] = useState(false);
+  const [claimAmount, setClaimAmount] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
+  // For wallet payment, use connected wallet address
+  const [selectedWalletId, setSelectedWalletId] = useState<string>("");
+  // For bank payment, use connected address as mock data
   const [selectedBankId, setSelectedBankId] = useState<string>(
-    mockBankAccounts.find(b => b.isDefault)?.id || mockBankAccounts[0]?.id || ''
+    defaultBankAccounts.find((b) => b.isDefault)?.id ||
+      defaultBankAccounts[0]?.id ||
+      ""
   );
   const [isClaiming, setIsClaiming] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState<string>('NGN');
+  const [selectedCurrency, setSelectedCurrency] = useState<string>("NGN");
 
-  const selectedWallet = mockWallets.find(w => w.id === selectedWalletId);
-  const selectedBank = mockBankAccounts.find(b => b.id === selectedBankId);
-  const selectedCurrencyData = currencyRates.find(c => c.code === selectedCurrency) || currencyRates[0];
+  // Use connected wallet address for wallet payment
+  const selectedWallet = walletAddress
+    ? {
+        id: "connected",
+        name: "Connected Wallet",
+        address: walletAddress,
+        type: "vechain" as const,
+        isDefault: true,
+      }
+    : null;
+  // For bank accounts, use mock data with connected address reference
+  const selectedBank = defaultBankAccounts.find((b) => b.id === selectedBankId);
+  const selectedCurrencyData =
+    currencyRates.find((c) => c.code === selectedCurrency) || currencyRates[0];
 
   const convertB3TRToCurrency = (b3trAmount: number): string => {
     const converted = b3trAmount * selectedCurrencyData.rateToB3TR;
-    return `${selectedCurrencyData.symbol}${converted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${selectedCurrencyData.symbol}${converted.toLocaleString(
+      undefined,
+      { minimumFractionDigits: 2, maximumFractionDigits: 2 }
+    )}`;
   };
 
   const truncateAddress = (address: string) => {
@@ -92,83 +172,93 @@ export default function Rewards() {
 
   const handleClaimRewards = () => {
     if (!claimAmount || Number(claimAmount) <= 0) {
-      toast.error('Please enter a valid amount');
-      return;
-    }
-    
-    if (Number(claimAmount) > mockUserProfile.pendingRewards) {
-      toast.error('Amount exceeds available rewards');
+      toast.error("Please enter a valid amount");
       return;
     }
 
-    if (paymentMethod === 'wallet' && !selectedWalletId) {
-      toast.error('Please select a wallet');
+    if (!userProfile || Number(claimAmount) > userProfile.pendingRewards) {
+      toast.error("Amount exceeds available rewards");
       return;
     }
 
-    if (paymentMethod === 'bank' && !selectedBankId) {
-      toast.error('Please select a bank account');
+    if (paymentMethod === "wallet" && !walletAddress) {
+      toast.error("Please connect your wallet");
       return;
     }
-    
+
+    if (paymentMethod === "bank" && !selectedBankId) {
+      toast.error("Please select a bank account");
+      return;
+    }
+
     setIsClaiming(true);
     setTimeout(() => {
       setIsClaiming(false);
       setClaimDialogOpen(false);
-      setClaimAmount('');
-      const destination = paymentMethod === 'wallet' 
-        ? selectedWallet?.name 
-        : `${selectedBank?.bankName} (${maskAccountNumber(selectedBank?.accountNumber || '')})`;
-      toast.success(`Successfully claimed ${claimAmount} B3TR tokens to ${destination}`);
+      setClaimAmount("");
+      const destination =
+        paymentMethod === "wallet"
+          ? truncateAddress(walletAddress || "")
+          : `${selectedBank?.bankName} (${maskAccountNumber(
+              selectedBank?.accountNumber || ""
+            )})`;
+      toast.success(
+        `Successfully claimed ${claimAmount} B3TR tokens to ${destination}`
+      );
     }, 1500);
   };
 
-  const filteredTransactions = mockRewardTransactions.filter((tx) => {
-    if (typeFilter === 'all') return true;
+  const filteredTransactions = rewardTransactions.filter((tx) => {
+    if (typeFilter === "all") return true;
     return tx.type === typeFilter;
   });
 
   const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(startIndex, startIndex + itemsPerPage);
+  const paginatedTransactions = filteredTransactions.slice(
+    startIndex,
+    startIndex + itemsPerPage
+  );
 
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
-    toast.success('Address copied to clipboard');
+    toast.success("Address copied to clipboard");
   };
 
   const exportToCSV = () => {
-    const headers = ['Date', 'Type', 'Amount', 'Cleanup', 'Status', 'TX Hash'];
+    const headers = ["Date", "Type", "Amount", "Cleanup", "Status", "TX Hash"];
     const rows = filteredTransactions.map((tx) => [
       tx.date,
       tx.type,
       tx.amount,
       tx.cleanupTitle,
       tx.status,
-      tx.txHash || '',
+      tx.txHash || "",
     ]);
 
-    const csvContent = [headers, ...rows].map((row) => row.join(',')).join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const csvContent = [headers, ...rows]
+      .map((row) => row.join(","))
+      .join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'rewards.csv';
+    a.download = "rewards.csv";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Rewards exported successfully');
+    toast.success("Rewards exported successfully");
   };
 
   const exportToJSON = () => {
     const jsonContent = JSON.stringify(filteredTransactions, null, 2);
-    const blob = new Blob([jsonContent], { type: 'application/json' });
+    const blob = new Blob([jsonContent], { type: "application/json" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
-    a.download = 'rewards.json';
+    a.download = "rewards.json";
     a.click();
     URL.revokeObjectURL(url);
-    toast.success('Rewards exported successfully');
+    toast.success("Rewards exported successfully");
   };
 
   return (
@@ -180,17 +270,21 @@ export default function Rewards() {
         className="relative overflow-hidden rounded-2xl p-4 sm:p-6 lg:p-8"
       >
         {/* Background Image */}
-        <div 
+        <div
           className="absolute inset-0 bg-cover bg-center"
           style={{ backgroundImage: `url(${africanMasksPattern})` }}
         />
         {/* Overlay for readability */}
         <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/85 to-background/70 dark:from-background/98 dark:via-background/90 dark:to-background/80" />
-        
+
         {/* Content */}
         <div className="relative z-10">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold">Rewards</h1>
-          <p className="text-muted-foreground text-sm mt-1">Claim your B3TR tokens for participating in cleanups</p>
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-semibold">
+            Rewards
+          </h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Claim your B3TR tokens for participating in cleanups
+          </p>
         </div>
       </motion.div>
 
@@ -205,16 +299,19 @@ export default function Rewards() {
           <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full border-[3px] border-primary/10" />
           <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full border-[3px] border-primary/15" />
           <div className="absolute -bottom-16 -right-16 w-32 h-32 rounded-full border-[3px] border-primary/20" />
-          
+
           <CardContent className="p-5 relative z-10">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-primary/10">
                 <Gift className="w-5 h-5 text-primary" />
               </div>
-              <span className="text-sm text-muted-foreground">Pending Rewards</span>
+              <span className="text-sm text-muted-foreground">
+                Pending Rewards
+              </span>
             </div>
             <p className="text-3xl font-semibold">
-              {mockUserProfile.pendingRewards} <span className="text-lg text-muted-foreground">B3TR</span>
+              {userProfile?.pendingRewards || 0}{" "}
+              <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
             {isMobile ? (
               <Drawer open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
@@ -238,81 +335,70 @@ export default function Rewards() {
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('wallet')}
+                          onClick={() => setPaymentMethod("wallet")}
                           disabled={isClaiming}
                           className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === 'wallet'
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50'
+                            paymentMethod === "wallet"
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
                           }`}
                         >
                           <Wallet className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">Web3 Wallet</span>
+                          <span className="text-sm font-medium">
+                            Web3 Wallet
+                          </span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('bank')}
+                          onClick={() => setPaymentMethod("bank")}
                           disabled={isClaiming}
                           className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === 'bank'
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50'
+                            paymentMethod === "bank"
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
                           }`}
                         >
                           <Building2 className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">Bank Account</span>
+                          <span className="text-sm font-medium">
+                            Bank Account
+                          </span>
                         </button>
                       </div>
                     </div>
 
                     {/* Wallet Selection */}
-                    {paymentMethod === 'wallet' && (
+                    {paymentMethod === "wallet" && (
                       <div className="space-y-2">
-                        <Label>Select Wallet *</Label>
-                        <RadioGroup
-                          value={selectedWalletId}
-                          onValueChange={setSelectedWalletId}
-                          className="space-y-2"
-                          disabled={isClaiming}
-                        >
-                          {mockWallets.map((wallet) => (
-                            <label
-                              key={wallet.id}
-                              htmlFor={`mobile-${wallet.id}`}
-                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                selectedWalletId === wallet.id
-                                  ? 'border-primary bg-primary/5'
-                                  : 'border-border hover:border-primary/50'
-                              }`}
-                            >
-                              <RadioGroupItem value={wallet.id} id={`mobile-${wallet.id}`} />
-                              <div className="p-2 bg-primary/10 rounded-lg">
-                                <Wallet className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium">{wallet.name}</p>
-                                  {wallet.isDefault && (
-                                    <Badge variant="secondary" className="text-xs">Default</Badge>
-                                  )}
-                                </div>
-                                <p className="font-mono text-xs text-muted-foreground truncate">
-                                  {truncateAddress(wallet.address)}
+                        <Label>Wallet Address *</Label>
+                        {walletAddress ? (
+                          <div className="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5">
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                              <Wallet className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium">
+                                  Connected Wallet
                                 </p>
+                                <Badge variant="secondary" className="text-xs">
+                                  Default
+                                </Badge>
                               </div>
-                            </label>
-                          ))}
-                        </RadioGroup>
-                        {mockWallets.length === 0 && (
+                              <p className="font-mono text-xs text-muted-foreground truncate">
+                                {truncateAddress(walletAddress)}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
                           <p className="text-sm text-muted-foreground text-center py-4">
-                            No wallets configured. Add a wallet in Settings.
+                            Please connect your wallet to claim rewards.
                           </p>
                         )}
                       </div>
                     )}
 
                     {/* Bank Account Selection */}
-                    {paymentMethod === 'bank' && (
+                    {paymentMethod === "bank" && (
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <Label>Select Bank Account *</Label>
@@ -322,37 +408,49 @@ export default function Rewards() {
                             className="space-y-2"
                             disabled={isClaiming}
                           >
-                            {mockBankAccounts.map((bank) => (
+                            {defaultBankAccounts.map((bank) => (
                               <label
                                 key={bank.id}
                                 htmlFor={`mobile-${bank.id}`}
                                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                                   selectedBankId === bank.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50'
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/50"
                                 }`}
                               >
-                                <RadioGroupItem value={bank.id} id={`mobile-${bank.id}`} />
+                                <RadioGroupItem
+                                  value={bank.id}
+                                  id={`mobile-${bank.id}`}
+                                />
                                 <div className="p-2 bg-primary/10 rounded-lg">
                                   <Building2 className="w-4 h-4 text-primary" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">{bank.bankName}</p>
+                                    <p className="text-sm font-medium">
+                                      {bank.bankName}
+                                    </p>
                                     {bank.isDefault && (
-                                      <Badge variant="secondary" className="text-xs">Default</Badge>
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        Default
+                                      </Badge>
                                     )}
                                   </div>
                                   <p className="text-xs text-muted-foreground">
-                                    {bank.accountName} • {maskAccountNumber(bank.accountNumber)}
+                                    {bank.accountName} •{" "}
+                                    {maskAccountNumber(bank.accountNumber)}
                                   </p>
                                 </div>
                               </label>
                             ))}
                           </RadioGroup>
-                          {mockBankAccounts.length === 0 && (
+                          {defaultBankAccounts.length === 0 && (
                             <p className="text-sm text-muted-foreground text-center py-4">
-                              No bank accounts configured. Add a bank account in Settings.
+                              No bank accounts configured. Add a bank account in
+                              Settings.
                             </p>
                           )}
                         </div>
@@ -360,20 +458,28 @@ export default function Rewards() {
                         {/* Currency Selection */}
                         <div className="space-y-2">
                           <Label>Currency for Conversion</Label>
-                          <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                          <Select
+                            value={selectedCurrency}
+                            onValueChange={setSelectedCurrency}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
                             <SelectContent>
                               {currencyRates.map((currency) => (
-                                <SelectItem key={currency.code} value={currency.code}>
-                                  {currency.symbol} {currency.name} ({currency.code})
+                                <SelectItem
+                                  key={currency.code}
+                                  value={currency.code}
+                                >
+                                  {currency.symbol} {currency.name} (
+                                  {currency.code})
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground">
-                            Rate: 1 B3TR = {selectedCurrencyData.symbol}{selectedCurrencyData.rateToB3TR.toLocaleString()}
+                            Rate: 1 B3TR = {selectedCurrencyData.symbol}
+                            {selectedCurrencyData.rateToB3TR.toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -392,14 +498,18 @@ export default function Rewards() {
                       />
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
-                          Available: {mockUserProfile.pendingRewards} B3TR
+                          Available: {userProfile?.pendingRewards || 0} B3TR
                         </p>
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           className="text-xs h-auto py-1"
-                          onClick={() => setClaimAmount(mockUserProfile.pendingRewards.toString())}
+                          onClick={() =>
+                            setClaimAmount(
+                              (userProfile?.pendingRewards || 0).toString()
+                            )
+                          }
                           disabled={isClaiming}
                         >
                           Max
@@ -412,25 +522,38 @@ export default function Rewards() {
                       <div className="p-3 bg-secondary rounded-lg space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Amount</span>
-                          <span className="font-medium">{claimAmount} B3TR</span>
+                          <span className="font-medium">
+                            {claimAmount} B3TR
+                          </span>
                         </div>
-                        {paymentMethod === 'bank' && (
+                        {paymentMethod === "bank" && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Converted Amount</span>
-                            <span className="font-medium text-primary">{convertB3TRToCurrency(Number(claimAmount))}</span>
+                            <span className="text-muted-foreground">
+                              Converted Amount
+                            </span>
+                            <span className="font-medium text-primary">
+                              {convertB3TRToCurrency(Number(claimAmount))}
+                            </span>
                           </div>
                         )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Method</span>
-                          <span className="font-medium">{paymentMethod === 'wallet' ? 'Web3 Wallet' : 'Bank Account'}</span>
+                          <span className="font-medium">
+                            {paymentMethod === "wallet"
+                              ? "Web3 Wallet"
+                              : "Bank Account"}
+                          </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Destination</span>
+                          <span className="text-muted-foreground">
+                            Destination
+                          </span>
                           <span className="text-xs truncate max-w-[150px]">
-                            {paymentMethod === 'wallet' 
-                              ? truncateAddress(selectedWallet?.address || '')
-                              : `${selectedBank?.bankName} (${maskAccountNumber(selectedBank?.accountNumber || '')})`
-                            }
+                            {paymentMethod === "wallet"
+                              ? truncateAddress(walletAddress || "")
+                              : `${selectedBank?.bankName} (${maskAccountNumber(
+                                  selectedBank?.accountNumber || ""
+                                )})`}
                           </span>
                         </div>
                       </div>
@@ -439,7 +562,13 @@ export default function Rewards() {
                   <DrawerFooter>
                     <Button
                       onClick={handleClaimRewards}
-                      disabled={isClaiming || !claimAmount || (paymentMethod === 'wallet' ? !selectedWalletId : !selectedBankId)}
+                      disabled={
+                        isClaiming ||
+                        !claimAmount ||
+                        (paymentMethod === "wallet"
+                          ? !walletAddress
+                          : !selectedBankId)
+                      }
                       className="w-full"
                     >
                       {isClaiming ? (
@@ -448,7 +577,7 @@ export default function Rewards() {
                           Claiming...
                         </>
                       ) : (
-                        'Claim Tokens'
+                        "Claim Tokens"
                       )}
                     </Button>
                     <Button
@@ -484,81 +613,70 @@ export default function Rewards() {
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('wallet')}
+                          onClick={() => setPaymentMethod("wallet")}
                           disabled={isClaiming}
                           className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === 'wallet'
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50'
+                            paymentMethod === "wallet"
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
                           }`}
                         >
                           <Wallet className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">Web3 Wallet</span>
+                          <span className="text-sm font-medium">
+                            Web3 Wallet
+                          </span>
                         </button>
                         <button
                           type="button"
-                          onClick={() => setPaymentMethod('bank')}
+                          onClick={() => setPaymentMethod("bank")}
                           disabled={isClaiming}
                           className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === 'bank'
-                              ? 'border-primary bg-primary/5'
-                              : 'border-border hover:border-primary/50'
+                            paymentMethod === "bank"
+                              ? "border-primary bg-primary/5"
+                              : "border-border hover:border-primary/50"
                           }`}
                         >
                           <Building2 className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">Bank Account</span>
+                          <span className="text-sm font-medium">
+                            Bank Account
+                          </span>
                         </button>
                       </div>
                     </div>
 
                     {/* Wallet Selection */}
-                    {paymentMethod === 'wallet' && (
+                    {paymentMethod === "wallet" && (
                       <div className="space-y-2">
-                        <Label>Select Wallet *</Label>
-                        <RadioGroup
-                          value={selectedWalletId}
-                          onValueChange={setSelectedWalletId}
-                          className="space-y-2"
-                          disabled={isClaiming}
-                        >
-                          {mockWallets.map((wallet) => (
-                            <label
-                              key={wallet.id}
-                              htmlFor={wallet.id}
-                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                selectedWalletId === wallet.id
-                                  ? 'border-primary bg-primary/5'
-                                  : 'border-border hover:border-primary/50'
-                              }`}
-                            >
-                              <RadioGroupItem value={wallet.id} id={wallet.id} />
-                              <div className="p-2 bg-primary/10 rounded-lg">
-                                <Wallet className="w-4 h-4 text-primary" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <p className="text-sm font-medium">{wallet.name}</p>
-                                  {wallet.isDefault && (
-                                    <Badge variant="secondary" className="text-xs">Default</Badge>
-                                  )}
-                                </div>
-                                <p className="font-mono text-xs text-muted-foreground truncate">
-                                  {truncateAddress(wallet.address)}
+                        <Label>Wallet Address *</Label>
+                        {walletAddress ? (
+                          <div className="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5">
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                              <Wallet className="w-4 h-4 text-primary" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium">
+                                  Connected Wallet
                                 </p>
+                                <Badge variant="secondary" className="text-xs">
+                                  Default
+                                </Badge>
                               </div>
-                            </label>
-                          ))}
-                        </RadioGroup>
-                        {mockWallets.length === 0 && (
+                              <p className="font-mono text-xs text-muted-foreground truncate">
+                                {truncateAddress(walletAddress)}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
                           <p className="text-sm text-muted-foreground text-center py-4">
-                            No wallets configured. Add a wallet in Settings.
+                            Please connect your wallet to claim rewards.
                           </p>
                         )}
                       </div>
                     )}
 
                     {/* Bank Account Selection */}
-                    {paymentMethod === 'bank' && (
+                    {paymentMethod === "bank" && (
                       <div className="space-y-4">
                         <div className="space-y-2">
                           <Label>Select Bank Account *</Label>
@@ -568,14 +686,14 @@ export default function Rewards() {
                             className="space-y-2"
                             disabled={isClaiming}
                           >
-                            {mockBankAccounts.map((bank) => (
+                            {defaultBankAccounts.map((bank) => (
                               <label
                                 key={bank.id}
                                 htmlFor={bank.id}
                                 className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
                                   selectedBankId === bank.id
-                                    ? 'border-primary bg-primary/5'
-                                    : 'border-border hover:border-primary/50'
+                                    ? "border-primary bg-primary/5"
+                                    : "border-border hover:border-primary/50"
                                 }`}
                               >
                                 <RadioGroupItem value={bank.id} id={bank.id} />
@@ -584,21 +702,30 @@ export default function Rewards() {
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">{bank.bankName}</p>
+                                    <p className="text-sm font-medium">
+                                      {bank.bankName}
+                                    </p>
                                     {bank.isDefault && (
-                                      <Badge variant="secondary" className="text-xs">Default</Badge>
+                                      <Badge
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        Default
+                                      </Badge>
                                     )}
                                   </div>
                                   <p className="text-xs text-muted-foreground">
-                                    {bank.accountName} • {maskAccountNumber(bank.accountNumber)}
+                                    {bank.accountName} •{" "}
+                                    {maskAccountNumber(bank.accountNumber)}
                                   </p>
                                 </div>
                               </label>
                             ))}
                           </RadioGroup>
-                          {mockBankAccounts.length === 0 && (
+                          {defaultBankAccounts.length === 0 && (
                             <p className="text-sm text-muted-foreground text-center py-4">
-                              No bank accounts configured. Add a bank account in Settings.
+                              No bank accounts configured. Add a bank account in
+                              Settings.
                             </p>
                           )}
                         </div>
@@ -606,20 +733,28 @@ export default function Rewards() {
                         {/* Currency Selection */}
                         <div className="space-y-2">
                           <Label>Currency for Conversion</Label>
-                          <Select value={selectedCurrency} onValueChange={setSelectedCurrency}>
+                          <Select
+                            value={selectedCurrency}
+                            onValueChange={setSelectedCurrency}
+                          >
                             <SelectTrigger>
                               <SelectValue placeholder="Select currency" />
                             </SelectTrigger>
                             <SelectContent>
                               {currencyRates.map((currency) => (
-                                <SelectItem key={currency.code} value={currency.code}>
-                                  {currency.symbol} {currency.name} ({currency.code})
+                                <SelectItem
+                                  key={currency.code}
+                                  value={currency.code}
+                                >
+                                  {currency.symbol} {currency.name} (
+                                  {currency.code})
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
                           <p className="text-xs text-muted-foreground">
-                            Rate: 1 B3TR = {selectedCurrencyData.symbol}{selectedCurrencyData.rateToB3TR.toLocaleString()}
+                            Rate: 1 B3TR = {selectedCurrencyData.symbol}
+                            {selectedCurrencyData.rateToB3TR.toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -638,14 +773,18 @@ export default function Rewards() {
                       />
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
-                          Available: {mockUserProfile.pendingRewards} B3TR
+                          Available: {userProfile?.pendingRewards || 0} B3TR
                         </p>
                         <Button
                           type="button"
                           variant="ghost"
                           size="sm"
                           className="text-xs h-auto py-1"
-                          onClick={() => setClaimAmount(mockUserProfile.pendingRewards.toString())}
+                          onClick={() =>
+                            setClaimAmount(
+                              (userProfile?.pendingRewards || 0).toString()
+                            )
+                          }
                           disabled={isClaiming}
                         >
                           Max
@@ -658,25 +797,38 @@ export default function Rewards() {
                       <div className="p-3 bg-secondary rounded-lg space-y-2">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Amount</span>
-                          <span className="font-medium">{claimAmount} B3TR</span>
+                          <span className="font-medium">
+                            {claimAmount} B3TR
+                          </span>
                         </div>
-                        {paymentMethod === 'bank' && (
+                        {paymentMethod === "bank" && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">Converted Amount</span>
-                            <span className="font-medium text-primary">{convertB3TRToCurrency(Number(claimAmount))}</span>
+                            <span className="text-muted-foreground">
+                              Converted Amount
+                            </span>
+                            <span className="font-medium text-primary">
+                              {convertB3TRToCurrency(Number(claimAmount))}
+                            </span>
                           </div>
                         )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Method</span>
-                          <span className="font-medium">{paymentMethod === 'wallet' ? 'Web3 Wallet' : 'Bank Account'}</span>
+                          <span className="font-medium">
+                            {paymentMethod === "wallet"
+                              ? "Web3 Wallet"
+                              : "Bank Account"}
+                          </span>
                         </div>
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Destination</span>
+                          <span className="text-muted-foreground">
+                            Destination
+                          </span>
                           <span className="font-mono text-xs">
-                            {paymentMethod === 'wallet' 
-                              ? truncateAddress(selectedWallet?.address || '')
-                              : `${selectedBank?.bankName} (${maskAccountNumber(selectedBank?.accountNumber || '')})`
-                            }
+                            {paymentMethod === "wallet"
+                              ? truncateAddress(walletAddress || "")
+                              : `${selectedBank?.bankName} (${maskAccountNumber(
+                                  selectedBank?.accountNumber || ""
+                                )})`}
                           </span>
                         </div>
                       </div>
@@ -692,7 +844,13 @@ export default function Rewards() {
                     </Button>
                     <Button
                       onClick={handleClaimRewards}
-                      disabled={isClaiming || !claimAmount || (paymentMethod === 'wallet' ? !selectedWalletId : !selectedBankId)}
+                      disabled={
+                        isClaiming ||
+                        !claimAmount ||
+                        (paymentMethod === "wallet"
+                          ? !walletAddress
+                          : !selectedBankId)
+                      }
                     >
                       {isClaiming ? (
                         <>
@@ -700,7 +858,7 @@ export default function Rewards() {
                           Claiming...
                         </>
                       ) : (
-                        'Claim Tokens'
+                        "Claim Tokens"
                       )}
                     </Button>
                   </DialogFooter>
@@ -714,16 +872,19 @@ export default function Rewards() {
           <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full border-[3px] border-status-approved/10" />
           <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full border-[3px] border-status-approved/15" />
           <div className="absolute -bottom-16 -right-16 w-32 h-32 rounded-full border-[3px] border-status-approved/20" />
-          
+
           <CardContent className="p-5 relative z-10">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-status-approved/10">
                 <ArrowDownLeft className="w-5 h-5 text-status-approved" />
               </div>
-              <span className="text-sm text-muted-foreground">Total Earned</span>
+              <span className="text-sm text-muted-foreground">
+                Total Earned
+              </span>
             </div>
             <p className="text-3xl font-semibold text-status-approved">
-              {mockUserProfile.totalRewards} <span className="text-lg text-muted-foreground">B3TR</span>
+              {userProfile?.totalRewards || 0}{" "}
+              <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
           </CardContent>
         </Card>
@@ -732,16 +893,19 @@ export default function Rewards() {
           <div className="absolute -bottom-24 -right-24 w-48 h-48 rounded-full border-[3px] border-accent/10" />
           <div className="absolute -bottom-20 -right-20 w-40 h-40 rounded-full border-[3px] border-accent/15" />
           <div className="absolute -bottom-16 -right-16 w-32 h-32 rounded-full border-[3px] border-accent/20" />
-          
+
           <CardContent className="p-5 relative z-10">
             <div className="flex items-center gap-3 mb-3">
               <div className="p-2 bg-accent/10">
                 <ArrowUpRight className="w-5 h-5 text-accent" />
               </div>
-              <span className="text-sm text-muted-foreground">Total Claimed</span>
+              <span className="text-sm text-muted-foreground">
+                Total Claimed
+              </span>
             </div>
             <p className="text-3xl font-semibold">
-              {mockUserProfile.claimedRewards} <span className="text-lg text-muted-foreground">B3TR</span>
+              {userProfile?.claimedRewards || 0}{" "}
+              <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
           </CardContent>
         </Card>
@@ -755,12 +919,14 @@ export default function Rewards() {
       >
         <Card>
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
-            <CardTitle className="text-base font-medium">Reward History</CardTitle>
+            <CardTitle className="text-base font-medium">
+              Reward History
+            </CardTitle>
             <div className="flex items-center gap-2 sm:gap-3">
               <Select
                 value={typeFilter}
                 onValueChange={(value) => {
-                  setTypeFilter(value as 'all' | 'earned' | 'claimed');
+                  setTypeFilter(value as "all" | "earned" | "claimed");
                   setCurrentPage(1);
                 }}
               >
@@ -804,38 +970,68 @@ export default function Rewards() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {paginatedTransactions.map((tx) => (
-                    <TableRow key={tx.id}>
-                      <TableCell className="text-sm">{tx.date}</TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {tx.type === 'earned' ? (
-                            <ArrowDownLeft className="w-4 h-4 text-status-approved" />
-                          ) : (
-                            <ArrowUpRight className="w-4 h-4 text-accent" />
-                          )}
-                          <span className="capitalize text-sm">{tx.type}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-sm truncate max-w-[150px] block">{tx.cleanupTitle}</span>
-                      </TableCell>
-                      <TableCell>
-                        <span className={`font-medium ${tx.type === 'earned' ? 'text-status-approved' : ''}`}>
-                          {tx.type === 'earned' ? '+' : '-'}{tx.amount} B3TR
-                        </span>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={tx.status === 'completed' ? 'default' : 'secondary'}>
-                          {tx.status}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {paginatedTransactions.length === 0 && (
+                  {isLoadingRewards ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-12">
-                        <p className="text-muted-foreground">No transactions found</p>
+                        <div className="flex items-center justify-center gap-2">
+                          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                          <span className="text-muted-foreground">
+                            Loading rewards...
+                          </span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedTransactions.map((tx) => (
+                      <TableRow key={tx.id}>
+                        <TableCell className="text-sm">{tx.date}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {tx.type === "earned" ? (
+                              <ArrowDownLeft className="w-4 h-4 text-status-approved" />
+                            ) : (
+                              <ArrowUpRight className="w-4 h-4 text-accent" />
+                            )}
+                            <span className="capitalize text-sm">
+                              {tx.type}
+                            </span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <span className="text-sm truncate max-w-[150px] block">
+                            {tx.cleanupTitle}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <span
+                            className={`font-medium ${
+                              tx.type === "earned" ? "text-status-approved" : ""
+                            }`}
+                          >
+                            {tx.type === "earned" ? "+" : "-"}
+                            {tx.amount} B3TR
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              tx.status === "completed"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {tx.status}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                  {!isLoadingRewards && paginatedTransactions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-12">
+                        <p className="text-muted-foreground">
+                          No transactions found
+                        </p>
                       </TableCell>
                     </TableRow>
                   )}
@@ -871,7 +1067,12 @@ export default function Rewards() {
 
                 <div className="flex items-center gap-2">
                   <span className="text-xs sm:text-sm text-muted-foreground">
-                    {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredTransactions.length)} of {filteredTransactions.length}
+                    {startIndex + 1}-
+                    {Math.min(
+                      startIndex + itemsPerPage,
+                      filteredTransactions.length
+                    )}{" "}
+                    of {filteredTransactions.length}
                   </span>
                   <div className="flex items-center gap-1">
                     <Button

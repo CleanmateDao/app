@@ -20,23 +20,48 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
-import { mockCleanups } from '@/data/mockData';
 import { CleanupParticipant } from '@/types/cleanup';
 import { toast } from 'sonner';
+import { useCleanup } from '@/services/subgraph/queries';
+import { transformCleanup } from '@/services/subgraph/transformers';
+import { Loader2 } from 'lucide-react';
+import { useSubmitProofOfWork } from '@/services/contracts/mutations';
+import { 
+  uploadFilesToIPFS, 
+  uploadParticipantRatingsToIPFS,
+  type ParticipantRating 
+} from '@/services/ipfs';
+import { useWalletAddress } from '@/hooks/use-wallet-address';
 
 const MIN_MEDIA_COUNT = 10;
 
 export default function SubmitProofOfWork() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const cleanup = mockCleanups.find((c) => c.id === id);
+  const walletAddress = useWalletAddress();
+  
+  // Fetch cleanup data
+  const { data: cleanupData, isLoading: isLoadingCleanup } = useCleanup(id || undefined);
+  const cleanup = cleanupData ? transformCleanup(cleanupData) : null;
   
   const [proofMedia, setProofMedia] = useState<File[]>([]);
   const [participantRatings, setParticipantRatings] = useState<Record<string, number>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  
+  const submitProofMutation = useSubmitProofOfWork();
 
   // Only accepted participants can be rated
   const acceptedParticipants = cleanup?.participants.filter(p => p.status === 'accepted') || [];
+
+  if (isLoadingCleanup) {
+    return (
+      <div className="p-6 text-center">
+        <Loader2 className="w-8 h-8 animate-spin text-muted-foreground mx-auto mb-4" />
+        <p className="text-muted-foreground">Loading cleanup...</p>
+      </div>
+    );
+  }
 
   if (!cleanup) {
     return (
@@ -72,7 +97,12 @@ export default function SubmitProofOfWork() {
 
   const hasEnoughMedia = proofMedia.length >= MIN_MEDIA_COUNT;
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
+    if (!id || !cleanup) {
+      toast.error('Cleanup information is missing');
+      return;
+    }
+
     if (!hasEnoughMedia) {
       toast.error(`Please upload at least ${MIN_MEDIA_COUNT} images/videos`);
       return;
@@ -83,17 +113,83 @@ export default function SubmitProofOfWork() {
       return;
     }
 
-    setIsSubmitting(true);
+    if (!walletAddress) {
+      toast.error('Wallet not connected');
+      return;
+    }
 
-    // Simulate API call
-    setTimeout(() => {
+    setIsSubmitting(true);
+    setUploadProgress(0);
+
+    try {
+      // Step 1: Upload proof media files to IPFS
+      toast.info('Uploading proof media to IPFS...');
+      setUploadProgress(25);
+      
+      const ipfsHashes = await uploadFilesToIPFS(proofMedia);
+      const mimetypes = proofMedia.map(file => file.type);
+      
+      setUploadProgress(50);
+
+      // Step 2: Prepare participant ratings data
+      const ratingsData: ParticipantRating[] = acceptedParticipants.map(participant => {
+        // Extract participant address from ID (format might be "cleanupId-address" or just address)
+        const participantAddress = participant.id.includes('-') 
+          ? participant.id.split('-')[1] 
+          : participant.id;
+        
+        return {
+          participantId: participant.id,
+          participantAddress,
+          participantName: participant.name,
+          rating: participantRatings[participant.id] || 0,
+          ratedAt: new Date().toISOString(),
+          ratedBy: walletAddress,
+        };
+      });
+
+      // Step 3: Upload participant ratings JSON to IPFS
+      toast.info('Uploading participant ratings to IPFS...');
+      setUploadProgress(75);
+      
+      const ratingsIpfsHash = await uploadParticipantRatingsToIPFS(ratingsData, id);
+      
+      // Note: The ratings IPFS hash is stored in the ratings JSON on IPFS
+      // The contract expects ipfsHashes for proof media, but ratings are included in the IPFS data
+      // If needed, you could add the ratings hash as an additional IPFS hash in the array
+      
+      setUploadProgress(90);
+
+      // Step 4: Submit proof of work to the contract
+      toast.info('Submitting proof of work to blockchain...');
+      
+      await submitProofMutation.mutateAsync({
+        cleanupAddress: id,
+        ipfsHashes,
+        mimetypes,
+      });
+
+      setUploadProgress(100);
       toast.success('Proof of work submitted successfully!');
+      
+      // Navigate back to cleanup detail page
+      setTimeout(() => {
+        navigate(`/cleanups/${id}`);
+      }, 1000);
+    } catch (error) {
+      console.error('Error submitting proof of work:', error);
+      toast.error(
+        error instanceof Error 
+          ? `Failed to submit proof: ${error.message}` 
+          : 'Failed to submit proof of work'
+      );
+    } finally {
       setIsSubmitting(false);
-      navigate(`/cleanups/${id}`);
-    }, 1500);
+      setUploadProgress(0);
+    }
   };
 
-  const uploadProgress = Math.min((proofMedia.length / MIN_MEDIA_COUNT) * 100, 100);
+  const mediaProgress = Math.min((proofMedia.length / MIN_MEDIA_COUNT) * 100, 100);
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-4xl mx-auto pb-24 lg:pb-6">
@@ -167,7 +263,7 @@ export default function SubmitProofOfWork() {
                   </Badge>
                 )}
               </div>
-              <Progress value={uploadProgress} className="h-2" />
+              <Progress value={mediaProgress} className="h-2" />
             </div>
 
             {/* Upload Area */}
@@ -292,21 +388,35 @@ export default function SubmitProofOfWork() {
                   </div>
                 </div>
               </div>
-              <Button
-                size="lg"
-                onClick={handleSubmit}
-                disabled={!hasEnoughMedia || !allParticipantsRated || isSubmitting}
-                className="w-full sm:w-auto"
-              >
-                {isSubmitting ? (
-                  <>Submitting...</>
-                ) : (
-                  <>
-                    <Send className="w-4 h-4 mr-2" />
-                    Submit for Review
-                  </>
+              <div className="w-full sm:w-auto space-y-2">
+                {isSubmitting && uploadProgress > 0 && (
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <span>Uploading...</span>
+                      <span>{uploadProgress}%</span>
+                    </div>
+                    <Progress value={uploadProgress} className="h-1" />
+                  </div>
                 )}
-              </Button>
+                <Button
+                  size="lg"
+                  onClick={handleSubmit}
+                  disabled={!hasEnoughMedia || !allParticipantsRated || isSubmitting}
+                  className="w-full sm:w-auto"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4 mr-2" />
+                      Submit for Review
+                    </>
+                  )}
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>

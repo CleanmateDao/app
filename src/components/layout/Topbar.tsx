@@ -14,7 +14,7 @@ interface TopbarProps {
   onMenuClick?: () => void;
 }
 
-const mockNotifications = [
+const sampleNotifications = [
   {
     id: 1,
     title: "Cleanup Completed",
@@ -42,7 +42,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const navigate = useNavigate();
   const { theme, setTheme } = useTheme();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const unreadCount = mockNotifications.filter((n) => n.unread).length;
+  const unreadCount = sampleNotifications.filter((n) => n.unread).length;
 
   return (
     <header className="h-14 lg:h-16 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 bg-background/80 backdrop-blur-sm border-b border-border/50 lg:border-0 lg:bg-transparent">
@@ -136,7 +136,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
               </Button>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {mockNotifications.map((notification) => (
+              {sampleNotifications.map((notification) => (
                 <div
                   key={notification.id}
                   className={`p-4 border-b border-border/50 last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer ${

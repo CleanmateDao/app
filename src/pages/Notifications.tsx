@@ -23,7 +23,7 @@ interface Notification {
   unread: boolean;
 }
 
-const mockNotifications: Notification[] = [
+const sampleNotifications: Notification[] = [
   { id: '1', title: 'Proposal Approved', message: 'Clean Water Initiative has been approved by the committee. You can now proceed with the next steps.', time: '2 min ago', date: 'Today', type: 'proposal', unread: true },
   { id: '2', title: 'New Vote Received', message: 'Your proposal "Solar Power for Schools" received 5 new votes in the last hour.', time: '1 hour ago', date: 'Today', type: 'vote', unread: true },
   { id: '3', title: 'Review Complete', message: 'The review for Solar Power project is complete. Check the feedback from reviewers.', time: '3 hours ago', date: 'Today', type: 'proposal', unread: false },
@@ -51,7 +51,7 @@ const typeColors: Record<Notification['type'], string> = {
 const ITEMS_PER_PAGE_OPTIONS = [5, 10, 20];
 
 export default function Notifications() {
-  const [notifications, setNotifications] = useState(mockNotifications);
+  const [notifications, setNotifications] = useState(sampleNotifications);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [currentPage, setCurrentPage] = useState(1);

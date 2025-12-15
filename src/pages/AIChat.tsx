@@ -16,7 +16,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { insightsData, mockCleanups } from '@/data/mockData';
+import { useCleanups, useRewards, useUser } from '@/services/subgraph/queries';
+import { transformCleanup, transformReward, transformUserToProfile, calculateInsights } from '@/services/subgraph/transformers';
+import { useWalletAddress } from '@/hooks/use-wallet-address';
+import { useMemo } from 'react';
 
 interface Message {
   id: string;
@@ -32,8 +35,12 @@ const quickPrompts = [
   "Summarize my cleanup categories"
 ];
 
-// Simple mock AI responses based on data
-const generateResponse = (query: string): string => {
+// Helper function to generate AI responses based on data
+const generateResponse = (
+  query: string,
+  insightsData: ReturnType<typeof calculateInsights>,
+  cleanups: ReturnType<typeof transformCleanup>[]
+): string => {
   const lowerQuery = query.toLowerCase();
   
   if (lowerQuery.includes('total reward') || lowerQuery.includes('rewards earned')) {
@@ -41,7 +48,7 @@ const generateResponse = (query: string): string => {
   }
   
   if (lowerQuery.includes('active') || lowerQuery.includes('open')) {
-    const openCleanups = mockCleanups.filter(c => c.status === 'open');
+    const openCleanups = cleanups.filter(c => c.status === 'open');
     return `You have **${openCleanups.length} active cleanups** open for registration:\n\n${openCleanups.map(c => `• **${c.title}** - ${c.location.city}`).join('\n')}\n\nWould you like more details on any of these?`;
   }
   
@@ -71,8 +78,35 @@ const generateResponse = (query: string): string => {
 
 export default function AIChat() {
   const location = useLocation();
+  const walletAddress = useWalletAddress();
   const initialQuery = (location.state as { initialQuery?: string })?.initialQuery;
   const hasProcessedInitialQuery = useRef(false);
+
+  // Fetch user data
+  const { data: userData } = useUser(walletAddress);
+  const userProfile = useMemo(() => 
+    userData ? transformUserToProfile(userData, walletAddress || undefined) : null,
+    [userData, walletAddress]
+  );
+
+  // Fetch cleanups
+  const { data: cleanupsData } = useCleanups({ published: true, first: 1000 });
+  const cleanups = useMemo(() => {
+    if (!cleanupsData) return [];
+    return cleanupsData.map(c => transformCleanup(c));
+  }, [cleanupsData]);
+
+  // Fetch rewards
+  const { data: rewardsData } = useRewards(walletAddress || undefined, { first: 1000 });
+  const rewards = useMemo(() => {
+    if (!rewardsData) return [];
+    return rewardsData.map(r => transformReward(r));
+  }, [rewardsData]);
+
+  // Calculate insights
+  const insightsData = useMemo(() => {
+    return calculateInsights(cleanups, rewards, userProfile);
+  }, [cleanups, rewards, userProfile]);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -123,7 +157,7 @@ export default function AIChat() {
     const aiResponse: Message = {
       id: (Date.now() + 1).toString(),
       role: 'assistant',
-      content: generateResponse(messageText),
+      content: generateResponse(messageText, insightsData, cleanups),
       timestamp: new Date(),
     };
 
