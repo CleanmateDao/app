@@ -79,6 +79,5 @@ export default defineConfig(({ mode }) => ({
       "os-browserify",
       "mersenne-twister",
     ],
-    exclude: ["@privy-io/react-auth"],
   },
 }));
