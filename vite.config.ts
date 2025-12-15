@@ -25,7 +25,13 @@ export default defineConfig(({ mode }) => ({
   build: {
     minify: false,
     commonjsOptions: { transformMixedEsModules: true },
-    rollupOptions: { external: ["@privy-io/react-auth"] },
+    rollupOptions: {
+      external: [
+        "@privy-io/react-auth",
+        "@walletconnect/utils",
+        "vm-browserify",
+      ],
+    },
   },
   optimizeDeps: {
     include: [
