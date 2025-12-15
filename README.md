@@ -1,7 +1,3 @@
-# FundFlow - NGO Funding Management Dashboard
-
-A modern, responsive Web3-enabled dashboard for NGOs to manage funding proposals, track transactions, and collaborate with stakeholders.
-
 ## Tech Stack
 
 - **React 18** + **TypeScript** - Core framework
