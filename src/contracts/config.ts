@@ -4,5 +4,6 @@ export const CONTRACT_ADDRESSES = {
   CLEANUP_FACTORY: import.meta.env.VITE_CLEANUP_FACTORY_ADDRESS || "",
   REWARDS_MANAGER: import.meta.env.VITE_REWARDS_MANAGER_ADDRESS || "",
   ADDRESSES_PROVIDER: import.meta.env.VITE_ADDRESSES_PROVIDER_ADDRESS || "",
+  STREAK: import.meta.env.VITE_STREAK_ADDRESS || "",
 } as const;
 

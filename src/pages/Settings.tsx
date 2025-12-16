@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -34,6 +34,7 @@ import {
   Gift,
   Share2,
   Navigation,
+  Loader2,
 } from "lucide-react";
 import africanPattern from "@/assets/african-pattern.jpg";
 import { cn } from "@/lib/utils";
@@ -64,41 +65,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import { defaultNGOProfile } from "@/data/mockData";
 import { toast } from "sonner";
+import { AddBankDialog } from "@/components/AddBankDialog";
+import { DeleteBankAlertDialog } from "@/components/DeleteBankAlertDialog";
+import { ConnectWalletDialog } from "@/components/ConnectWalletDialog";
+import { InviteTeamMemberDialog } from "@/components/InviteTeamMemberDialog";
+import { EditTeamMemberDialog } from "@/components/EditTeamMemberDialog";
+import { RemoveTeamMemberAlertDialog } from "@/components/RemoveTeamMemberAlertDialog";
+import { SignOutAlertDialog } from "@/components/SignOutAlertDialog";
+import { DeactivateAccountAlertDialog } from "@/components/DeactivateAccountAlertDialog";
+import { DeleteAccountAlertDialog } from "@/components/DeleteAccountAlertDialog";
 import { useTheme } from "@/components/ThemeProvider";
 import { useUser } from "@/services/subgraph/queries";
 import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { useMemo, useEffect } from "react";
 import { useSubmitKYCToAPI } from "@/services/api/kyc";
 import {
   useMarkKYCPending,
-  useSetSettingsData,
   useUpdateProfile,
-  useUpdateEmail,
 } from "@/services/contracts/mutations";
-import { uploadSettingsToIPFS, getSettingsFromIPFS } from "@/services/ipfs";
+import type { UserMetadata } from "@/services/subgraph/types";
+import {
+  SUPPORTED_COUNTRIES,
+  SUPPORTED_LANGUAGES,
+  SUPPORTED_CURRENCIES,
+  getStatesForCountry,
+  type SupportedCountryCode,
+  type SupportedCurrencyCode,
+} from "@/constants/supported";
+import {
+  useBanks,
+  useCreateBankAccount,
+  useDeleteBankAccount,
+  useSetDefaultBankAccount,
+  useBanksListByCurrency,
+  type BankAccount,
+} from "@/services/api/banks";
 
 interface TeamMemberPermissions {
   canOrganizeCleanups: boolean;
@@ -117,15 +119,6 @@ interface TeamMember {
   avatar?: string;
 }
 
-interface BankAccount {
-  id: string;
-  bankName: string;
-  accountNumber: string;
-  accountName: string;
-  currency: "NGN" | "GHS";
-  isDefault: boolean;
-}
-
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const walletAddress = useWalletAddress();
@@ -140,17 +133,45 @@ export default function Settings() {
     [userData, walletAddress]
   );
 
-  const [profile, setProfile] = useState(defaultNGOProfile);
+  const [profile, setProfile] = useState({
+    name: "",
+    registrationNumber: "",
+    foundedYear: "",
+    teamSize: "",
+    description: "",
+    mission: "",
+    vision: "",
+    focusAreas: [] as string[],
+    email: "",
+    phone: "",
+    website: "",
+    country: SUPPORTED_COUNTRIES[0]?.name || "",
+    city: "",
+    address: "",
+    walletAddress: "",
+    socialLinks: {
+      twitter: "",
+      linkedin: "",
+      facebook: "",
+    },
+  });
   const [newFocusArea, setNewFocusArea] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [preferences, setPreferences] = useState({
+  const [preferences, setPreferences] = useState<{
+    emailNotifications: boolean;
+    proposalUpdates: boolean;
+    fundingAlerts: boolean;
+    weeklyDigest: boolean;
+    language: string;
+    locationAccess: boolean;
+  }>({
     emailNotifications: true,
     proposalUpdates: true,
     fundingAlerts: true,
     weeklyDigest: false,
-    language: "en",
+    language: SUPPORTED_LANGUAGES[0].code,
     locationAccess: true,
   });
 
@@ -207,24 +228,26 @@ export default function Settings() {
       canManageTeam: false,
     });
 
-  // Bank accounts state
-  const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([
-    {
-      id: "b1",
-      bankName: "First Bank Nigeria",
-      accountNumber: "3045678901",
-      accountName: "GreenEarth Foundation",
-      currency: "NGN",
-      isDefault: true,
-    },
-  ]);
+  // Bank accounts - fetch from API
+  const { data: bankAccounts = [], isLoading: isLoadingBanks } =
+    useBanks(walletAddress);
+  const createBankAccountMutation = useCreateBankAccount();
+  const deleteBankAccountMutation = useDeleteBankAccount();
+  const setDefaultBankAccountMutation = useSetDefaultBankAccount();
   const [isAddBankDialogOpen, setIsAddBankDialogOpen] = useState(false);
   const [newBankAccount, setNewBankAccount] = useState({
     bankName: "",
+    bankCode: "",
     accountNumber: "",
     accountName: "",
-    currency: "NGN" as "NGN" | "GHS",
+    currency: SUPPORTED_CURRENCIES[0].code as SupportedCurrencyCode,
   });
+  const [deleteBankId, setDeleteBankId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+
+  // Fetch banks list from Paystack for the selected currency
+  const { data: paystackBanks = [], isLoading: isLoadingPaystackBanks } =
+    useBanksListByCurrency(newBankAccount.currency);
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -234,16 +257,30 @@ export default function Settings() {
     "not_started" | "pending" | "verified" | "rejected"
   >("not_started");
   const [kycData, setKycData] = useState({
-    idType: "national_id" as "national_id" | "passport",
-    idNumber: "",
-    idDocument: null as string | null,
-    photograph: null as string | null,
+    firstName: "",
+    lastName: "",
+    phoneNumber: "",
+    documentType: "national_id" as
+      | "passport"
+      | "national_id"
+      | "drivers_license"
+      | "other",
+    documentNumber: "",
+    idDocument: null as File | null,
+    idDocumentPreview: null as string | null,
+    photograph: null as File | null,
+    photographPreview: null as string | null,
     dateOfBirth: undefined as Date | undefined,
-    address: "",
-    city: "",
-    postalCode: "",
-    country: "",
-    proofOfAddress: null as string | null,
+    nationality: "",
+    address: {
+      street: "",
+      city: "",
+      state: "",
+      country: "",
+      zipCode: "",
+    },
+    proofOfAddress: null as File | null,
+    proofOfAddressPreview: null as string | null,
   });
   const idDocumentRef = useRef<HTMLInputElement>(null);
   const photographRef = useRef<HTMLInputElement>(null);
@@ -251,21 +288,60 @@ export default function Settings() {
 
   const submitKYCToAPIMutation = useSubmitKYCToAPI();
   const markKYCPendingMutation = useMarkKYCPending();
-  const setSettingsDataMutation = useSetSettingsData();
   const updateProfileMutation = useUpdateProfile();
-  const updateEmailMutation = useUpdateEmail();
 
-  // Load settings from IPFS if available
+  // Load profile metadata from contract if available
   useEffect(() => {
-    const loadSettings = async () => {
-      if (!walletAddress || !userProfile) return;
+    if (!walletAddress || !userProfile) return;
 
-      // In a real implementation, you would fetch the IPFS hash from the contract
-      // and then fetch the settings from IPFS. For now, we'll just use local state.
-      // This would require adding a query to fetch settings IPFS hash from contract
-    };
+    // Update profile from userProfile data
+    if (userProfile) {
+      setProfile((prev) => ({
+        ...prev,
+        name: userProfile.name || prev.name,
+        description: userProfile.bio || prev.description,
+        country:
+          userProfile.country ||
+          prev.country ||
+          SUPPORTED_COUNTRIES[0]?.name ||
+          "",
+        city: userProfile.city || prev.city,
+        focusAreas: userProfile.focusAreas || prev.focusAreas,
+        email: userProfile.email || prev.email,
+        walletAddress: walletAddress || prev.walletAddress,
+      }));
+      if (userProfile.profileImage) {
+        setProfileImage(userProfile.profileImage);
+      }
 
-    loadSettings();
+      // Initialize KYC data from profile
+      if (userProfile.name) {
+        const nameParts = userProfile.name.trim().split(/\s+/);
+        setKycData((prev) => ({
+          ...prev,
+          firstName: nameParts[0] || prev.firstName,
+          lastName: nameParts.slice(1).join(" ") || prev.lastName,
+        }));
+      }
+      if (userProfile.country) {
+        setKycData((prev) => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            country: userProfile.country || prev.address.country,
+          },
+        }));
+      }
+      if (userProfile.city) {
+        setKycData((prev) => ({
+          ...prev,
+          address: {
+            ...prev.address,
+            city: userProfile.city || prev.address.city,
+          },
+        }));
+      }
+    }
   }, [walletAddress, userProfile]);
 
   const handleKycFileUpload = (
@@ -274,10 +350,18 @@ export default function Settings() {
   ) => {
     const file = e.target.files?.[0];
     if (file) {
-      // For KYC, we store the file directly (not uploading to Pinata as per requirement)
+      // Store the File object and create a preview
       const reader = new FileReader();
       reader.onloadend = () => {
-        setKycData((prev) => ({ ...prev, [field]: reader.result as string }));
+        const previewField = `${field}Preview` as
+          | "idDocumentPreview"
+          | "photographPreview"
+          | "proofOfAddressPreview";
+        setKycData((prev) => ({
+          ...prev,
+          [field]: file,
+          [previewField]: reader.result as string,
+        }));
         toast.success("Document uploaded successfully");
       };
       reader.readAsDataURL(file);
@@ -290,12 +374,16 @@ export default function Settings() {
       return;
     }
 
+    // Validate required fields
     if (
-      !kycData.idNumber ||
+      !kycData.firstName ||
+      !kycData.lastName ||
+      !profile.email ||
+      !kycData.documentType ||
       !kycData.idDocument ||
       !kycData.photograph ||
       !kycData.dateOfBirth ||
-      !kycData.address ||
+      !kycData.address.country ||
       !kycData.proofOfAddress
     ) {
       toast.error("Please complete all required fields");
@@ -303,24 +391,44 @@ export default function Settings() {
     }
 
     try {
-      // Step 1: Submit KYC data to backend API via POST request
+      // Step 1: Submit KYC data to KYC service
       toast.info("Submitting KYC data...");
+
+      // Prepare files array
+      const files: File[] = [];
+      if (kycData.idDocument) files.push(kycData.idDocument);
+      if (kycData.photograph) files.push(kycData.photograph);
+      if (kycData.proofOfAddress) files.push(kycData.proofOfAddress);
+
+      // Prepare address object
+      const address = {
+        street: kycData.address.street || undefined,
+        city: kycData.address.city || undefined,
+        state: kycData.address.state || undefined,
+        country: kycData.address.country,
+        zipCode: kycData.address.zipCode || undefined,
+      };
+
       const kycSubmissionData = {
-        idType: kycData.idType,
-        idNumber: kycData.idNumber,
-        dateOfBirth: kycData.dateOfBirth.toISOString(),
-        address: kycData.address,
-        city: kycData.city,
-        postalCode: kycData.postalCode,
-        country: kycData.country,
+        userId: walletAddress,
         walletAddress,
+        firstName: kycData.firstName,
+        lastName: kycData.lastName,
+        email: profile.email,
+        phoneNumber: kycData.phoneNumber || undefined,
+        dateOfBirth: kycData.dateOfBirth.toISOString().split("T")[0],
+        nationality: kycData.nationality || undefined,
+        documentType: kycData.documentType,
+        documentNumber: kycData.documentNumber || undefined,
+        address,
+        files,
       };
 
       await submitKYCToAPIMutation.mutateAsync(kycSubmissionData);
 
       // Step 2: After successful POST, call smart contract mutation
       toast.info("Submitting KYC to blockchain...");
-      await markKYCPendingMutation.mutateAsync();
+      await markKYCPendingMutation.sendTransaction();
 
       setKycStatus("pending");
       toast.success("KYC submitted for review");
@@ -346,48 +454,23 @@ export default function Settings() {
     }
 
     try {
-      // Step 1: Update profile metadata on blockchain (only one contract call)
-      const profileMetadata = JSON.stringify({
+      // Update profile metadata on blockchain using standardized UserMetadata type
+      // Note: email, kycStatus, referralCode are stored in contract, not in metadata
+      const profileMetadata: UserMetadata = {
         name: profile.name,
-        description: profile.description,
+        bio: profile.description,
         country: profile.country,
         city: profile.city,
         focusAreas: profile.focusAreas,
-      });
-
-      toast.info("Updating profile on blockchain...");
-      await updateProfileMutation.mutateAsync(profileMetadata);
-
-      // Step 2: Update email if changed (separate contract call if needed)
-      if (profile.email && profile.email !== userProfile.email) {
-        toast.info("Updating email on blockchain...");
-        await updateEmailMutation.mutateAsync(profile.email);
-      }
-
-      // Step 3: Upload settings to IPFS (only after successful profile update)
-      toast.info("Uploading settings to IPFS...");
-      const settingsData = {
-        profile: {
-          name: profile.name,
-          email: profile.email,
-          description: profile.description,
-          country: profile.country,
-          city: profile.city,
-          focusAreas: profile.focusAreas,
-          profileImage: profileImage,
-        },
-        preferences: preferences,
-        bankAccounts: bankAccounts,
-        walletAddress: profile.walletAddress,
+        profileImage: profileImage,
       };
 
-      const ipfsHash = await uploadSettingsToIPFS(settingsData);
+      toast.info("Updating profile on blockchain...");
+      await updateProfileMutation.sendTransaction(
+        JSON.stringify(profileMetadata)
+      );
 
-      // Step 4: Save IPFS hash to contract
-      toast.info("Saving settings to blockchain...");
-      await setSettingsDataMutation.mutateAsync(ipfsHash);
-
-      toast.success("Settings saved successfully");
+      toast.success("Profile updated successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
       toast.error(
@@ -454,7 +537,7 @@ export default function Settings() {
     toast.success(`Invitation sent to ${inviteEmail}`);
   };
 
-  const handleAddBankAccount = () => {
+  const handleAddBankAccount = async () => {
     if (
       !newBankAccount.bankName.trim() ||
       !newBankAccount.accountNumber.trim() ||
@@ -463,32 +546,67 @@ export default function Settings() {
       toast.error("Please fill in all fields");
       return;
     }
-    const newAccount: BankAccount = {
-      id: Date.now().toString(),
-      ...newBankAccount,
-      isDefault: bankAccounts.length === 0,
-    };
-    setBankAccounts([...bankAccounts, newAccount]);
-    setNewBankAccount({
-      bankName: "",
-      accountNumber: "",
-      accountName: "",
-      currency: "NGN",
-    });
-    setIsAddBankDialogOpen(false);
-    toast.success("Bank account added");
+
+    if (!walletAddress) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+
+    try {
+      await createBankAccountMutation.mutateAsync({
+        ...newBankAccount,
+        userId: walletAddress,
+        isDefault: bankAccounts.length === 0,
+      });
+      setNewBankAccount({
+        bankName: "",
+        bankCode: "",
+        accountNumber: "",
+        accountName: "",
+        currency: SUPPORTED_CURRENCIES[0].code as SupportedCurrencyCode,
+      });
+      setIsAddBankDialogOpen(false);
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
   };
 
   const handleRemoveBankAccount = (id: string) => {
-    setBankAccounts(bankAccounts.filter((b) => b.id !== id));
-    toast.success("Bank account removed");
+    setDeleteBankId(id);
+    setIsDeleteDialogOpen(true);
   };
 
-  const handleSetDefaultBankAccount = (id: string) => {
-    setBankAccounts(
-      bankAccounts.map((b) => ({ ...b, isDefault: b.id === id }))
-    );
-    toast.success("Default bank account updated");
+  const confirmDeleteBankAccount = async () => {
+    if (!deleteBankId || !walletAddress) {
+      return;
+    }
+
+    try {
+      await deleteBankAccountMutation.mutateAsync({
+        id: deleteBankId,
+        userId: walletAddress,
+      });
+      setIsDeleteDialogOpen(false);
+      setDeleteBankId(null);
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
+  };
+
+  const handleSetDefaultBankAccount = async (id: string) => {
+    if (!walletAddress) {
+      toast.error("Please connect your wallet");
+      return;
+    }
+
+    try {
+      await setDefaultBankAccountMutation.mutateAsync({
+        id,
+        userId: walletAddress,
+      });
+    } catch (error) {
+      // Error is handled by the mutation hook
+    }
   };
 
   const maskAccountNumber = (accountNumber: string) => {
@@ -688,13 +806,23 @@ export default function Settings() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
+                  <Select
                     value={profile.country}
-                    onChange={(e) =>
-                      setProfile({ ...profile, country: e.target.value })
+                    onValueChange={(value) =>
+                      setProfile({ ...profile, country: value })
                     }
-                  />
+                  >
+                    <SelectTrigger id="country">
+                      <SelectValue placeholder="Select country" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SUPPORTED_COUNTRIES.map((country) => (
+                        <SelectItem key={country.code} value={country.name}>
+                          {country.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="city">City</Label>
@@ -818,10 +946,14 @@ export default function Settings() {
                 <div className="space-y-2">
                   <Label>Document Type</Label>
                   <Select
-                    value={kycData.idType}
-                    onValueChange={(value: "national_id" | "passport") =>
-                      setKycData({ ...kycData, idType: value })
-                    }
+                    value={kycData.documentType}
+                    onValueChange={(
+                      value:
+                        | "passport"
+                        | "national_id"
+                        | "drivers_license"
+                        | "other"
+                    ) => setKycData({ ...kycData, documentType: value })}
                     disabled={
                       kycStatus === "verified" || kycStatus === "pending"
                     }
@@ -832,23 +964,31 @@ export default function Settings() {
                     <SelectContent>
                       <SelectItem value="national_id">National ID</SelectItem>
                       <SelectItem value="passport">Passport</SelectItem>
+                      <SelectItem value="drivers_license">
+                        Driver's License
+                      </SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>
-                    {kycData.idType === "passport"
+                    {kycData.documentType === "passport"
                       ? "Passport Number"
+                      : kycData.documentType === "drivers_license"
+                      ? "License Number"
                       : "ID Number"}
                   </Label>
                   <Input
-                    value={kycData.idNumber}
+                    value={kycData.documentNumber}
                     onChange={(e) =>
-                      setKycData({ ...kycData, idNumber: e.target.value })
+                      setKycData({ ...kycData, documentNumber: e.target.value })
                     }
                     placeholder={
-                      kycData.idType === "passport"
+                      kycData.documentType === "passport"
                         ? "Enter passport number"
+                        : kycData.documentType === "drivers_license"
+                        ? "Enter license number"
                         : "Enter ID number"
                     }
                     disabled={
@@ -939,9 +1079,9 @@ export default function Settings() {
                     kycData.photograph ? "border-green-500" : "border-border"
                   )}
                 >
-                  {kycData.photograph ? (
+                  {kycData.photographPreview ? (
                     <img
-                      src={kycData.photograph}
+                      src={kycData.photographPreview}
                       alt="Your photo"
                       className="w-full h-full object-cover"
                     />
@@ -966,13 +1106,69 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Calendar className="w-4 h-4" />
+                <User className="w-4 h-4" />
                 Personal Details
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>First Name *</Label>
+                  <Input
+                    value={kycData.firstName}
+                    onChange={(e) =>
+                      setKycData({ ...kycData, firstName: e.target.value })
+                    }
+                    placeholder="Enter your first name"
+                    disabled={
+                      kycStatus === "verified" || kycStatus === "pending"
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Last Name *</Label>
+                  <Input
+                    value={kycData.lastName}
+                    onChange={(e) =>
+                      setKycData({ ...kycData, lastName: e.target.value })
+                    }
+                    placeholder="Enter your last name"
+                    disabled={
+                      kycStatus === "verified" || kycStatus === "pending"
+                    }
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Phone Number</Label>
+                  <Input
+                    value={kycData.phoneNumber}
+                    onChange={(e) =>
+                      setKycData({ ...kycData, phoneNumber: e.target.value })
+                    }
+                    placeholder="Enter your phone number"
+                    disabled={
+                      kycStatus === "verified" || kycStatus === "pending"
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nationality</Label>
+                  <Input
+                    value={kycData.nationality}
+                    onChange={(e) =>
+                      setKycData({ ...kycData, nationality: e.target.value })
+                    }
+                    placeholder="Enter your nationality"
+                    disabled={
+                      kycStatus === "verified" || kycStatus === "pending"
+                    }
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label>Date of Birth</Label>
+                <Label>Date of Birth *</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -1025,9 +1221,12 @@ export default function Settings() {
               <div className="space-y-2">
                 <Label>Street Address</Label>
                 <Textarea
-                  value={kycData.address}
+                  value={kycData.address.street}
                   onChange={(e) =>
-                    setKycData({ ...kycData, address: e.target.value })
+                    setKycData({
+                      ...kycData,
+                      address: { ...kycData.address, street: e.target.value },
+                    })
                   }
                   placeholder="Enter your full street address"
                   rows={2}
@@ -1038,9 +1237,12 @@ export default function Settings() {
                 <div className="space-y-2">
                   <Label>City</Label>
                   <Input
-                    value={kycData.city}
+                    value={kycData.address.city}
                     onChange={(e) =>
-                      setKycData({ ...kycData, city: e.target.value })
+                      setKycData({
+                        ...kycData,
+                        address: { ...kycData.address, city: e.target.value },
+                      })
                     }
                     placeholder="City"
                     disabled={
@@ -1049,11 +1251,53 @@ export default function Settings() {
                   />
                 </div>
                 <div className="space-y-2">
+                  <Label>State/Province</Label>
+                  <Select
+                    value={kycData.address.state}
+                    onValueChange={(value) =>
+                      setKycData({
+                        ...kycData,
+                        address: { ...kycData.address, state: value },
+                      })
+                    }
+                    disabled={
+                      kycStatus === "verified" || kycStatus === "pending"
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select state or province" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(() => {
+                        // Get country code from country name
+                        const country = SUPPORTED_COUNTRIES.find(
+                          (c) => c.name === kycData.address.country
+                        );
+                        const countryCode = country?.code || "NG";
+                        const states = getStatesForCountry(
+                          countryCode as SupportedCountryCode
+                        );
+                        return states.map((state) => (
+                          <SelectItem key={state.code} value={state.name}>
+                            {state.name}
+                          </SelectItem>
+                        ));
+                      })()}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Postal Code</Label>
                   <Input
-                    value={kycData.postalCode}
+                    value={kycData.address.zipCode}
                     onChange={(e) =>
-                      setKycData({ ...kycData, postalCode: e.target.value })
+                      setKycData({
+                        ...kycData,
+                        address: {
+                          ...kycData.address,
+                          zipCode: e.target.value,
+                        },
+                      })
                     }
                     placeholder="Postal code"
                     disabled={
@@ -1061,19 +1305,20 @@ export default function Settings() {
                     }
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Country</Label>
-                  <Input
-                    value={kycData.country}
-                    onChange={(e) =>
-                      setKycData({ ...kycData, country: e.target.value })
-                    }
-                    placeholder="Country"
-                    disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
-                    }
-                  />
-                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Country *</Label>
+                <Input
+                  value={kycData.address.country}
+                  onChange={(e) =>
+                    setKycData({
+                      ...kycData,
+                      address: { ...kycData.address, country: e.target.value },
+                    })
+                  }
+                  placeholder="Country"
+                  disabled={kycStatus === "verified" || kycStatus === "pending"}
+                />
               </div>
             </CardContent>
           </Card>
@@ -1368,108 +1613,25 @@ export default function Settings() {
                   Receive funding via traditional banking (NGN & GHS only)
                 </CardDescription>
               </div>
-              <Dialog
+              <AddBankDialog
                 open={isAddBankDialogOpen}
                 onOpenChange={setIsAddBankDialogOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2">
-                    <Plus className="w-4 h-4" />
-                    Add Account
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="w-[95vw] max-w-md">
-                  <DialogHeader>
-                    <DialogTitle>Add Bank Account</DialogTitle>
-                    <DialogDescription>
-                      Add a new bank account to receive payments.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Currency</Label>
-                      <Select
-                        value={newBankAccount.currency}
-                        onValueChange={(v) =>
-                          setNewBankAccount({
-                            ...newBankAccount,
-                            currency: v as "NGN" | "GHS",
-                          })
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="NGN">
-                            Nigerian Naira (₦)
-                          </SelectItem>
-                          <SelectItem value="GHS">
-                            Ghanaian Cedi (GH₵)
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Bank Name</Label>
-                      <Input
-                        placeholder="Enter bank name"
-                        value={newBankAccount.bankName}
-                        onChange={(e) =>
-                          setNewBankAccount({
-                            ...newBankAccount,
-                            bankName: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Account Number</Label>
-                      <Input
-                        placeholder="Enter account number"
-                        value={newBankAccount.accountNumber}
-                        onChange={(e) =>
-                          setNewBankAccount({
-                            ...newBankAccount,
-                            accountNumber: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Account Holder Name</Label>
-                      <Input
-                        placeholder="Enter account holder name"
-                        value={newBankAccount.accountName}
-                        onChange={(e) =>
-                          setNewBankAccount({
-                            ...newBankAccount,
-                            accountName: e.target.value,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter className="flex-col sm:flex-row gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsAddBankDialogOpen(false)}
-                      className="w-full sm:w-auto"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAddBankAccount}
-                      className="w-full sm:w-auto"
-                    >
-                      Add Account
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                bankAccount={newBankAccount}
+                onBankAccountChange={setNewBankAccount}
+                paystackBanks={paystackBanks}
+                isLoadingPaystackBanks={isLoadingPaystackBanks}
+                onSubmit={handleAddBankAccount}
+                isPending={createBankAccountMutation.isPending}
+              />
             </CardHeader>
             <CardContent>
-              {bankAccounts.length === 0 ? (
+              {isLoadingBanks ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">
+                    Loading bank accounts...
+                  </p>
+                </div>
+              ) : bankAccounts.length === 0 ? (
                 <div className="text-center py-8">
                   <CreditCard className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">
@@ -1519,41 +1681,14 @@ export default function Settings() {
                             Set Default
                           </Button>
                         )}
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent className="w-[95vw] max-w-md">
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>
-                                Remove bank account?
-                              </AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Are you sure you want to remove this bank
-                                account?
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                              <AlertDialogCancel className="w-full sm:w-auto">
-                                Cancel
-                              </AlertDialogCancel>
-                              <AlertDialogAction
-                                onClick={() =>
-                                  handleRemoveBankAccount(account.id)
-                                }
-                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
-                              >
-                                Remove
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive"
+                          onClick={() => handleRemoveBankAccount(account.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -1561,6 +1696,15 @@ export default function Settings() {
               )}
             </CardContent>
           </Card>
+
+          {/* Delete Bank Account Confirmation Dialog */}
+          <DeleteBankAlertDialog
+            open={isDeleteDialogOpen}
+            onOpenChange={setIsDeleteDialogOpen}
+            onConfirm={confirmDeleteBankAccount}
+            isPending={deleteBankAccountMutation.isPending}
+            onCancel={() => setDeleteBankId(null)}
+          />
 
           {/* Web3 Wallet */}
           <Card>
@@ -1583,54 +1727,7 @@ export default function Settings() {
                 />
               </div>
               <div className="flex gap-3">
-                <Dialog>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" className="gap-2">
-                      <Link2 className="w-4 h-4" />
-                      Connect Wallet
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="w-[95vw] max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>Connect Wallet</DialogTitle>
-                      <DialogDescription>
-                        Choose a wallet provider to connect your Web3 wallet.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-3 py-4">
-                      <Button
-                        variant="outline"
-                        className="justify-start h-14"
-                        onClick={handleConnectWallet}
-                      >
-                        <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center mr-3">
-                          <Wallet className="w-4 h-4" />
-                        </div>
-                        MetaMask
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start h-14"
-                        onClick={handleConnectWallet}
-                      >
-                        <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center mr-3">
-                          <Wallet className="w-4 h-4" />
-                        </div>
-                        WalletConnect
-                      </Button>
-                      <Button
-                        variant="outline"
-                        className="justify-start h-14"
-                        onClick={handleConnectWallet}
-                      >
-                        <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center mr-3">
-                          <Wallet className="w-4 h-4" />
-                        </div>
-                        Coinbase Wallet
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <ConnectWalletDialog onConnect={handleConnectWallet} />
               </div>
             </CardContent>
           </Card>
@@ -1680,16 +1777,21 @@ export default function Settings() {
                 <Select
                   value={preferences.language}
                   onValueChange={(value) =>
-                    setPreferences({ ...preferences, language: value })
+                    setPreferences({
+                      ...preferences,
+                      language: value as string,
+                    })
                   }
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
+                    {SUPPORTED_LANGUAGES.map((language) => (
+                      <SelectItem key={language.code} value={language.code}>
+                        {language.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -1842,164 +1944,15 @@ export default function Settings() {
                   Manage who can help organize your cleanups
                 </CardDescription>
               </div>
-              <Dialog
+              <InviteTeamMemberDialog
                 open={isInviteDialogOpen}
                 onOpenChange={setIsInviteDialogOpen}
-              >
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2">
-                    <UserPlus className="w-4 h-4" />
-                    Invite
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Invite Team Member</DialogTitle>
-                    <DialogDescription>
-                      Send an invitation and select their permissions.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label>Email Address</Label>
-                      <Input
-                        type="email"
-                        placeholder="colleague@example.com"
-                        value={inviteEmail}
-                        onChange={(e) => setInviteEmail(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-3">
-                      <Label>Permissions</Label>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">
-                              Organize Cleanups
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Can create and manage cleanup events
-                            </p>
-                          </div>
-                          <Switch
-                            checked={invitePermissions.canOrganizeCleanups}
-                            onCheckedChange={(checked) =>
-                              setInvitePermissions({
-                                ...invitePermissions,
-                                canOrganizeCleanups: checked,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">
-                              Manage Participants
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Can accept or reject participant applications
-                            </p>
-                          </div>
-                          <Switch
-                            checked={invitePermissions.canManageParticipants}
-                            onCheckedChange={(checked) =>
-                              setInvitePermissions({
-                                ...invitePermissions,
-                                canManageParticipants: checked,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">
-                              Submit Proof of Work
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Can submit cleanup evidence
-                            </p>
-                          </div>
-                          <Switch
-                            checked={invitePermissions.canSubmitProof}
-                            onCheckedChange={(checked) =>
-                              setInvitePermissions({
-                                ...invitePermissions,
-                                canSubmitProof: checked,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">View Rewards</p>
-                            <p className="text-xs text-muted-foreground">
-                              Can see reward information
-                            </p>
-                          </div>
-                          <Switch
-                            checked={invitePermissions.canViewRewards}
-                            onCheckedChange={(checked) =>
-                              setInvitePermissions({
-                                ...invitePermissions,
-                                canViewRewards: checked,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">Claim Rewards</p>
-                            <p className="text-xs text-muted-foreground">
-                              Can claim rewards to wallet or bank
-                            </p>
-                          </div>
-                          <Switch
-                            checked={invitePermissions.canClaimRewards}
-                            onCheckedChange={(checked) =>
-                              setInvitePermissions({
-                                ...invitePermissions,
-                                canClaimRewards: checked,
-                              })
-                            }
-                          />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium">Manage Team</p>
-                            <p className="text-xs text-muted-foreground">
-                              Can invite and remove team members
-                            </p>
-                          </div>
-                          <Switch
-                            checked={invitePermissions.canManageTeam}
-                            onCheckedChange={(checked) =>
-                              setInvitePermissions({
-                                ...invitePermissions,
-                                canManageTeam: checked,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <DialogFooter className="flex-col sm:flex-row gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsInviteDialogOpen(false)}
-                      className="w-full sm:w-auto"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleInviteMember}
-                      className="w-full sm:w-auto"
-                    >
-                      Send Invitation
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
+                email={inviteEmail}
+                onEmailChange={setInviteEmail}
+                permissions={invitePermissions}
+                onPermissionsChange={setInvitePermissions}
+                onSubmit={handleInviteMember}
+              />
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
@@ -2086,201 +2039,13 @@ export default function Settings() {
           </Card>
 
           {/* Edit Member Dialog */}
-          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-            <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Edit Team Member</DialogTitle>
-                <DialogDescription>
-                  Update permissions for {editingMember?.name}.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-3">
-                  <Label>Permissions</Label>
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Organize Cleanups</p>
-                        <p className="text-xs text-muted-foreground">
-                          Can create and manage cleanup events
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          editingMember?.permissions.canOrganizeCleanups ??
-                          false
-                        }
-                        onCheckedChange={(checked) =>
-                          setEditingMember(
-                            editingMember
-                              ? {
-                                  ...editingMember,
-                                  permissions: {
-                                    ...editingMember.permissions,
-                                    canOrganizeCleanups: checked,
-                                  },
-                                }
-                              : null
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">
-                          Manage Participants
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Can accept or reject participant applications
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          editingMember?.permissions.canManageParticipants ??
-                          false
-                        }
-                        onCheckedChange={(checked) =>
-                          setEditingMember(
-                            editingMember
-                              ? {
-                                  ...editingMember,
-                                  permissions: {
-                                    ...editingMember.permissions,
-                                    canManageParticipants: checked,
-                                  },
-                                }
-                              : null
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">
-                          Submit Proof of Work
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Can submit cleanup evidence
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          editingMember?.permissions.canSubmitProof ?? false
-                        }
-                        onCheckedChange={(checked) =>
-                          setEditingMember(
-                            editingMember
-                              ? {
-                                  ...editingMember,
-                                  permissions: {
-                                    ...editingMember.permissions,
-                                    canSubmitProof: checked,
-                                  },
-                                }
-                              : null
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">View Rewards</p>
-                        <p className="text-xs text-muted-foreground">
-                          Can see reward information
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          editingMember?.permissions.canViewRewards ?? false
-                        }
-                        onCheckedChange={(checked) =>
-                          setEditingMember(
-                            editingMember
-                              ? {
-                                  ...editingMember,
-                                  permissions: {
-                                    ...editingMember.permissions,
-                                    canViewRewards: checked,
-                                  },
-                                }
-                              : null
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Claim Rewards</p>
-                        <p className="text-xs text-muted-foreground">
-                          Can claim rewards to wallet or bank
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          editingMember?.permissions.canClaimRewards ?? false
-                        }
-                        onCheckedChange={(checked) =>
-                          setEditingMember(
-                            editingMember
-                              ? {
-                                  ...editingMember,
-                                  permissions: {
-                                    ...editingMember.permissions,
-                                    canClaimRewards: checked,
-                                  },
-                                }
-                              : null
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-medium">Manage Team</p>
-                        <p className="text-xs text-muted-foreground">
-                          Can invite and remove team members
-                        </p>
-                      </div>
-                      <Switch
-                        checked={
-                          editingMember?.permissions.canManageTeam ?? false
-                        }
-                        onCheckedChange={(checked) =>
-                          setEditingMember(
-                            editingMember
-                              ? {
-                                  ...editingMember,
-                                  permissions: {
-                                    ...editingMember.permissions,
-                                    canManageTeam: checked,
-                                  },
-                                }
-                              : null
-                          )
-                        }
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <DialogFooter className="flex-col sm:flex-row gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsEditDialogOpen(false)}
-                  className="w-full sm:w-auto"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={handleUpdateMember}
-                  className="w-full sm:w-auto"
-                >
-                  <Check className="w-4 h-4 mr-2" />
-                  Save Changes
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <EditTeamMemberDialog
+            open={isEditDialogOpen}
+            onOpenChange={setIsEditDialogOpen}
+            member={editingMember}
+            onMemberChange={setEditingMember}
+            onSave={handleUpdateMember}
+          />
         </TabsContent>
 
         {/* Account Tab */}
@@ -2300,31 +2065,7 @@ export default function Settings() {
                     Sign out of your account on this device
                   </p>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="outline">Sign Out</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="w-[95vw] max-w-md">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Sign out?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        You will be signed out of your account on this device.
-                        You can sign back in at any time.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                      <AlertDialogCancel className="w-full sm:w-auto">
-                        Cancel
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleSignOut}
-                        className="w-full sm:w-auto"
-                      >
-                        Sign Out
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <SignOutAlertDialog onSignOut={handleSignOut} />
               </div>
             </CardContent>
           </Card>
@@ -2344,36 +2085,7 @@ export default function Settings() {
                     Temporarily disable your account
                   </p>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className="text-destructive hover:text-destructive"
-                    >
-                      Deactivate
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="w-[95vw] max-w-md">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Deactivate account?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Your account will be temporarily disabled. You can
-                        reactivate it by signing in again.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                      <AlertDialogCancel className="w-full sm:w-auto">
-                        Cancel
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDeactivate}
-                        className="bg-destructive text-destructive-foreground w-full sm:w-auto"
-                      >
-                        Deactivate
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <DeactivateAccountAlertDialog onDeactivate={handleDeactivate} />
               </div>
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
@@ -2382,33 +2094,7 @@ export default function Settings() {
                     Permanently delete your account and data
                   </p>
                 </div>
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive">Delete Account</Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent className="w-[95vw] max-w-md">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>
-                        Delete account permanently?
-                      </AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. All your data and cleanup
-                        history will be permanently deleted.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                      <AlertDialogCancel className="w-full sm:w-auto">
-                        Cancel
-                      </AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={handleDeleteAccount}
-                        className="bg-destructive text-destructive-foreground w-full sm:w-auto"
-                      >
-                        Delete Forever
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <DeleteAccountAlertDialog onDelete={handleDeleteAccount} />
               </div>
             </CardContent>
           </Card>

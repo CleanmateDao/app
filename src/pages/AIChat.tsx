@@ -1,25 +1,15 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, User, Bot, Loader2, Trash2 } from 'lucide-react';
+import { Send, Sparkles, User, Bot, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
+import { ClearChatAlertDialog } from '@/components/ClearChatAlertDialog';
 import { useCleanups, useRewards, useUser } from '@/services/subgraph/queries';
 import { transformCleanup, transformReward, transformUserToProfile, calculateInsights } from '@/services/subgraph/transformers';
 import { useWalletAddress } from '@/hooks/use-wallet-address';
-import { useMemo } from 'react';
+import { useTemiChat } from '@/services/api/temi';
 
 interface Message {
   id: string;
@@ -35,47 +25,6 @@ const quickPrompts = [
   "Summarize my cleanup categories"
 ];
 
-// Helper function to generate AI responses based on data
-const generateResponse = (
-  query: string,
-  insightsData: ReturnType<typeof calculateInsights>,
-  cleanups: ReturnType<typeof transformCleanup>[]
-): string => {
-  const lowerQuery = query.toLowerCase();
-  
-  if (lowerQuery.includes('total reward') || lowerQuery.includes('rewards earned')) {
-    return `Your total rewards earned is **${insightsData.totalRewards.toLocaleString()} B3TR**. Keep up the great work organizing and participating in cleanups!`;
-  }
-  
-  if (lowerQuery.includes('active') || lowerQuery.includes('open')) {
-    const openCleanups = cleanups.filter(c => c.status === 'open');
-    return `You have **${openCleanups.length} active cleanups** open for registration:\n\n${openCleanups.map(c => `• **${c.title}** - ${c.location.city}`).join('\n')}\n\nWould you like more details on any of these?`;
-  }
-  
-  if (lowerQuery.includes('completed') || lowerQuery.includes('finished')) {
-    return `You have completed **${insightsData.cleanupsCompleted} cleanups** so far! That's amazing progress for environmental impact.`;
-  }
-  
-  if (lowerQuery.includes('categor') || lowerQuery.includes('breakdown')) {
-    const categories = insightsData.categoryData;
-    return `Here's your cleanup breakdown by category:\n\n${categories.map(c => `• **${c.name}**: ${c.value}%`).join('\n')}\n\nBeach cleanups lead with the highest participation.`;
-  }
-  
-  if (lowerQuery.includes('participant') || lowerQuery.includes('helped')) {
-    return `You have helped **${insightsData.participantsHelped} participants** join cleanups. Great community building!`;
-  }
-  
-  if (lowerQuery.includes('nearby') || lowerQuery.includes('location')) {
-    return `There are **${insightsData.activeCleanupsNearby} active cleanups** near your location. Check the Cleanups page to see them on the map!`;
-  }
-  
-  if (lowerQuery.includes('hello') || lowerQuery.includes('hi') || lowerQuery.includes('hey')) {
-    return `Hello! 👋 I'm your Cleanup AI assistant. I can help you with:\n\n• Viewing cleanup insights and rewards\n• Checking cleanup statuses\n• Analyzing your participation\n• Exploring category breakdowns\n\nWhat would you like to know?`;
-  }
-  
-  return `I understand you're asking about "${query}". Based on your account data:\n\n• **Total Rewards**: ${insightsData.totalRewards.toLocaleString()} B3TR\n• **Cleanups Completed**: ${insightsData.cleanupsCompleted}\n• **Participants Helped**: ${insightsData.participantsHelped}\n\nCould you be more specific about what you'd like to know? I can help with cleanups, rewards, or participation analytics.`;
-};
-
 export default function AIChat() {
   const location = useLocation();
   const walletAddress = useWalletAddress();
@@ -90,7 +39,7 @@ export default function AIChat() {
   );
 
   // Fetch cleanups
-  const { data: cleanupsData } = useCleanups({ published: true, first: 1000 });
+  const { data: cleanupsData } = useCleanups({ where: { published: true }, first: 1000, userAddress: walletAddress || undefined });
   const cleanups = useMemo(() => {
     if (!cleanupsData) return [];
     return cleanupsData.map(c => transformCleanup(c));
@@ -108,6 +57,9 @@ export default function AIChat() {
     return calculateInsights(cleanups, rewards, userProfile);
   }, [cleanups, rewards, userProfile]);
 
+  // Temi chat mutation
+  const temiChatMutation = useTemiChat();
+
   const [messages, setMessages] = useState<Message[]>([
     {
       id: '1',
@@ -117,7 +69,7 @@ export default function AIChat() {
     }
   ]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const isLoading = temiChatMutation.isPending;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -147,22 +99,47 @@ export default function AIChat() {
       timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    // Get current messages before updating to build history
+    let currentMessages: Message[] = [];
+    setMessages(prev => {
+      currentMessages = prev;
+      return [...prev, userMessage];
+    });
     setInput('');
-    setIsLoading(true);
 
-    // Simulate AI response delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 1000));
+    // Prepare chat history for the API (exclude initial greeting)
+    const chatHistory = currentMessages
+      .filter(msg => msg.id !== '1')
+      .map(msg => ({
+        role: msg.role,
+        content: msg.content,
+      }));
 
-    const aiResponse: Message = {
-      id: (Date.now() + 1).toString(),
-      role: 'assistant',
-      content: generateResponse(messageText, insightsData, cleanups),
-      timestamp: new Date(),
-    };
+    try {
+      const response = await temiChatMutation.mutateAsync({
+        message: messageText,
+        history: chatHistory.length > 0 ? chatHistory : undefined,
+      });
 
-    setMessages(prev => [...prev, aiResponse]);
-    setIsLoading(false);
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: response.message,
+        timestamp: new Date(response.timestamp),
+      };
+
+      setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      // Error is already handled by the mutation's onError callback
+      // Add error message to chat for user visibility
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: 'assistant',
+        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        timestamp: new Date(),
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    }
   };
 
   const handleClearChat = () => {
@@ -197,25 +174,7 @@ export default function AIChat() {
             <p className="text-xs lg:text-sm text-muted-foreground">Your CleanMate AI Assistant</p>
           </div>
         </div>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="ghost" size="icon" className="text-muted-foreground">
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear chat history?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will delete all messages in this conversation. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleClearChat}>Clear</AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <ClearChatAlertDialog onClear={handleClearChat} />
       </div>
 
       {/* Messages */}

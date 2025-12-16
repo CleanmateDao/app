@@ -9,7 +9,6 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import Landing from "./pages/Landing";
 import Insights from "./pages/Insights";
 import Cleanups from "./pages/Cleanups";
 import CleanupDetail from "./pages/CleanupDetail";
@@ -21,9 +20,6 @@ import AIChat from "./pages/AIChat";
 import Onboarding from "./pages/Onboarding";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
-import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import HelpCenter from "./pages/HelpCenter";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -86,11 +82,8 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Landing />} />
+                <Route path="/" element={<Navigate to="/onboarding" replace />} />
                 <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/terms" element={<TermsOfService />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
-                <Route path="/help" element={<HelpCenter />} />
                 <Route
                   path="/dashboard"
                   element={

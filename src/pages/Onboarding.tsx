@@ -31,15 +31,20 @@ import {
 import { toast } from "sonner";
 import africanPattern from "@/assets/african-pattern-decorative.jpg";
 import africanMask from "@/assets/african-mask.jpg";
-import { uploadOnboardingToIPFS } from "@/services/ipfs";
 import {
-  useSetOnboardingData,
   useRegisterUser,
   useRegisterWithReferral,
+  useUpdateProfile,
 } from "@/services/contracts/mutations";
+import type { UserMetadata } from "@/services/subgraph/types";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSearchParams } from "react-router-dom";
 import { useUser } from "@/services/subgraph/queries";
+import {
+  SUPPORTED_COUNTRIES,
+  getStatesForCountry,
+  type SupportedCountryCode,
+} from "@/constants/supported";
 
 export interface OnboardingData {
   // Profile
@@ -49,6 +54,7 @@ export interface OnboardingData {
 
   // Location
   country: string;
+  state: string;
   city: string;
 
   // Interests
@@ -69,6 +75,7 @@ const initialData: OnboardingData = {
   email: "",
   bio: "",
   country: "",
+  state: "",
   city: "",
   interests: [],
   walletAddress: "",
@@ -166,9 +173,9 @@ export default function Onboarding() {
   const { data: existingUser } = useUser(walletAddress);
   const userExists = !!existingUser;
 
-  const setOnboardingDataMutation = useSetOnboardingData();
   const registerUserMutation = useRegisterUser();
   const registerWithReferralMutation = useRegisterWithReferral();
+  const updateProfileMutation = useUpdateProfile();
 
   const progress = (currentStep / steps.length) * 100;
 
@@ -211,56 +218,40 @@ export default function Onboarding() {
     setIsSubmitting(true);
 
     try {
-      // Prepare user metadata (for contract)
-      const userMetadata = JSON.stringify({
-        fullName: data.fullName,
+      // Prepare user metadata using standardized UserMetadata type
+      // Note: email, walletAddress, referralCode are stored in contract, not in metadata
+      const userMetadata: UserMetadata = {
+        name: data.fullName,
         bio: data.bio,
         country: data.country,
+        state: data.state || undefined,
         city: data.city,
         interests: data.interests,
-      });
-
-      // Step 1: Register user on blockchain (only one contract call)
-      if (userExists) {
-        toast.error(
-          "User already registered. Please use Settings to update your profile."
-        );
-        return;
-      }
-
-      toast.info("Registering on blockchain...");
-      if (data.referralCode) {
-        await registerWithReferralMutation.mutateAsync({
-          metadata: userMetadata,
-          email: data.email,
-          referralCode: data.referralCode,
-        });
-      } else {
-        await registerUserMutation.mutateAsync({
-          metadata: userMetadata,
-          email: data.email,
-        });
-      }
-
-      // Step 2: Upload onboarding data to IPFS (only after successful registration)
-      toast.info("Uploading onboarding data to IPFS...");
-      const onboardingData = {
-        fullName: data.fullName,
-        email: data.email,
-        bio: data.bio,
-        country: data.country,
-        city: data.city,
-        interests: data.interests,
-        walletAddress: data.walletAddress || walletAddress,
-        referralCode: data.referralCode,
-        agreeTerms: data.agreeTerms,
       };
 
-      const ipfsHash = await uploadOnboardingToIPFS(onboardingData);
-
-      // Step 3: Save onboarding IPFS hash to contract
-      toast.info("Saving onboarding data...");
-      await setOnboardingDataMutation.mutateAsync(ipfsHash);
+      // Step 1: Register user on blockchain or update profile if exists
+      if (userExists) {
+        // User already exists, just update profile metadata
+        toast.info("Updating profile...");
+        await updateProfileMutation.sendTransaction(
+          JSON.stringify(userMetadata)
+        );
+      } else {
+        // New user registration
+        toast.info("Registering on blockchain...");
+        if (data.referralCode) {
+          await registerWithReferralMutation.sendTransaction({
+            metadata: JSON.stringify(userMetadata),
+            email: data.email,
+            referralCode: data.referralCode,
+          });
+        } else {
+          await registerUserMutation.sendTransaction({
+            metadata: JSON.stringify(userMetadata),
+            email: data.email,
+          });
+        }
+      }
 
       localStorage.setItem("onboardingComplete", "true");
       localStorage.setItem("userProfile", JSON.stringify(data));
@@ -586,7 +577,7 @@ export default function Onboarding() {
                         <Select
                           value={data.country}
                           onValueChange={(value) =>
-                            updateData({ country: value })
+                            updateData({ country: value, state: "" })
                           }
                         >
                           <SelectTrigger>
@@ -601,6 +592,45 @@ export default function Onboarding() {
                           </SelectContent>
                         </Select>
                       </div>
+
+                      {(() => {
+                        if (!data.country) return null;
+                        
+                        // Get country code from country name
+                        const country = SUPPORTED_COUNTRIES.find(
+                          (c) => c.name === data.country
+                        );
+                        const countryCode = country?.code || "NG";
+                        const states = getStatesForCountry(
+                          countryCode as SupportedCountryCode
+                        );
+                        
+                        // Only show state dropdown if states are available for the selected country
+                        if (states.length === 0) return null;
+                        
+                        return (
+                          <div className="space-y-2">
+                            <Label htmlFor="state">State/Province</Label>
+                            <Select
+                              value={data.state}
+                              onValueChange={(value) =>
+                                updateData({ state: value })
+                              }
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select state or province" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {states.map((state) => (
+                                  <SelectItem key={state.code} value={state.name}>
+                                    {state.name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        );
+                      })()}
 
                       <div className="space-y-2">
                         <Label htmlFor="city">City</Label>

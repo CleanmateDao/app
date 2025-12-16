@@ -4,9 +4,18 @@ import type {
   GetCleanupResponse,
   GetCleanupsResponse,
   GetRewardsResponse,
+  GetTransactionsResponse,
   GetNotificationsResponse,
   GetUserCleanupsResponse,
   GetCleanupParticipantsResponse,
+  GetTeamMembershipsResponse,
+  GetTransactionsQueryParams,
+  GetCleanupsQueryParams,
+  GetTeamMembershipsQueryParams,
+  GetStreakSubmissionResponse,
+  GetStreakSubmissionsResponse,
+  GetUserStreakStatsResponse,
+  GetStreakSubmissionsQueryParams,
 } from "./types";
 
 const SUBGRAPH_URL =
@@ -21,6 +30,7 @@ const GET_USER_QUERY = `
     user(id: $id) {
       id
       metadata
+      email
       emailVerified
       kycStatus
       referralCode
@@ -88,8 +98,8 @@ const GET_CLEANUP_QUERY = `
 `;
 
 const GET_CLEANUPS_QUERY = `
-  query GetCleanups($first: Int, $skip: Int, $where: Cleanup_filter) {
-    cleanups(first: $first, skip: $skip, where: $where, orderBy: createdAt, orderDirection: desc) {
+  query GetCleanups($first: Int, $skip: Int, $where: Cleanup_filter, $orderBy: Cleanup_orderBy, $orderDirection: OrderDirection) {
+    cleanups(first: $first, skip: $skip, where: $where, orderBy: $orderBy, orderDirection: $orderDirection) {
       id
       organizer
       metadata
@@ -237,6 +247,28 @@ const GET_REWARDS_QUERY = `
   }
 `;
 
+const GET_TRANSACTIONS_QUERY = `
+  query GetTransactions($first: Int, $skip: Int, $where: Transaction_filter, $orderBy: Transaction_orderBy, $orderDirection: OrderDirection) {
+    transactions(
+      first: $first
+      skip: $skip
+      where: $where
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+    ) {
+      id
+      user
+      cleanupId
+      amount
+      transactionType
+      rewardType
+      timestamp
+      blockNumber
+      transactionHash
+    }
+  }
+`;
+
 const GET_NOTIFICATIONS_QUERY = `
   query GetNotifications($user: Bytes!, $first: Int, $skip: Int) {
     notifications(
@@ -257,6 +289,101 @@ const GET_NOTIFICATIONS_QUERY = `
       createdAt
       blockNumber
       transactionHash
+    }
+  }
+`;
+
+const GET_TEAM_MEMBERSHIPS_QUERY = `
+  query GetTeamMemberships($first: Int, $skip: Int, $where: TeamMembership_filter, $orderBy: TeamMembership_orderBy, $orderDirection: OrderDirection) {
+    teamMemberships(
+      first: $first
+      skip: $skip
+      where: $where
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+    ) {
+      id
+      organizer
+      member
+      canEditCleanups
+      canManageParticipants
+      canSubmitProof
+      addedAt
+      lastUpdatedAt
+    }
+  }
+`;
+
+const GET_STREAK_SUBMISSION_QUERY = `
+  query GetStreakSubmission($id: ID!) {
+    streakSubmission(id: $id) {
+      id
+      user
+      submissionId
+      metadata
+      status
+      submittedAt
+      reviewedAt
+      amount
+      rejectionReason
+      ipfsHashes
+      mimetypes
+      blockNumber
+      transactionHash
+      media {
+        id
+        ipfsHash
+        mimeType
+        index
+      }
+    }
+  }
+`;
+
+const GET_STREAK_SUBMISSIONS_QUERY = `
+  query GetStreakSubmissions($first: Int, $skip: Int, $where: StreakSubmission_filter, $orderBy: StreakSubmission_orderBy, $orderDirection: OrderDirection) {
+    streakSubmissions(
+      first: $first
+      skip: $skip
+      where: $where
+      orderBy: $orderBy
+      orderDirection: $orderDirection
+    ) {
+      id
+      user
+      submissionId
+      metadata
+      status
+      submittedAt
+      reviewedAt
+      amount
+      rejectionReason
+      ipfsHashes
+      mimetypes
+      blockNumber
+      transactionHash
+      media {
+        id
+        ipfsHash
+        mimeType
+        index
+      }
+    }
+  }
+`;
+
+const GET_USER_STREAK_STATS_QUERY = `
+  query GetUserStreakStats($id: Bytes!) {
+    userStreakStats(id: $id) {
+      id
+      user
+      streakerCode
+      totalSubmissions
+      approvedSubmissions
+      rejectedSubmissions
+      pendingSubmissions
+      totalAmount
+      lastSubmissionAt
     }
   }
 `;
@@ -283,20 +410,14 @@ export const subgraphClient = {
     });
   },
 
-  async getCleanups(params?: {
-    first?: number;
-    skip?: number;
-    where?: {
-      organizer?: string;
-      status?: number;
-      published?: boolean;
-      city?: string;
-      country?: string;
-    };
-  }): Promise<GetCleanupsResponse> {
+  async getCleanups(
+    params?: GetCleanupsQueryParams
+  ): Promise<GetCleanupsResponse> {
     const variables: Record<string, unknown> = {
       first: params?.first ?? 100,
       skip: params?.skip ?? 0,
+      orderBy: params?.orderBy ?? "createdAt",
+      orderDirection: params?.orderDirection ?? "desc",
     };
 
     if (params?.where) {
@@ -310,13 +431,19 @@ export const subgraphClient = {
       if (params.where.published !== undefined) {
         where.published = params.where.published;
       }
-      if (params.where.city) {
-        where.city = params.where.city;
-      }
-      if (params.where.country) {
-        where.country = params.where.country;
-      }
       variables.where = where;
+    }
+
+    // If userState is provided, add it to where filter for state-based ordering
+    // The subgraph will order by matching state in location/city fields
+    if (params?.userState) {
+      if (!variables.where) {
+        variables.where = {};
+      }
+      // Filter by location containing the state (location field contains full address string)
+      // This works if location field contains the state information
+      (variables.where as Record<string, unknown>).location_contains =
+        params.userState;
     }
 
     return client.request<GetCleanupsResponse>(GET_CLEANUPS_QUERY, variables);
@@ -358,6 +485,39 @@ export const subgraphClient = {
     });
   },
 
+  async getTransactions(
+    params?: GetTransactionsQueryParams
+  ): Promise<GetTransactionsResponse> {
+    const variables: Record<string, unknown> = {
+      first: params?.first ?? 100,
+      skip: params?.skip ?? 0,
+      orderBy: params?.orderBy ?? "timestamp",
+      orderDirection: params?.orderDirection ?? "desc",
+    };
+
+    if (params?.where) {
+      const where: Record<string, unknown> = {};
+      if (params.where.user) {
+        where.user = normalizeAddress(params.where.user);
+      }
+      if (params.where.cleanupId) {
+        where.cleanupId = normalizeAddress(params.where.cleanupId);
+      }
+      if (params.where.transactionType) {
+        where.transactionType = params.where.transactionType;
+      }
+      if (params.where.rewardType !== undefined) {
+        where.rewardType = params.where.rewardType;
+      }
+      variables.where = where;
+    }
+
+    return client.request<GetTransactionsResponse>(
+      GET_TRANSACTIONS_QUERY,
+      variables
+    );
+  },
+
   async getNotifications(
     userAddress: string,
     params?: { first?: number; skip?: number }
@@ -367,5 +527,81 @@ export const subgraphClient = {
       first: params?.first ?? 100,
       skip: params?.skip ?? 0,
     });
+  },
+
+  async getTeamMemberships(
+    params?: GetTeamMembershipsQueryParams
+  ): Promise<GetTeamMembershipsResponse> {
+    const variables: Record<string, unknown> = {
+      first: params?.first ?? 100,
+      skip: params?.skip ?? 0,
+      orderBy: params?.orderBy ?? "addedAt",
+      orderDirection: params?.orderDirection ?? "desc",
+    };
+
+    if (params?.where) {
+      const where: Record<string, unknown> = {};
+      if (params.where.organizer) {
+        where.organizer = normalizeAddress(params.where.organizer);
+      }
+      if (params.where.member) {
+        where.member = normalizeAddress(params.where.member);
+      }
+      variables.where = where;
+    }
+
+    return client.request<GetTeamMembershipsResponse>(
+      GET_TEAM_MEMBERSHIPS_QUERY,
+      variables
+    );
+  },
+
+  async getStreakSubmission(
+    submissionId: string
+  ): Promise<GetStreakSubmissionResponse> {
+    return client.request<GetStreakSubmissionResponse>(
+      GET_STREAK_SUBMISSION_QUERY,
+      {
+        id: submissionId,
+      }
+    );
+  },
+
+  async getStreakSubmissions(
+    params?: GetStreakSubmissionsQueryParams
+  ): Promise<GetStreakSubmissionsResponse> {
+    const variables: Record<string, unknown> = {
+      first: params?.first ?? 100,
+      skip: params?.skip ?? 0,
+      orderBy: params?.orderBy ?? "submittedAt",
+      orderDirection: params?.orderDirection ?? "desc",
+    };
+
+    if (params?.where) {
+      const where: Record<string, unknown> = {};
+      if (params.where.user) {
+        where.user = normalizeAddress(params.where.user);
+      }
+      if (params.where.status !== undefined) {
+        where.status = params.where.status;
+      }
+      variables.where = where;
+    }
+
+    return client.request<GetStreakSubmissionsResponse>(
+      GET_STREAK_SUBMISSIONS_QUERY,
+      variables
+    );
+  },
+
+  async getUserStreakStats(
+    userAddress: string
+  ): Promise<GetUserStreakStatsResponse> {
+    return client.request<GetUserStreakStatsResponse>(
+      GET_USER_STREAK_STATS_QUERY,
+      {
+        id: normalizeAddress(userAddress),
+      }
+    );
   },
 };

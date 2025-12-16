@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Bell, Check, CheckCheck, Trash2, Filter, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { Bell, Check, CheckCheck, Trash2, Filter, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -48,38 +48,77 @@ const typeColors: Record<Notification['type'], string> = {
   system: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
 };
 
-const ITEMS_PER_PAGE_OPTIONS = [5, 10, 20];
+
+const ITEMS_PER_LOAD = 10;
 
 export default function Notifications() {
   const [notifications, setNotifications] = useState(sampleNotifications);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  const [displayedCount, setDisplayedCount] = useState(ITEMS_PER_LOAD);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const unreadCount = notifications.filter(n => n.unread).length;
 
-  const filteredNotifications = notifications.filter(n => {
-    const matchesFilter = filter === 'all' || 
-      (filter === 'unread' && n.unread) || 
-      n.type === filter;
-    const matchesSearch = n.title.toLowerCase().includes(search.toLowerCase()) ||
-      n.message.toLowerCase().includes(search.toLowerCase());
-    return matchesFilter && matchesSearch;
-  });
+  const filteredNotifications = useMemo(() => {
+    return notifications.filter(n => {
+      const matchesFilter = filter === 'all' || 
+        (filter === 'unread' && n.unread) || 
+        n.type === filter;
+      const matchesSearch = n.title.toLowerCase().includes(search.toLowerCase()) ||
+        n.message.toLowerCase().includes(search.toLowerCase());
+      return matchesFilter && matchesSearch;
+    });
+  }, [notifications, filter, search]);
 
-  // Pagination
-  const totalPages = Math.ceil(filteredNotifications.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedNotifications = filteredNotifications.slice(startIndex, startIndex + itemsPerPage);
+  // Infinite scroll: show more items
+  const displayedNotifications = useMemo(() => {
+    return filteredNotifications.slice(0, displayedCount);
+  }, [filteredNotifications, displayedCount]);
 
-  const groupedNotifications = paginatedNotifications.reduce((acc, notification) => {
-    if (!acc[notification.date]) {
-      acc[notification.date] = [];
-    }
-    acc[notification.date].push(notification);
-    return acc;
-  }, {} as Record<string, Notification[]>);
+  const hasMore = displayedCount < filteredNotifications.length;
+
+  const groupedNotifications = useMemo(() => {
+    return displayedNotifications.reduce((acc, notification) => {
+      if (!acc[notification.date]) {
+        acc[notification.date] = [];
+      }
+      acc[notification.date].push(notification);
+      return acc;
+    }, {} as Record<string, Notification[]>);
+  }, [displayedNotifications]);
+
+  // Infinite scroll sentinel ref
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || isLoadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry.isIntersecting && hasMore && !isLoadingMore) {
+          setIsLoadingMore(true);
+          // Simulate loading delay
+          setTimeout(() => {
+            setDisplayedCount(prev => Math.min(prev + ITEMS_PER_LOAD, filteredNotifications.length));
+            setIsLoadingMore(false);
+          }, 300);
+        }
+      },
+      {
+        threshold: 0.1,
+        rootMargin: '100px',
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [hasMore, isLoadingMore, filteredNotifications.length]);
 
   const markAsRead = (id: string) => {
     setNotifications(notifications.map(n => 
@@ -99,19 +138,14 @@ export default function Notifications() {
     setNotifications([]);
   };
 
-  const handleItemsPerPageChange = (value: string) => {
-    setItemsPerPage(Number(value));
-    setCurrentPage(1);
-  };
-
   const handleFilterChange = (value: string) => {
     setFilter(value);
-    setCurrentPage(1);
+    setDisplayedCount(ITEMS_PER_LOAD);
   };
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    setCurrentPage(1);
+    setDisplayedCount(ITEMS_PER_LOAD);
   };
 
   return (
@@ -267,59 +301,20 @@ export default function Notifications() {
         )}
       </div>
 
-      {/* Pagination */}
+      {/* Infinite Scroll Sentinel */}
       {filteredNotifications.length > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-border">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Show</span>
-            <Select value={String(itemsPerPage)} onValueChange={handleItemsPerPageChange}>
-              <SelectTrigger className="w-16 h-8">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {ITEMS_PER_PAGE_OPTIONS.map(option => (
-                  <SelectItem key={option} value={String(option)}>{option}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <span>per page</span>
-            <span className="mx-2">•</span>
-            <span>
-              {startIndex + 1}-{Math.min(startIndex + itemsPerPage, filteredNotifications.length)} of {filteredNotifications.length}
-            </span>
-          </div>
-          
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </Button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-              <Button
-                key={page}
-                variant={currentPage === page ? "default" : "outline"}
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(page)}
-              >
-                {page}
-              </Button>
-            ))}
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8"
-              onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            >
-              <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
+        <div ref={sentinelRef} className="h-4 flex items-center justify-center py-4">
+          {isLoadingMore && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              <span>Loading more notifications...</span>
+            </div>
+          )}
+          {!hasMore && displayedNotifications.length > 0 && (
+            <p className="text-sm text-muted-foreground">
+              No more notifications to load
+            </p>
+          )}
         </div>
       )}
     </div>

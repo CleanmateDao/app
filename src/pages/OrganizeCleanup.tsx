@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, Link } from 'react-router-dom';
 import { 
@@ -42,7 +42,6 @@ import { PlacesAutocomplete } from '@/components/ui/places-autocomplete';
 import { useUser } from '@/services/subgraph/queries';
 import { transformUserToProfile } from '@/services/subgraph/transformers';
 import { useWalletAddress } from '@/hooks/use-wallet-address';
-import { useMemo } from 'react';
 import { uploadFilesToIPFS } from '@/services/ipfs';
 import { useCreateCleanup } from '@/services/contracts/mutations';
 

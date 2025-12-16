@@ -3,6 +3,7 @@ import type {
   SubgraphCleanup,
   SubgraphCleanupParticipant,
   SubgraphReward,
+  SubgraphTransaction,
   SubgraphProofOfWorkMedia,
 } from "./types";
 import type {
@@ -32,12 +33,13 @@ export function transformUserToProfile(
   if (!user) return null;
 
   const metadata = parseUserMetadata(user.metadata);
-  const email = extractEmailFromMetadata(user.metadata);
+  // Email is now stored separately in the subgraph, not in metadata
+  const email = user.email || "";
 
   return {
     id: user.id.toLowerCase(),
     name: metadata?.name || "Unknown User",
-    email: email || "",
+    email: email,
     walletAddress: userAddress || user.id.toLowerCase(),
     totalRewards: bigIntToNumber(user.totalRewardsEarned),
     claimedRewards: bigIntToNumber(user.totalRewardsClaimed),
@@ -160,6 +162,7 @@ export function transformCleanup(
 
 /**
  * Transform subgraph reward to app reward transaction
+ * @deprecated Use transformTransaction instead
  */
 export function transformReward(
   reward: SubgraphReward,
@@ -174,6 +177,34 @@ export function transformReward(
     date: bigIntToDate(reward.earnedAt) || "",
     status: "pending", // Claim status is no longer tracked in Reward entity
     txHash: undefined, // Transaction hash is not in subgraph reward entity
+  };
+}
+
+/**
+ * Transform subgraph transaction to app reward transaction
+ */
+export function transformTransaction(
+  transaction: SubgraphTransaction,
+  cleanupMetadata?: { title?: string }
+): RewardTransaction {
+  // Map transactionType to type: "RECEIVE" -> "earned", "CLAIM" -> "claimed"
+  const type: "earned" | "claimed" =
+    transaction.transactionType === "CLAIM" ? "claimed" : "earned";
+
+  // Status is "completed" if there's a transaction hash, otherwise "pending"
+  const status: "pending" | "completed" = transaction.transactionHash
+    ? "completed"
+    : "pending";
+
+  return {
+    id: transaction.id,
+    type,
+    amount: bigIntToNumber(transaction.amount),
+    cleanupId: transaction.cleanupId?.toLowerCase() || "",
+    cleanupTitle: cleanupMetadata?.title || "Unknown Cleanup",
+    date: bigIntToDate(transaction.timestamp) || "",
+    status,
+    txHash: transaction.transactionHash || undefined,
   };
 }
 

@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   Gift,
@@ -7,8 +7,6 @@ import {
   ExternalLink,
   Copy,
   Download,
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Coins,
   Building2,
@@ -41,19 +39,24 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  defaultBankAccounts,
-  currencyRates,
-  BankAccountInfo,
-  CurrencyRate,
-} from "@/data/mockData";
+  SUPPORTED_CURRENCIES,
+  type SupportedCurrencyCode,
+} from "@/constants/supported";
+import { useBanks } from "@/services/api/banks";
+import { useCurrencyRates } from "@/services/api/currency-rates";
+import { useClaimRewardsWithPermit } from "@/services/api/bank-claim";
 import { toast } from "sonner";
 import { Wallet, Check } from "lucide-react";
-import { useRewards, useUser } from "@/services/subgraph/queries";
+import { useInfiniteTransactions, useUser } from "@/services/subgraph/queries";
+import { useClaimRewards } from "@/services/contracts/mutations";
+import { useDAppKitWallet } from "@vechain/vechain-kit";
+import { ethers } from "ethers";
 import {
-  transformReward,
+  transformTransaction,
   transformUserToProfile,
 } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useCleanups } from "@/services/subgraph/queries";
 import { transformCleanup } from "@/services/subgraph/transformers";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -77,8 +80,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-const ITEMS_PER_PAGE_OPTIONS = [5, 10, 20, 50];
-
 type PaymentMethod = "wallet" | "bank";
 
 export default function Rewards() {
@@ -96,7 +97,11 @@ export default function Rewards() {
   );
 
   // Fetch cleanups to get cleanup metadata for rewards
-  const { data: cleanupsData } = useCleanups({ published: true, first: 1000 });
+  const { data: cleanupsData } = useCleanups({
+    where: { published: true },
+    first: 1000,
+    userAddress: walletAddress || undefined,
+  });
   const cleanupsMap = useMemo(() => {
     if (!cleanupsData) return new Map();
     const map = new Map();
@@ -107,21 +112,67 @@ export default function Rewards() {
     return map;
   }, [cleanupsData]);
 
-  // Fetch rewards
-  const { data: rewardsData, isLoading: isLoadingRewards } = useRewards(
-    walletAddress || undefined,
-    { first: 1000 }
+  // Fetch transactions with infinite scroll
+  const {
+    data: infiniteTransactionsData,
+    isLoading: isLoadingRewards,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteTransactions(
+    walletAddress
+      ? {
+          where: { user: walletAddress },
+          orderBy: "timestamp",
+          orderDirection: "desc",
+        }
+      : undefined,
+    20,
+    { enabled: !!walletAddress }
   );
-  const rewardTransactions = useMemo(() => {
-    if (!rewardsData) return [];
-    return rewardsData.map((r) => {
-      const cleanup = cleanupsMap.get(r.cleanupId?.toLowerCase() || "");
-      return transformReward(r, { title: cleanup?.title });
-    });
-  }, [rewardsData, cleanupsMap]);
 
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(5);
+  // Transform and flatten infinite query data
+  const rewardTransactions = useMemo(() => {
+    if (!infiniteTransactionsData) return [];
+    // Handle infinite query format (with pages)
+    type InfiniteData = { pages?: Array<Array<unknown>> };
+    const infiniteData = infiniteTransactionsData as InfiniteData;
+    if (infiniteData.pages) {
+      return infiniteData.pages.flatMap((page) =>
+        page.map((tx) => {
+          const txData = tx as { cleanupId?: string };
+          const cleanup = cleanupsMap.get(
+            txData.cleanupId?.toLowerCase() || ""
+          );
+          return transformTransaction(
+            tx as Parameters<typeof transformTransaction>[0],
+            {
+              title: cleanup?.title,
+            }
+          );
+        })
+      );
+    }
+    // Fallback for direct array format
+    return (infiniteTransactionsData as Array<unknown>).map((tx) => {
+      const txData = tx as { cleanupId?: string };
+      const cleanup = cleanupsMap.get(txData.cleanupId?.toLowerCase() || "");
+      return transformTransaction(
+        tx as Parameters<typeof transformTransaction>[0],
+        {
+          title: cleanup?.title,
+        }
+      );
+    });
+  }, [infiniteTransactionsData, cleanupsMap]);
+
+  // Infinite scroll hook
+  const sentinelRef = useInfiniteScroll({
+    hasNextPage: hasNextPage ?? false,
+    isFetchingNextPage: isFetchingNextPage ?? false,
+    fetchNextPage,
+  });
+
   const [typeFilter, setTypeFilter] = useState<"all" | "earned" | "claimed">(
     "all"
   );
@@ -130,14 +181,35 @@ export default function Rewards() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
   // For wallet payment, use connected wallet address
   const [selectedWalletId, setSelectedWalletId] = useState<string>("");
-  // For bank payment, use connected address as mock data
+  // For bank payment, fetch from API
+  const { data: bankAccounts = [] } = useBanks(walletAddress);
+  const { data: currencyRates = [] } = useCurrencyRates();
+
+  // Use default bank or first bank
+  const defaultBank = bankAccounts.find((b) => b.isDefault) || bankAccounts[0];
   const [selectedBankId, setSelectedBankId] = useState<string>(
-    defaultBankAccounts.find((b) => b.isDefault)?.id ||
-      defaultBankAccounts[0]?.id ||
-      ""
+    defaultBank?.id || ""
   );
+
+  // Update selectedBankId when default bank changes
+  useEffect(() => {
+    if (defaultBank && selectedBankId !== defaultBank.id) {
+      setSelectedBankId(defaultBank.id);
+    }
+  }, [defaultBank, selectedBankId]);
   const [isClaiming, setIsClaiming] = useState(false);
-  const [selectedCurrency, setSelectedCurrency] = useState<string>("NGN");
+  const [selectedCurrency, setSelectedCurrency] = useState<string>(
+    SUPPORTED_CURRENCIES[0].code
+  );
+
+  // Hooks for claiming
+  const { account, requestTypedData } = useDAppKitWallet();
+  const {
+    sendTransaction: claimRewardsWallet,
+    isTransactionPending: isClaimingWallet,
+  } = useClaimRewards();
+  const { mutate: claimRewardsBank, isPending: isClaimingBank } =
+    useClaimRewardsWithPermit();
 
   // Use connected wallet address for wallet payment
   const selectedWallet = walletAddress
@@ -149,10 +221,27 @@ export default function Rewards() {
         isDefault: true,
       }
     : null;
-  // For bank accounts, use mock data with connected address reference
-  const selectedBank = defaultBankAccounts.find((b) => b.id === selectedBankId);
-  const selectedCurrencyData =
-    currencyRates.find((c) => c.code === selectedCurrency) || currencyRates[0];
+  // For bank accounts, use API data
+  const selectedBank = bankAccounts.find((b) => b.id === selectedBankId);
+  const selectedCurrencyData = currencyRates.find(
+    (c) => c.code === selectedCurrency
+  ) ||
+    currencyRates[0] || {
+      code: SUPPORTED_CURRENCIES[0].code,
+      name: SUPPORTED_CURRENCIES[0].name,
+      symbol: SUPPORTED_CURRENCIES[0].symbol,
+      rateToB3TR: 0,
+    };
+
+  // Update selectedCurrency when currencyRates load
+  useEffect(() => {
+    if (
+      currencyRates.length > 0 &&
+      !currencyRates.find((c) => c.code === selectedCurrency)
+    ) {
+      setSelectedCurrency(currencyRates[0].code);
+    }
+  }, [currencyRates, selectedCurrency]);
 
   const convertB3TRToCurrency = (b3trAmount: number): string => {
     const converted = b3trAmount * selectedCurrencyData.rateToB3TR;
@@ -170,7 +259,7 @@ export default function Rewards() {
     return `****${accountNumber.slice(-4)}`;
   };
 
-  const handleClaimRewards = () => {
+  const handleClaimRewards = async () => {
     if (!claimAmount || Number(claimAmount) <= 0) {
       toast.error("Please enter a valid amount");
       return;
@@ -181,44 +270,124 @@ export default function Rewards() {
       return;
     }
 
-    if (paymentMethod === "wallet" && !walletAddress) {
-      toast.error("Please connect your wallet");
+    if (paymentMethod === "wallet") {
+      if (!walletAddress) {
+        toast.error("Please connect your wallet");
+        return;
+      }
+
+      setIsClaiming(true);
+      try {
+        await claimRewardsWallet({ amount: claimAmount });
+        setClaimDialogOpen(false);
+        setClaimAmount("");
+      } catch (error) {
+        console.error("Failed to claim rewards:", error);
+      } finally {
+        setIsClaiming(false);
+      }
       return;
     }
 
-    if (paymentMethod === "bank" && !selectedBankId) {
-      toast.error("Please select a bank account");
+    // Bank payment method - use permit signature
+    const bankIdToUse = selectedBankId || defaultBank?.id;
+    if (!bankIdToUse || !walletAddress || !account || !requestTypedData) {
+      toast.error("Please connect your wallet and add a bank account");
+      return;
+    }
+
+    if (!defaultBank) {
+      toast.error("Please add a bank account in Settings");
       return;
     }
 
     setIsClaiming(true);
-    setTimeout(() => {
-      setIsClaiming(false);
-      setClaimDialogOpen(false);
-      setClaimAmount("");
-      const destination =
-        paymentMethod === "wallet"
-          ? truncateAddress(walletAddress || "")
-          : `${selectedBank?.bankName} (${maskAccountNumber(
-              selectedBank?.accountNumber || ""
-            )})`;
-      toast.success(
-        `Successfully claimed ${claimAmount} B3TR tokens to ${destination}`
+    try {
+      // Get nonce from contract (need to create a provider for this)
+      // For now, we'll use a simple approach - the backend can handle nonce retrieval
+      // Set deadline (1 hour from now)
+      const deadline = Math.floor(Date.now() / 1000) + 3600;
+
+      // Use VeChain Kit's requestTypedData for EIP-712 signing
+      const domain = {
+        name: "RewardsManager",
+        version: "1",
+        chainId: 100010, // VeChain testnet
+        verifyingContract: import.meta.env.VITE_REWARDS_MANAGER_ADDRESS || "",
+      };
+
+      const types = {
+        Permit: [
+          { name: "owner", type: "address" },
+          { name: "amount", type: "uint256" },
+          { name: "deadline", type: "uint256" },
+          { name: "nonce", type: "uint256" },
+        ],
+      };
+
+      // We need to get the nonce - for now, use 0 and let backend handle it
+      // In production, you'd fetch this from the contract
+      const nonce = 0;
+
+      const message = {
+        owner: walletAddress,
+        amount: claimAmount,
+        deadline: deadline,
+        nonce: nonce,
+      };
+
+      const signature = await requestTypedData(domain, types, message);
+
+      // Parse signature (VeChain returns it in a specific format)
+      // VeChain signatures are typically 65 bytes: r (32) + s (32) + v (1)
+      const sigBytes = ethers.getBytes(signature);
+      const r = ethers.hexlify(sigBytes.slice(0, 32));
+      const s = ethers.hexlify(sigBytes.slice(32, 64));
+      const v = sigBytes[64];
+
+      const permit = {
+        deadline,
+        v,
+        r,
+        s,
+      };
+
+      // Call bank service to claim with permit
+      claimRewardsBank(
+        {
+          userId: walletAddress, // Using wallet address as userId
+          walletAddress,
+          amount: claimAmount,
+          bankId: bankIdToUse,
+          permit,
+        },
+        {
+          onSuccess: () => {
+            setIsClaiming(false);
+            setClaimDialogOpen(false);
+            setClaimAmount("");
+          },
+          onError: (error) => {
+            console.error("Failed to claim rewards:", error);
+            setIsClaiming(false);
+          },
+        }
       );
-    }, 1500);
+    } catch (error) {
+      console.error("Failed to create permit signature:", error);
+      toast.error(
+        `Failed to create permit signature: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
+      setIsClaiming(false);
+    }
   };
 
   const filteredTransactions = rewardTransactions.filter((tx) => {
     if (typeFilter === "all") return true;
     return tx.type === typeFilter;
   });
-
-  const totalPages = Math.ceil(filteredTransactions.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedTransactions = filteredTransactions.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
 
   const copyAddress = (address: string) => {
     navigator.clipboard.writeText(address);
@@ -408,7 +577,7 @@ export default function Rewards() {
                             className="space-y-2"
                             disabled={isClaiming}
                           >
-                            {defaultBankAccounts.map((bank) => (
+                            {bankAccounts.map((bank) => (
                               <label
                                 key={bank.id}
                                 htmlFor={`mobile-${bank.id}`}
@@ -447,7 +616,7 @@ export default function Rewards() {
                               </label>
                             ))}
                           </RadioGroup>
-                          {defaultBankAccounts.length === 0 && (
+                          {bankAccounts.length === 0 && (
                             <p className="text-sm text-muted-foreground text-center py-4">
                               No bank accounts configured. Add a bank account in
                               Settings.
@@ -564,14 +733,16 @@ export default function Rewards() {
                       onClick={handleClaimRewards}
                       disabled={
                         isClaiming ||
+                        isClaimingWallet ||
+                        isClaimingBank ||
                         !claimAmount ||
                         (paymentMethod === "wallet"
                           ? !walletAddress
-                          : !selectedBankId)
+                          : !selectedBankId || !account)
                       }
                       className="w-full"
                     >
-                      {isClaiming ? (
+                      {isClaiming || isClaimingWallet || isClaimingBank ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Claiming...
@@ -686,7 +857,7 @@ export default function Rewards() {
                             className="space-y-2"
                             disabled={isClaiming}
                           >
-                            {defaultBankAccounts.map((bank) => (
+                            {bankAccounts.map((bank) => (
                               <label
                                 key={bank.id}
                                 htmlFor={bank.id}
@@ -722,7 +893,7 @@ export default function Rewards() {
                               </label>
                             ))}
                           </RadioGroup>
-                          {defaultBankAccounts.length === 0 && (
+                          {bankAccounts.length === 0 && (
                             <p className="text-sm text-muted-foreground text-center py-4">
                               No bank accounts configured. Add a bank account in
                               Settings.
@@ -846,13 +1017,15 @@ export default function Rewards() {
                       onClick={handleClaimRewards}
                       disabled={
                         isClaiming ||
+                        isClaimingWallet ||
+                        isClaimingBank ||
                         !claimAmount ||
                         (paymentMethod === "wallet"
                           ? !walletAddress
-                          : !selectedBankId)
+                          : !selectedBankId || !account)
                       }
                     >
-                      {isClaiming ? (
+                      {isClaiming || isClaimingWallet || isClaimingBank ? (
                         <>
                           <Loader2 className="w-4 h-4 animate-spin" />
                           Claiming...
@@ -925,10 +1098,9 @@ export default function Rewards() {
             <div className="flex items-center gap-2 sm:gap-3">
               <Select
                 value={typeFilter}
-                onValueChange={(value) => {
-                  setTypeFilter(value as "all" | "earned" | "claimed");
-                  setCurrentPage(1);
-                }}
+                onValueChange={(value) =>
+                  setTypeFilter(value as "all" | "earned" | "claimed")
+                }
               >
                 <SelectTrigger className="w-28 sm:w-32 h-9">
                   <SelectValue />
@@ -982,7 +1154,7 @@ export default function Rewards() {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    paginatedTransactions.map((tx) => (
+                    filteredTransactions.map((tx) => (
                       <TableRow key={tx.id}>
                         <TableCell className="text-sm">{tx.date}</TableCell>
                         <TableCell>
@@ -1026,7 +1198,7 @@ export default function Rewards() {
                       </TableRow>
                     ))
                   )}
-                  {!isLoadingRewards && paginatedTransactions.length === 0 && (
+                  {!isLoadingRewards && filteredTransactions.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center py-12">
                         <p className="text-muted-foreground">
@@ -1039,64 +1211,23 @@ export default function Rewards() {
               </Table>
             </div>
 
-            {/* Pagination */}
-            {filteredTransactions.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-border">
+            {/* Infinite Scroll Sentinel */}
+            <div
+              ref={sentinelRef}
+              className="h-4 flex items-center justify-center py-4"
+            >
+              {isFetchingNextPage && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <span>Show</span>
-                  <Select
-                    value={itemsPerPage.toString()}
-                    onValueChange={(value) => {
-                      setItemsPerPage(Number(value));
-                      setCurrentPage(1);
-                    }}
-                  >
-                    <SelectTrigger className="w-16 h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ITEMS_PER_PAGE_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option.toString()}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <span className="hidden sm:inline">entries</span>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading more transactions...</span>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs sm:text-sm text-muted-foreground">
-                    {startIndex + 1}-
-                    {Math.min(
-                      startIndex + itemsPerPage,
-                      filteredTransactions.length
-                    )}{" "}
-                    of {filteredTransactions.length}
-                  </span>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={currentPage === 1}
-                      onClick={() => setCurrentPage(currentPage - 1)}
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-8 w-8"
-                      disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage(currentPage + 1)}
-                    >
-                      <ChevronRight className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )}
+              )}
+              {!hasNextPage && filteredTransactions.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No more transactions to load
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </motion.div>

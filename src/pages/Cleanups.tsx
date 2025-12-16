@@ -8,8 +8,6 @@ import {
   Eye,
   Trash2,
   Download,
-  ChevronLeft,
-  ChevronRight,
   MapPin,
   Calendar,
   Users,
@@ -56,10 +54,14 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { CleanupMap } from "@/components/cleanup/CleanupMap";
 import { BottomNav } from "@/components/layout/BottomNav";
-import { useCleanups, useUserCleanups } from "@/services/subgraph/queries";
+import {
+  useInfiniteCleanups,
+  useUserCleanups,
+} from "@/services/subgraph/queries";
 import { transformCleanup } from "@/services/subgraph/transformers";
 import { mapAppStatusToSubgraph } from "@/services/subgraph/utils";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
 const statusTabs: {
   label: string;
@@ -96,8 +98,6 @@ const statusConfig: Record<
   },
 };
 
-const ITEMS_PER_PAGE_OPTIONS = [5, 10, 20, 50];
-
 export default function Cleanups() {
   const navigate = useNavigate();
   const walletAddress = useWalletAddress();
@@ -105,8 +105,6 @@ export default function Cleanups() {
     "all"
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cleanupToDelete, setCleanupToDelete] = useState<Cleanup | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">(() => {
@@ -121,13 +119,22 @@ export default function Cleanups() {
       ? mapAppStatusToSubgraph(activeTab)
       : undefined;
 
-  // Fetch all cleanups or user's cleanups
-  const { data: allCleanupsData, isLoading: isLoadingAll } = useCleanups(
+  // Fetch all cleanups with infinite scroll
+  const {
+    data: infiniteCleanupsData,
+    isLoading: isLoadingAll,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteCleanups(
     {
-      status: statusFilter,
-      published: true,
-      first: 1000,
+      where: {
+        status: statusFilter,
+        published: true,
+      },
+      userAddress: walletAddress || undefined,
     },
+    20,
     { enabled: !isCreatedTab }
   );
 
@@ -138,11 +145,13 @@ export default function Cleanups() {
     { enabled: isCreatedTab && !!walletAddress }
   );
 
-  // Transform subgraph data to app format
+  // Transform and flatten infinite query data
   const allCleanups = useMemo(() => {
-    if (!allCleanupsData) return [];
-    return allCleanupsData.map((cleanup) => transformCleanup(cleanup));
-  }, [allCleanupsData]);
+    if (!infiniteCleanupsData?.pages) return [];
+    return infiniteCleanupsData.pages.flatMap((page) =>
+      page.map((cleanup) => transformCleanup(cleanup))
+    );
+  }, [infiniteCleanupsData]);
 
   const userCleanups = useMemo(() => {
     if (!userCleanupsData) return [];
@@ -151,6 +160,13 @@ export default function Cleanups() {
 
   const cleanups = isCreatedTab ? userCleanups : allCleanups;
   const isLoading = isCreatedTab ? isLoadingUser : isLoadingAll;
+
+  // Infinite scroll hook
+  const sentinelRef = useInfiniteScroll({
+    hasNextPage: hasNextPage ?? false,
+    isFetchingNextPage: isFetchingNextPage ?? false,
+    fetchNextPage,
+  });
 
   // Persist view mode
   useEffect(() => {
@@ -173,13 +189,6 @@ export default function Cleanups() {
       return matchesSearch;
     });
   }, [cleanups, searchQuery]);
-
-  const totalPages = Math.ceil(filteredCleanups.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedCleanups = filteredCleanups.slice(
-    startIndex,
-    startIndex + itemsPerPage
-  );
 
   const exportToCSV = () => {
     const headers = [
@@ -275,10 +284,7 @@ export default function Cleanups() {
                 {statusTabs.map((tab) => (
                   <button
                     key={tab.value}
-                    onClick={() => {
-                      setActiveTab(tab.value);
-                      setCurrentPage(1);
-                    }}
+                    onClick={() => setActiveTab(tab.value)}
                     className={cn(
                       "px-3 py-1.5 text-xs font-medium transition-colors rounded-md whitespace-nowrap",
                       activeTab === tab.value
@@ -358,10 +364,7 @@ export default function Cleanups() {
             {statusTabs.map((tab) => (
               <button
                 key={tab.value}
-                onClick={() => {
-                  setActiveTab(tab.value);
-                  setCurrentPage(1);
-                }}
+                onClick={() => setActiveTab(tab.value)}
                 className={cn(
                   "px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium transition-colors whitespace-nowrap",
                   activeTab === tab.value
@@ -382,10 +385,7 @@ export default function Cleanups() {
             type="text"
             placeholder="Search cleanups..."
             value={searchQuery}
-            onChange={(e) => {
-              setSearchQuery(e.target.value);
-              setCurrentPage(1);
-            }}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-10 pl-10 pr-4 bg-card border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
           />
         </div>
@@ -416,7 +416,7 @@ export default function Cleanups() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  paginatedCleanups.map((cleanup) => (
+                  filteredCleanups.map((cleanup) => (
                     <TableRow
                       key={cleanup.id}
                       className="cursor-pointer"
@@ -500,7 +500,7 @@ export default function Cleanups() {
                     </TableRow>
                   ))
                 )}
-                {!isLoading && paginatedCleanups.length === 0 && (
+                {!isLoading && filteredCleanups.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12">
                       <p className="text-muted-foreground">No cleanups found</p>
@@ -518,59 +518,23 @@ export default function Cleanups() {
             </Table>
           </div>
 
-          {/* Pagination */}
-          {filteredCleanups.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 px-4 py-3 border-t border-border">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>Show</span>
-                <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(Number(value));
-                    setCurrentPage(1);
-                  }}
-                >
-                  <SelectTrigger className="w-16 h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ITEMS_PER_PAGE_OPTIONS.map((option) => (
-                      <SelectItem key={option} value={option.toString()}>
-                        {option}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="hidden sm:inline">entries</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm text-muted-foreground">
-                  {startIndex + 1}-
-                  {Math.min(startIndex + itemsPerPage, filteredCleanups.length)}{" "}
-                  of {filteredCleanups.length}
-                </span>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    disabled={currentPage === 1}
-                    onClick={() => setCurrentPage(currentPage - 1)}
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    className="h-8 w-8"
-                    disabled={currentPage === totalPages}
-                    onClick={() => setCurrentPage(currentPage + 1)}
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
+          {/* Infinite Scroll Sentinel */}
+          {!isCreatedTab && (
+            <div
+              ref={sentinelRef}
+              className="h-4 flex items-center justify-center py-4"
+            >
+              {isFetchingNextPage && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading more cleanups...</span>
                 </div>
-              </div>
+              )}
+              {!hasNextPage && filteredCleanups.length > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  No more cleanups to load
+                </p>
+              )}
             </div>
           )}
         </Card>

@@ -12,6 +12,8 @@ import {
   Gift,
   MoreHorizontal,
   Loader2,
+  Flame,
+  ChevronRight,
 } from "lucide-react";
 import africanPattern from "@/assets/african-pattern.jpg";
 import { Card, CardContent } from "@/components/ui/card";
@@ -22,14 +24,17 @@ import {
   useUserCleanups,
   useRewards,
   useUser,
+  useUserStreakStats,
 } from "@/services/subgraph/queries";
 import {
   transformCleanup,
-  transformReward,
+  transformTransaction,
   transformUserToProfile,
   calculateInsights,
 } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { transformUserStreakStats } from "@/types/streak";
+import { JoinStreakDrawer } from "@/components/JoinStreakDrawer";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
 
 const fadeIn = {
@@ -48,6 +53,7 @@ const stagger = {
 
 export default function Insights() {
   const [query, setQuery] = useState("");
+  const [joinStreakOpen, setJoinStreakOpen] = useState(false);
   const navigate = useNavigate();
   const walletAddress = useWalletAddress();
 
@@ -67,7 +73,11 @@ export default function Insights() {
 
   // Fetch all cleanups to find ones where user participated
   const { data: allCleanupsData, isLoading: isLoadingAllCleanups } =
-    useCleanups({ published: true, first: 1000 });
+    useCleanups({
+      where: { published: true },
+      first: 1000,
+      userAddress: walletAddress || undefined,
+    });
 
   // Combine user's cleanups (organized + participated)
   const userCleanups = useMemo(() => {
@@ -108,15 +118,23 @@ export default function Insights() {
 
   const isLoadingCleanups = isLoadingOrganizedCleanups || isLoadingAllCleanups;
 
-  // Fetch rewards
+  // Fetch rewards (transactions)
   const { data: rewardsData, isLoading: isLoadingRewards } = useRewards(
     walletAddress || undefined,
     { first: 1000 }
   );
   const rewards = useMemo(() => {
     if (!rewardsData) return [];
-    return rewardsData.map((r) => transformReward(r));
+    return rewardsData.map((r) => transformTransaction(r));
   }, [rewardsData]);
+
+  // Fetch streak stats
+  const { data: streakStatsData } = useUserStreakStats(
+    walletAddress || undefined
+  );
+  const streakStats = useMemo(() => {
+    return transformUserStreakStats(streakStatsData || null);
+  }, [streakStatsData]);
 
   // Calculate insights (user-specific)
   const insightsData = useMemo(() => {
@@ -212,6 +230,57 @@ export default function Insights() {
             ))}
           </div>
         </div>
+      </motion.div>
+
+      {/* Streaks CTA */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+      >
+        <Card
+          className="border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
+          onClick={() => {
+            if (!streakStats?.streakerCode) {
+              setJoinStreakOpen(true);
+            } else {
+              navigate("/streaks");
+            }
+          }}
+        >
+          <CardContent className="p-4 lg:p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 sm:gap-4">
+                <div className="w-12 h-12 rounded-xl bg-primary/20 flex items-center justify-center">
+                  <Flame className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-sm sm:text-base flex items-center gap-2">
+                    Streaks
+                    <span className="text-xs font-normal text-muted-foreground hidden sm:inline">
+                      Individual sustainable actions
+                    </span>
+                  </h3>
+                  <div className="flex items-center gap-3 text-xs sm:text-sm text-muted-foreground">
+                    {streakStats ? (
+                      <>
+                        <span>{streakStats.approvedSubmissions} approved</span>
+                        <span className="text-primary font-medium">
+                          +{streakStats.totalAmount} B3TR
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">
+                        Join to start earning
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+            </div>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Metrics Row */}
@@ -527,6 +596,12 @@ export default function Insights() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Join Streak Drawer */}
+      <JoinStreakDrawer
+        open={joinStreakOpen}
+        onOpenChange={setJoinStreakOpen}
+      />
     </div>
   );
 }

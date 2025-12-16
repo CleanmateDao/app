@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -19,8 +19,6 @@ import {
   Info,
   UserPlus,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   Search,
   ShieldCheck,
   AlertCircle,
@@ -29,24 +27,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
+import { RatingDialog } from "@/components/RatingDialog";
+import { SubmitProofDialog } from "@/components/SubmitProofDialog";
+import { AcceptParticipantAlertDialog } from "@/components/AcceptParticipantAlertDialog";
+import { RejectParticipantAlertDialog } from "@/components/RejectParticipantAlertDialog";
+import { ParticipantInfoDialog } from "@/components/ParticipantInfoDialog";
+import { JoinRequestDialog } from "@/components/JoinRequestDialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -65,10 +51,7 @@ import {
   useUpdateCleanupStatus,
   useSubmitProofOfWork,
 } from "@/services/contracts/mutations";
-import { useQuery } from "@tanstack/react-query";
-import { ABIContract, Address } from "@vechain/sdk-core";
-import { UserRegistryABI } from "@/contracts/abis/UserRegistry.abi";
-import { CONTRACT_ADDRESSES } from "@/contracts/config";
+import { useTeamMember } from "@/services/subgraph/queries";
 
 const statusConfig: Record<
   CleanupStatus,
@@ -132,10 +115,12 @@ export default function CleanupDetail() {
   const [joinMessage, setJoinMessage] = useState("");
   const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
 
-  // Search and pagination for accepted participants
+  // Search and infinite scroll for accepted participants
   const [participantSearch, setParticipantSearch] = useState("");
-  const [participantsPage, setParticipantsPage] = useState(1);
-  const participantsPerPage = 5;
+  const [displayedParticipantsCount, setDisplayedParticipantsCount] =
+    useState(5);
+  const [isLoadingMoreParticipants, setIsLoadingMoreParticipants] =
+    useState(false);
 
   // Mutations
   const acceptParticipantMutation = useAcceptParticipant();
@@ -148,19 +133,10 @@ export default function CleanupDetail() {
   const { data: organizerData } = useUser(cleanup?.organizer.id);
 
   // Check team membership and permissions
-  // Note: Team membership checking would require contract read calls or subgraph indexing
-  // For now, we'll assume false until subgraph indexes team memberships
-  const { data: teamMembership } = useQuery({
-    queryKey: ["teamMembership", cleanup?.organizer.id, walletAddress],
-    queryFn: async () => {
-      // TODO: Implement team membership check via contract read or subgraph
-      // This would require either:
-      // 1. A read-only contract call to UserRegistry.teamMembers(organizer, member)
-      // 2. Subgraph indexing of TeamMemberAdded/TeamMemberRemoved events
-      return null;
-    },
-    enabled: !!walletAddress && !!cleanup?.organizer.id,
-  });
+  const { data: teamMembership } = useTeamMember(
+    cleanup?.organizer.id,
+    walletAddress || undefined
+  );
 
   // Update participants when cleanup data changes
   useEffect(() => {
@@ -175,12 +151,14 @@ export default function CleanupDetail() {
       ? cleanup.organizer.id.toLowerCase() === walletAddress.toLowerCase()
       : false;
 
-  // Check if user is a team member (for now, we'll assume false until subgraph indexes this)
-  // In production, this should query the contract or subgraph for team membership
-  const isTeamMember = false; // TODO: Query from contract/subgraph
-  const canManageParticipants = isOrganizer || isTeamMember; // Team members with permission can manage
-  const canEditCleanups = isOrganizer || isTeamMember; // Team members with permission can edit
-  const canSubmitProof = isOrganizer || isTeamMember; // Team members with permission can submit proof
+  // Check if user is a team member and get permissions
+  const isTeamMember = !!teamMembership;
+  const canManageParticipants =
+    isOrganizer || (isTeamMember && teamMembership?.canManageParticipants);
+  const canEditCleanups =
+    isOrganizer || (isTeamMember && teamMembership?.canEditCleanups);
+  const canSubmitProof =
+    isOrganizer || (isTeamMember && teamMembership?.canSubmitProof);
 
   // Check if current user has already applied
   const currentUserEmail = currentUserProfile?.email || "";
@@ -191,6 +169,82 @@ export default function CleanupDetail() {
   );
   const hasApplied = !!existingApplication;
   const applicationStatus = existingApplication?.status;
+
+  // Filter participants: exclude organizer from regular participants list
+  const acceptedParticipants = participants.filter(
+    (p) =>
+      p.status === "accepted" &&
+      (!walletAddress ||
+        !cleanup ||
+        p.id.toLowerCase() !== cleanup.organizer.id.toLowerCase())
+  );
+  const pendingParticipants = participants.filter(
+    (p) => p.status === "pending"
+  );
+
+  // Check if current user is a participant (not organizer)
+  const isParticipant =
+    walletAddress &&
+    participants.some(
+      (p) =>
+        p.id.toLowerCase().includes(walletAddress.toLowerCase()) &&
+        p.status === "accepted" &&
+        !isOrganizer
+    );
+
+  const filteredParticipants = acceptedParticipants.filter(
+    (p) =>
+      p.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
+      p.email.toLowerCase().includes(participantSearch.toLowerCase())
+  );
+
+  const displayedParticipants = filteredParticipants.slice(
+    0,
+    displayedParticipantsCount
+  );
+  const hasMoreParticipants =
+    displayedParticipantsCount < filteredParticipants.length;
+
+  // Infinite scroll sentinel for participants
+  const participantsSentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const sentinel = participantsSentinelRef.current;
+    if (!sentinel || !hasMoreParticipants || isLoadingMoreParticipants) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (
+          entry.isIntersecting &&
+          hasMoreParticipants &&
+          !isLoadingMoreParticipants
+        ) {
+          setIsLoadingMoreParticipants(true);
+          setTimeout(() => {
+            setDisplayedParticipantsCount((prev) =>
+              Math.min(prev + 5, filteredParticipants.length)
+            );
+            setIsLoadingMoreParticipants(false);
+          }, 300);
+        }
+      },
+      {
+        threshold: 0.1,
+        rootMargin: "100px",
+      }
+    );
+
+    observer.observe(sentinel);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [
+    hasMoreParticipants,
+    isLoadingMoreParticipants,
+    filteredParticipants.length,
+  ]);
 
   if (isLoadingCleanup) {
     return (
@@ -311,41 +365,6 @@ export default function CleanupDetail() {
       setIsSubmittingJoin(false);
     }
   };
-
-  // Filter participants: exclude organizer from regular participants list
-  const acceptedParticipants = participants.filter(
-    (p) =>
-      p.status === "accepted" &&
-      (!walletAddress ||
-        !cleanup ||
-        p.id.toLowerCase() !== cleanup.organizer.id.toLowerCase())
-  );
-  const pendingParticipants = participants.filter(
-    (p) => p.status === "pending"
-  );
-
-  // Check if current user is a participant (not organizer)
-  const isParticipant =
-    walletAddress &&
-    participants.some(
-      (p) =>
-        p.id.toLowerCase().includes(walletAddress.toLowerCase()) &&
-        p.status === "accepted" &&
-        !isOrganizer
-    );
-
-  const filteredParticipants = acceptedParticipants.filter(
-    (p) =>
-      p.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-      p.email.toLowerCase().includes(participantSearch.toLowerCase())
-  );
-  const totalParticipantPages = Math.ceil(
-    filteredParticipants.length / participantsPerPage
-  );
-  const paginatedParticipants = filteredParticipants.slice(
-    (participantsPage - 1) * participantsPerPage,
-    participantsPage * participantsPerPage
-  );
 
   // Check if cleanup is full
   const isFull = acceptedParticipants.length >= (cleanup?.maxParticipants || 0);
@@ -642,7 +661,7 @@ export default function CleanupDetail() {
                   value={participantSearch}
                   onChange={(e) => {
                     setParticipantSearch(e.target.value);
-                    setParticipantsPage(1);
+                    setDisplayedParticipantsCount(5);
                   }}
                   className="h-8 pl-9 text-sm"
                 />
@@ -660,7 +679,7 @@ export default function CleanupDetail() {
               </p>
             ) : (
               <>
-                {paginatedParticipants.map((participant) => (
+                {displayedParticipants.map((participant) => (
                   <div
                     key={participant.id}
                     className="flex items-center justify-between p-3 bg-secondary rounded-lg"
@@ -729,41 +748,24 @@ export default function CleanupDetail() {
                   </div>
                 ))}
 
-                {/* Pagination */}
-                {totalParticipantPages > 1 && (
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <span className="text-xs text-muted-foreground">
-                      {(participantsPage - 1) * participantsPerPage + 1}-
-                      {Math.min(
-                        participantsPage * participantsPerPage,
-                        acceptedParticipants.length
-                      )}{" "}
-                      of {acceptedParticipants.length}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={participantsPage === 1}
-                        onClick={() =>
-                          setParticipantsPage(participantsPage - 1)
-                        }
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={participantsPage === totalParticipantPages}
-                        onClick={() =>
-                          setParticipantsPage(participantsPage + 1)
-                        }
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
+                {/* Infinite Scroll Sentinel */}
+                {filteredParticipants.length > 0 && (
+                  <div
+                    ref={participantsSentinelRef}
+                    className="h-4 flex items-center justify-center py-2"
+                  >
+                    {isLoadingMoreParticipants && (
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Loading more participants...</span>
+                      </div>
+                    )}
+                    {!hasMoreParticipants &&
+                      displayedParticipants.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          Showing all {filteredParticipants.length} participants
+                        </p>
+                      )}
                   </div>
                 )}
               </>
@@ -830,366 +832,66 @@ export default function CleanupDetail() {
       )}
 
       {/* Rating Dialog */}
-      <Dialog open={ratingDialogOpen} onOpenChange={setRatingDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Rate Participant</DialogTitle>
-            <DialogDescription>
-              How would you rate {selectedParticipant?.name}'s participation?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-6 flex justify-center gap-2">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                onClick={() => setRating(star)}
-                className="p-1 transition-transform hover:scale-110"
-              >
-                <Star
-                  className={`w-8 h-8 ${
-                    star <= rating
-                      ? "text-yellow-500 fill-yellow-500"
-                      : "text-muted-foreground"
-                  }`}
-                />
-              </button>
-            ))}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setRatingDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleRateParticipant} disabled={rating === 0}>
-              Submit Rating
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RatingDialog
+        open={ratingDialogOpen}
+        onOpenChange={setRatingDialogOpen}
+        participantName={selectedParticipant?.name}
+        rating={rating}
+        onRatingChange={setRating}
+        onSubmit={handleRateParticipant}
+      />
 
       {/* Submit for Review Dialog */}
-      <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Submit for Review</DialogTitle>
-            <DialogDescription>
-              Upload images and videos as proof of the cleanup work to submit
-              for review and receive rewards.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            <div className="border-2 border-dashed border-border rounded-lg p-6 text-center mb-4">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={handleProofUpload}
-                className="hidden"
-                id="proof-upload"
-              />
-              <label htmlFor="proof-upload" className="cursor-pointer">
-                <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                <p className="text-sm text-muted-foreground">
-                  Click to upload images/videos
-                </p>
-              </label>
-            </div>
-            {proofMedia.length > 0 && (
-              <div>
-                <Label className="mb-2 block">
-                  Selected files ({proofMedia.length})
-                </Label>
-                <div className="space-y-2">
-                  {proofMedia.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center gap-2 p-2 bg-secondary rounded"
-                    >
-                      {file.type.startsWith("image") ? (
-                        <Image className="w-4 h-4 text-muted-foreground" />
-                      ) : (
-                        <Video className="w-4 h-4 text-muted-foreground" />
-                      )}
-                      <span className="text-sm truncate flex-1">
-                        {file.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setSubmitDialogOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSubmitForReview}>
-              <Send className="w-4 h-4 mr-2" />
-              Submit for Review
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SubmitProofDialog
+        open={submitDialogOpen}
+        onOpenChange={setSubmitDialogOpen}
+        proofMedia={proofMedia}
+        onProofUpload={handleProofUpload}
+        onSubmit={handleSubmitForReview}
+      />
 
       {/* Accept Confirmation Dialog */}
-      <AlertDialog open={acceptDialogOpen} onOpenChange={setAcceptDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Accept Participant</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to accept{" "}
-              <strong>{actionParticipant?.name}</strong> as a participant for
-              this cleanup?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setActionParticipant(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleAcceptParticipant}>
-              <Check className="w-4 h-4 mr-2" />
-              Accept
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <AcceptParticipantAlertDialog
+        open={acceptDialogOpen}
+        onOpenChange={setAcceptDialogOpen}
+        participantName={actionParticipant?.name}
+        onAccept={handleAcceptParticipant}
+        onCancel={() => setActionParticipant(null)}
+      />
 
       {/* Reject Confirmation Dialog */}
-      <AlertDialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Reject Participant</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to reject{" "}
-              <strong>{actionParticipant?.name}</strong>? You can provide an
-              optional reason below.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4">
-            <Label htmlFor="reject-reason">Reason (optional)</Label>
-            <Textarea
-              id="reject-reason"
-              placeholder="Enter a reason for rejection..."
-              value={rejectReason}
-              onChange={(e) => setRejectReason(e.target.value)}
-              className="mt-2"
-              rows={3}
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel
-              onClick={() => {
-                setActionParticipant(null);
-                setRejectReason("");
-              }}
-            >
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleRejectParticipant}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              <X className="w-4 h-4 mr-2" />
-              Reject
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <RejectParticipantAlertDialog
+        open={rejectDialogOpen}
+        onOpenChange={setRejectDialogOpen}
+        participantName={actionParticipant?.name}
+        rejectReason={rejectReason}
+        onRejectReasonChange={setRejectReason}
+        onReject={handleRejectParticipant}
+        onCancel={() => {
+          setActionParticipant(null);
+          setRejectReason("");
+        }}
+      />
 
       {/* Participant Info Dialog */}
-      <Dialog open={participantInfoOpen} onOpenChange={setParticipantInfoOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Participant Details</DialogTitle>
-          </DialogHeader>
-          {selectedParticipant && (
-            <div className="space-y-6 py-4">
-              {/* Avatar and Name */}
-              <div className="flex items-center gap-4">
-                <Avatar className="w-16 h-16">
-                  <AvatarFallback className="text-xl">
-                    {selectedParticipant.name.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    {selectedParticipant.name}
-                  </h3>
-                  <Badge
-                    variant={
-                      selectedParticipant.status === "accepted"
-                        ? "default"
-                        : selectedParticipant.status === "pending"
-                        ? "secondary"
-                        : "destructive"
-                    }
-                  >
-                    {selectedParticipant.status.charAt(0).toUpperCase() +
-                      selectedParticipant.status.slice(1)}
-                  </Badge>
-                </div>
-              </div>
-
-              {/* Contact Info */}
-              <div className="space-y-3">
-                <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-                  <Mail className="w-4 h-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Email</p>
-                    <p className="text-sm font-medium">
-                      {selectedParticipant.email}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-                  <Calendar className="w-4 h-4 text-muted-foreground" />
-                  <div>
-                    <p className="text-xs text-muted-foreground">Applied On</p>
-                    <p className="text-sm font-medium">
-                      {selectedParticipant.appliedAt}
-                    </p>
-                  </div>
-                </div>
-                {selectedParticipant.rating && (
-                  <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-                    <Star className="w-4 h-4 text-muted-foreground" />
-                    <div>
-                      <p className="text-xs text-muted-foreground">Rating</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < selectedParticipant.rating!
-                                ? "text-yellow-500 fill-yellow-500"
-                                : "text-muted-foreground"
-                            }`}
-                          />
-                        ))}
-                        <span className="text-sm ml-2">
-                          {selectedParticipant.rating}/5
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setParticipantInfoOpen(false)}
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ParticipantInfoDialog
+        open={participantInfoOpen}
+        onOpenChange={setParticipantInfoOpen}
+        participant={selectedParticipant}
+      />
 
       {/* Join Request Dialog */}
-      <Dialog open={joinDialogOpen} onOpenChange={setJoinDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Request to Join</DialogTitle>
-            <DialogDescription>
-              Submit your request to participate in "{cleanup.title}". The
-              organizer will review and approve your request.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Cleanup Summary */}
-            <div className="p-4 bg-secondary rounded-lg space-y-2">
-              <div className="flex items-center gap-2 text-sm">
-                <Calendar className="w-4 h-4 text-muted-foreground" />
-                <span>
-                  {cleanup.date} • {cleanup.startTime} - {cleanup.endTime}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <MapPin className="w-4 h-4 text-muted-foreground" />
-                <span>
-                  {cleanup.location.address}, {cleanup.location.city}
-                </span>
-              </div>
-              <div className="flex items-center gap-2 text-sm">
-                <Users className="w-4 h-4 text-muted-foreground" />
-                <span>
-                  {acceptedParticipants.length}/{cleanup.maxParticipants}{" "}
-                  participants
-                </span>
-              </div>
-            </div>
-
-            {/* Message */}
-            <div className="space-y-2">
-              <Label htmlFor="join-message">
-                Message to Organizer (optional)
-              </Label>
-              <Textarea
-                id="join-message"
-                placeholder="Introduce yourself or share why you'd like to join this cleanup..."
-                value={joinMessage}
-                onChange={(e) => setJoinMessage(e.target.value)}
-                rows={3}
-                disabled={isSubmittingJoin}
-              />
-            </div>
-
-            {/* User Info Preview */}
-            <div className="p-3 border border-border rounded-lg">
-              <p className="text-xs text-muted-foreground mb-2">
-                Your application will include:
-              </p>
-              <div className="flex items-center gap-3">
-                <Avatar className="w-10 h-10">
-                  <AvatarFallback>
-                    {(currentUserProfile?.name || "U").charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium text-sm">
-                    {currentUserProfile?.name || "User"}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {currentUserProfile?.email || ""}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setJoinDialogOpen(false);
-                setJoinMessage("");
-              }}
-              disabled={isSubmittingJoin}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleJoinRequest} disabled={isSubmittingJoin}>
-              {isSubmittingJoin ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  Submitting...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4 mr-2" />
-                  Submit Request
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <JoinRequestDialog
+        open={joinDialogOpen}
+        onOpenChange={setJoinDialogOpen}
+        cleanup={cleanup}
+        acceptedParticipantsCount={acceptedParticipants.length}
+        message={joinMessage}
+        onMessageChange={setJoinMessage}
+        currentUserProfile={currentUserProfile}
+        onSubmit={handleJoinRequest}
+        isSubmitting={isSubmittingJoin}
+      />
     </div>
   );
 }

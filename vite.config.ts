@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" ? undefined : nodePolyfills(),
   ].filter(Boolean),
+  server: {
+    port: 5174,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
