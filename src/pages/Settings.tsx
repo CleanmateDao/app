@@ -4,20 +4,14 @@ import { motion } from "framer-motion";
 import {
   User,
   Mail,
-  Users,
-  Wallet,
   Save,
   Plus,
   X,
   Link2,
-  Bell,
   LogOut,
   AlertTriangle,
-  UserPlus,
   Upload,
   Trash2,
-  Edit2,
-  Check,
   Shield,
   FileText,
   Camera,
@@ -26,15 +20,11 @@ import {
   AlertCircle,
   CheckCircle2,
   Clock,
-  Download,
-  CreditCard,
   Moon,
   Sun,
   Copy,
   Gift,
   Share2,
-  Navigation,
-  Loader2,
 } from "lucide-react";
 import africanPattern from "@/assets/african-pattern.jpg";
 import { cn } from "@/lib/utils";
@@ -66,12 +56,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AddBankDialog } from "@/components/AddBankDialog";
-import { DeleteBankAlertDialog } from "@/components/DeleteBankAlertDialog";
-import { ConnectWalletDialog } from "@/components/ConnectWalletDialog";
-import { InviteTeamMemberDialog } from "@/components/InviteTeamMemberDialog";
-import { EditTeamMemberDialog } from "@/components/EditTeamMemberDialog";
-import { RemoveTeamMemberAlertDialog } from "@/components/RemoveTeamMemberAlertDialog";
 import { SignOutAlertDialog } from "@/components/SignOutAlertDialog";
 import { DeactivateAccountAlertDialog } from "@/components/DeactivateAccountAlertDialog";
 import { DeleteAccountAlertDialog } from "@/components/DeleteAccountAlertDialog";
@@ -80,55 +64,17 @@ import { useUser } from "@/services/subgraph/queries";
 import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSubmitKYCToAPI } from "@/services/api/kyc";
+import { uploadFileToIPFS, toIPFSGatewayUrl } from "@/services/ipfs";
 import {
   useMarkKYCPending,
   useUpdateProfile,
 } from "@/services/contracts/mutations";
-import type { UserMetadata } from "@/services/subgraph/types";
+import type { UserProfileMetadata } from "@/types/user";
 import {
   SUPPORTED_COUNTRIES,
-  SUPPORTED_LANGUAGES,
-  SUPPORTED_CURRENCIES,
   getStatesForCountry,
   type SupportedCountryCode,
-  type SupportedCurrencyCode,
 } from "@/constants/supported";
-import {
-  useBanks,
-  useCreateBankAccount,
-  useDeleteBankAccount,
-  useSetDefaultBankAccount,
-  useBanksListByCurrency,
-  type BankAccount,
-} from "@/services/api/banks";
-import {
-  AlertDialog,
-  AlertDialogHeader,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-
-interface TeamMemberPermissions {
-  canOrganizeCleanups: boolean;
-  canManageParticipants: boolean;
-  canSubmitProof: boolean;
-  canViewRewards: boolean;
-  canClaimRewards: boolean;
-  canManageTeam: boolean;
-}
-
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  permissions: TeamMemberPermissions;
-  avatar?: string;
-}
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
@@ -143,130 +89,25 @@ export default function Settings() {
         : null,
     [userData, walletAddress]
   );
+  const isEmailVerified = !!userProfile?.isEmailVerified;
+  const canApplyForKyc = isEmailVerified;
 
   const [profile, setProfile] = useState({
     name: "",
-    registrationNumber: "",
-    foundedYear: "",
-    teamSize: "",
     description: "",
-    mission: "",
-    vision: "",
-    focusAreas: [] as string[],
+    interests: [] as string[],
     email: "",
-    phone: "",
-    website: "",
     country: SUPPORTED_COUNTRIES[0]?.name || "",
-    city: "",
-    address: "",
+    state: "",
     walletAddress: "",
-    socialLinks: {
-      twitter: "",
-      linkedin: "",
-      facebook: "",
-    },
   });
-  const [newFocusArea, setNewFocusArea] = useState("");
+  const [newInterest, setNewInterest] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [preferences, setPreferences] = useState<{
-    emailNotifications: boolean;
-    proposalUpdates: boolean;
-    fundingAlerts: boolean;
-    weeklyDigest: boolean;
-    language: string;
-    locationAccess: boolean;
-  }>({
-    emailNotifications: true,
-    proposalUpdates: true,
-    fundingAlerts: true,
-    weeklyDigest: false,
-    language: SUPPORTED_LANGUAGES[0].code,
-    locationAccess: true,
-  });
-
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([
-    {
-      id: "1",
-      name: "John Doe",
-      email: "john@greenearth.org",
-      permissions: {
-        canOrganizeCleanups: true,
-        canManageParticipants: true,
-        canSubmitProof: true,
-        canViewRewards: true,
-        canClaimRewards: true,
-        canManageTeam: true,
-      },
-    },
-    {
-      id: "2",
-      name: "Jane Smith",
-      email: "jane@greenearth.org",
-      permissions: {
-        canOrganizeCleanups: true,
-        canManageParticipants: true,
-        canSubmitProof: true,
-        canViewRewards: true,
-        canClaimRewards: false,
-        canManageTeam: false,
-      },
-    },
-    {
-      id: "3",
-      name: "Mike Johnson",
-      email: "mike@greenearth.org",
-      permissions: {
-        canOrganizeCleanups: false,
-        canManageParticipants: false,
-        canSubmitProof: false,
-        canViewRewards: true,
-        canClaimRewards: false,
-        canManageTeam: false,
-      },
-    },
-  ]);
-
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [invitePermissions, setInvitePermissions] =
-    useState<TeamMemberPermissions>({
-      canOrganizeCleanups: false,
-      canManageParticipants: false,
-      canSubmitProof: false,
-      canViewRewards: true,
-      canClaimRewards: false,
-      canManageTeam: false,
-    });
-
-  // Bank accounts - fetch from API
-  const { data: bankAccounts = [], isLoading: isLoadingBanks } =
-    useBanks(walletAddress);
-  const createBankAccountMutation = useCreateBankAccount();
-  const deleteBankAccountMutation = useDeleteBankAccount();
-  const setDefaultBankAccountMutation = useSetDefaultBankAccount();
-  const [isAddBankDialogOpen, setIsAddBankDialogOpen] = useState(false);
-  const [newBankAccount, setNewBankAccount] = useState({
-    bankName: "",
-    bankCode: "",
-    accountNumber: "",
-    accountName: "",
-    currency: SUPPORTED_CURRENCIES[0].code as SupportedCurrencyCode,
-  });
-  const [deleteBankId, setDeleteBankId] = useState<string | null>(null);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-
-  // Fetch banks list from Paystack for the selected currency
-  const { data: paystackBanks = [], isLoading: isLoadingPaystackBanks } =
-    useBanksListByCurrency(newBankAccount.currency);
-  const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-
-  // KYC State
-  const [kycStatus, setKycStatus] = useState<
-    "not_started" | "pending" | "verified" | "rejected"
-  >("not_started");
+  // KYC status is sourced from the subgraph/contract via `useUser`.
+  const kycStatus = userProfile?.kycStatus ?? ("not_started" as const);
   const [kycData, setKycData] = useState({
     firstName: "",
     lastName: "",
@@ -316,8 +157,11 @@ export default function Settings() {
           prev.country ||
           SUPPORTED_COUNTRIES[0]?.name ||
           "",
-        city: userProfile.city || prev.city,
-        focusAreas: userProfile.focusAreas || prev.focusAreas,
+        state:
+          userProfile.country === "Nigeria"
+            ? userProfile.city || prev.state
+            : prev.state,
+        interests: userProfile.interests || prev.interests,
         email: userProfile.email || prev.email,
         walletAddress: walletAddress || prev.walletAddress,
       }));
@@ -343,15 +187,7 @@ export default function Settings() {
           },
         }));
       }
-      if (userProfile.city) {
-        setKycData((prev) => ({
-          ...prev,
-          address: {
-            ...prev.address,
-            city: userProfile.city || prev.address.city,
-          },
-        }));
-      }
+      // Do not auto-fill KYC city from profile (profile no longer stores city)
     }
   }, [walletAddress, userProfile]);
 
@@ -382,6 +218,11 @@ export default function Settings() {
   const handleSubmitKyc = async () => {
     if (!walletAddress) {
       toast.error("Wallet not connected");
+      return;
+    }
+
+    if (!canApplyForKyc) {
+      toast.error("Please verify your email before applying for KYC");
       return;
     }
 
@@ -441,7 +282,6 @@ export default function Settings() {
       toast.info("Submitting KYC to blockchain...");
       await markKYCPendingMutation.sendTransaction();
 
-      setKycStatus("pending");
       toast.success("KYC submitted for review");
     } catch (error) {
       console.error("Error submitting KYC:", error);
@@ -465,21 +305,40 @@ export default function Settings() {
     }
 
     try {
-      // Update profile metadata on blockchain using standardized UserMetadata type
-      // Note: email, kycStatus, referralCode are stored in contract, not in metadata
-      const profileMetadata: UserMetadata = {
+      let photoToStore = profileImage || undefined;
+
+      // If a new file was selected, upload on action click and store an IPFS URI.
+      if (profilePhotoFile) {
+        toast.info("Uploading profile photo to IPFS...");
+        const cid = await uploadFileToIPFS(
+          profilePhotoFile,
+          `profile-photo-${walletAddress}`
+        );
+        photoToStore = `ipfs://${cid}`;
+      }
+
+      // Update legacy profile metadata JSON (single source of truth for the subgraph parser)
+      const location =
+        profile.country === "Nigeria" && profile.state
+          ? `${profile.state}, Nigeria`
+          : profile.country || undefined;
+      const profileMetadata: UserProfileMetadata = {
         name: profile.name,
-        bio: profile.description,
-        country: profile.country,
-        city: profile.city,
-        focusAreas: profile.focusAreas,
-        profileImage: profileImage,
+        bio: profile.description || undefined,
+        photo: photoToStore,
+        location,
+        interests: profile.interests,
       };
 
       toast.info("Updating profile on blockchain...");
       await updateProfileMutation.sendTransaction(
         JSON.stringify(profileMetadata)
       );
+
+      if (profilePhotoFile && photoToStore) {
+        setProfileImage(photoToStore);
+        setProfilePhotoFile(null);
+      }
 
       toast.success("Profile updated successfully");
     } catch (error) {
@@ -492,152 +351,33 @@ export default function Settings() {
     }
   };
 
-  const addFocusArea = () => {
-    if (newFocusArea.trim()) {
+  const addInterest = () => {
+    if (newInterest.trim()) {
       setProfile({
         ...profile,
-        focusAreas: [...profile.focusAreas, newFocusArea.trim()],
+        interests: [...profile.interests, newInterest.trim()],
       });
-      setNewFocusArea("");
-      toast.success("Focus area added");
+      setNewInterest("");
+      toast.success("Interest added");
     }
   };
 
-  const removeFocusArea = (area: string) => {
+  const removeInterest = (interest: string) => {
     setProfile({
       ...profile,
-      focusAreas: profile.focusAreas.filter((a) => a !== area),
+      interests: profile.interests.filter((a) => a !== interest),
     });
-    toast.success("Focus area removed");
+    toast.success("Interest removed");
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProfileImage(reader.result as string);
-        toast.success("Profile image uploaded");
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleInviteMember = () => {
-    if (!inviteEmail.trim()) {
-      toast.error("Please enter an email address");
-      return;
-    }
-    const newMember: TeamMember = {
-      id: Date.now().toString(),
-      name: inviteEmail.split("@")[0],
-      email: inviteEmail,
-      permissions: invitePermissions,
-    };
-    setTeamMembers([...teamMembers, newMember]);
-    setInviteEmail("");
-    setInvitePermissions({
-      canOrganizeCleanups: false,
-      canManageParticipants: false,
-      canSubmitProof: false,
-      canViewRewards: true,
-      canClaimRewards: false,
-      canManageTeam: false,
-    });
-    setIsInviteDialogOpen(false);
-    toast.success(`Invitation sent to ${inviteEmail}`);
-  };
-
-  const handleAddBankAccount = async () => {
-    if (
-      !newBankAccount.bankName.trim() ||
-      !newBankAccount.accountNumber.trim() ||
-      !newBankAccount.accountName.trim()
-    ) {
-      toast.error("Please fill in all fields");
-      return;
-    }
-
-    if (!walletAddress) {
-      toast.error("Please connect your wallet");
-      return;
-    }
-
-    try {
-      await createBankAccountMutation.mutateAsync({
-        ...newBankAccount,
-        userId: walletAddress,
-        isDefault: bankAccounts.length === 0,
-      });
-      setNewBankAccount({
-        bankName: "",
-        bankCode: "",
-        accountNumber: "",
-        accountName: "",
-        currency: SUPPORTED_CURRENCIES[0].code as SupportedCurrencyCode,
-      });
-      setIsAddBankDialogOpen(false);
-    } catch (error) {
-      // Error is handled by the mutation hook
-    }
-  };
-
-  const handleRemoveBankAccount = (id: string) => {
-    setDeleteBankId(id);
-    setIsDeleteDialogOpen(true);
-  };
-
-  const confirmDeleteBankAccount = async () => {
-    if (!deleteBankId || !walletAddress) {
-      return;
-    }
-
-    try {
-      await deleteBankAccountMutation.mutateAsync({
-        id: deleteBankId,
-        userId: walletAddress,
-      });
-      setIsDeleteDialogOpen(false);
-      setDeleteBankId(null);
-    } catch (error) {
-      // Error is handled by the mutation hook
-    }
-  };
-
-  const handleSetDefaultBankAccount = async (id: string) => {
-    if (!walletAddress) {
-      toast.error("Please connect your wallet");
-      return;
-    }
-
-    try {
-      await setDefaultBankAccountMutation.mutateAsync({
-        id,
-        userId: walletAddress,
-      });
-    } catch (error) {
-      // Error is handled by the mutation hook
-    }
-  };
-
-  const maskAccountNumber = (accountNumber: string) => {
-    if (accountNumber.length <= 4) return accountNumber;
-    return "****" + accountNumber.slice(-4);
-  };
-
-  const handleRemoveMember = (id: string) => {
-    setTeamMembers(teamMembers.filter((m) => m.id !== id));
-    toast.success("Team member removed");
-  };
-
-  const handleUpdateMember = () => {
-    if (editingMember) {
-      setTeamMembers(
-        teamMembers.map((m) => (m.id === editingMember.id ? editingMember : m))
-      );
-      setIsEditDialogOpen(false);
-      setEditingMember(null);
-      toast.success("Member updated");
+      // Local preview only; upload happens when the user clicks "Update Profile".
+      const previewUrl = URL.createObjectURL(file);
+      setProfileImage(previewUrl);
+      setProfilePhotoFile(file);
+      toast.success("Photo selected. Click Update Profile to upload.");
     }
   };
 
@@ -651,10 +391,6 @@ export default function Settings() {
 
   const handleDeleteAccount = () => {
     toast.error("Account deleted");
-  };
-
-  const handleConnectWallet = () => {
-    toast.success("Wallet connection initiated");
   };
 
   return (
@@ -683,14 +419,8 @@ export default function Settings() {
             <TabsTrigger value="referral" className="text-xs sm:text-sm">
               Referral
             </TabsTrigger>
-            <TabsTrigger value="wallets" className="text-xs sm:text-sm">
-              Wallets
-            </TabsTrigger>
             <TabsTrigger value="preferences" className="text-xs sm:text-sm">
               Preferences
-            </TabsTrigger>
-            <TabsTrigger value="team" className="text-xs sm:text-sm">
-              Team
             </TabsTrigger>
             <TabsTrigger value="account" className="text-xs sm:text-sm">
               Account
@@ -700,6 +430,36 @@ export default function Settings() {
 
         {/* Profile Tab */}
         <TabsContent value="profile" className="space-y-6">
+          {/* Email Verification Warning */}
+          {!isEmailVerified && (
+            <Card className="border-l-4 border-l-primary">
+              <CardContent className="pt-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <Mail className="w-6 h-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold">Verify Your Email</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Verify your email to unlock referrals and apply for KYC.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() =>
+                      toast.info(
+                        "Email verification is not implemented yet in the frontend."
+                      )
+                    }
+                  >
+                    Verify Email
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {/* Profile Image */}
           <Card>
             <CardHeader>
@@ -713,7 +473,7 @@ export default function Settings() {
                   <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
                     {profileImage ? (
                       <img
-                        src={profileImage}
+                        src={toIPFSGatewayUrl(profileImage)}
                         alt="Profile"
                         className="w-full h-full object-cover"
                       />
@@ -733,6 +493,7 @@ export default function Settings() {
                   <Button
                     variant="outline"
                     onClick={() => fileInputRef.current?.click()}
+                    disabled={!walletAddress}
                   >
                     <Upload className="w-4 h-4 mr-2" />
                     Upload Photo
@@ -741,8 +502,10 @@ export default function Settings() {
                     <Button
                       variant="ghost"
                       className="text-destructive"
+                      disabled={!walletAddress}
                       onClick={() => {
                         setProfileImage(null);
+                        setProfilePhotoFile(null);
                         toast.success("Profile photo removed");
                       }}
                     >
@@ -784,9 +547,7 @@ export default function Settings() {
                     id="email"
                     type="email"
                     value={profile.email}
-                    onChange={(e) =>
-                      setProfile({ ...profile, email: e.target.value })
-                    }
+                    disabled={!!profile.email}
                   />
                 </div>
               </div>
@@ -820,7 +581,11 @@ export default function Settings() {
                   <Select
                     value={profile.country}
                     onValueChange={(value) =>
-                      setProfile({ ...profile, country: value })
+                      setProfile({
+                        ...profile,
+                        country: value,
+                        state: value === "Nigeria" ? profile.state : "",
+                      })
                     }
                   >
                     <SelectTrigger id="country">
@@ -832,19 +597,34 @@ export default function Settings() {
                           {country.name}
                         </SelectItem>
                       ))}
+                      <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    value={profile.city}
-                    onChange={(e) =>
-                      setProfile({ ...profile, city: e.target.value })
-                    }
-                  />
-                </div>
+                {profile.country === "Nigeria" && (
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Select
+                      value={profile.state}
+                      onValueChange={(value) =>
+                        setProfile({ ...profile, state: value })
+                      }
+                    >
+                      <SelectTrigger id="state">
+                        <SelectValue placeholder="Select state" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getStatesForCountry("NG" as SupportedCountryCode).map(
+                          (s) => (
+                            <SelectItem key={s.code} value={s.name}>
+                              {s.name}
+                            </SelectItem>
+                          )
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -856,11 +636,11 @@ export default function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                {profile.focusAreas.map((area) => (
+                {profile.interests.map((area) => (
                   <Badge key={area} variant="secondary" className="gap-1 pr-1">
                     {area}
                     <button
-                      onClick={() => removeFocusArea(area)}
+                      onClick={() => removeInterest(area)}
                       className="ml-1 hover:bg-muted rounded p-0.5"
                     >
                       <X className="w-3 h-3" />
@@ -871,16 +651,30 @@ export default function Settings() {
               <div className="flex gap-2">
                 <Input
                   placeholder="Add interest..."
-                  value={newFocusArea}
-                  onChange={(e) => setNewFocusArea(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addFocusArea()}
+                  value={newInterest}
+                  onChange={(e) => setNewInterest(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && addInterest()}
                 />
-                <Button variant="outline" onClick={addFocusArea}>
+                <Button variant="outline" onClick={addInterest}>
                   <Plus className="w-4 h-4" />
                 </Button>
               </div>
             </CardContent>
           </Card>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={handleSave}
+              disabled={
+                !walletAddress || updateProfileMutation.isTransactionPending
+              }
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {updateProfileMutation.isTransactionPending
+                ? "Updating..."
+                : "Update Profile"}
+            </Button>
+          </div>
         </TabsContent>
 
         {/* KYC Tab */}
@@ -966,7 +760,9 @@ export default function Settings() {
                         | "other"
                     ) => setKycData({ ...kycData, documentType: value })}
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   >
                     <SelectTrigger>
@@ -1003,7 +799,9 @@ export default function Settings() {
                         : "Enter ID number"
                     }
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1016,17 +814,23 @@ export default function Settings() {
                   accept="image/*,.pdf"
                   onChange={(e) => handleKycFileUpload("idDocument", e)}
                   className="hidden"
-                  disabled={kycStatus === "verified" || kycStatus === "pending"}
+                  disabled={
+                    !canApplyForKyc ||
+                    kycStatus === "verified" ||
+                    kycStatus === "pending"
+                  }
                 />
                 <div
                   onClick={() =>
+                    canApplyForKyc &&
                     kycStatus !== "verified" &&
                     kycStatus !== "pending" &&
                     idDocumentRef.current?.click()
                   }
                   className={cn(
                     "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                    kycStatus !== "verified" &&
+                    canApplyForKyc &&
+                      kycStatus !== "verified" &&
                       kycStatus !== "pending" &&
                       "cursor-pointer hover:border-primary hover:bg-primary/5",
                     kycData.idDocument
@@ -1073,18 +877,24 @@ export default function Settings() {
                 accept="image/*"
                 onChange={(e) => handleKycFileUpload("photograph", e)}
                 className="hidden"
-                disabled={kycStatus === "verified" || kycStatus === "pending"}
+                disabled={
+                  !canApplyForKyc ||
+                  kycStatus === "verified" ||
+                  kycStatus === "pending"
+                }
               />
               <div className="flex items-center gap-6">
                 <div
                   onClick={() =>
+                    canApplyForKyc &&
                     kycStatus !== "verified" &&
                     kycStatus !== "pending" &&
                     photographRef.current?.click()
                   }
                   className={cn(
                     "w-32 h-32 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors",
-                    kycStatus !== "verified" &&
+                    canApplyForKyc &&
+                      kycStatus !== "verified" &&
                       kycStatus !== "pending" &&
                       "cursor-pointer hover:border-primary hover:bg-primary/5",
                     kycData.photograph ? "border-green-500" : "border-border"
@@ -1132,7 +942,9 @@ export default function Settings() {
                     }
                     placeholder="Enter your first name"
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1145,7 +957,9 @@ export default function Settings() {
                     }
                     placeholder="Enter your last name"
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1160,7 +974,9 @@ export default function Settings() {
                     }
                     placeholder="Enter your phone number"
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1173,7 +989,9 @@ export default function Settings() {
                     }
                     placeholder="Enter your nationality"
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1189,7 +1007,9 @@ export default function Settings() {
                         !kycData.dateOfBirth && "text-muted-foreground"
                       )}
                       disabled={
-                        kycStatus === "verified" || kycStatus === "pending"
+                        !canApplyForKyc ||
+                        kycStatus === "verified" ||
+                        kycStatus === "pending"
                       }
                     >
                       <Calendar className="mr-2 h-4 w-4" />
@@ -1241,7 +1061,11 @@ export default function Settings() {
                   }
                   placeholder="Enter your full street address"
                   rows={2}
-                  disabled={kycStatus === "verified" || kycStatus === "pending"}
+                  disabled={
+                    !canApplyForKyc ||
+                    kycStatus === "verified" ||
+                    kycStatus === "pending"
+                  }
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1257,7 +1081,9 @@ export default function Settings() {
                     }
                     placeholder="City"
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1272,7 +1098,9 @@ export default function Settings() {
                       })
                     }
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   >
                     <SelectTrigger>
@@ -1312,7 +1140,9 @@ export default function Settings() {
                     }
                     placeholder="Postal code"
                     disabled={
-                      kycStatus === "verified" || kycStatus === "pending"
+                      !canApplyForKyc ||
+                      kycStatus === "verified" ||
+                      kycStatus === "pending"
                     }
                   />
                 </div>
@@ -1328,7 +1158,11 @@ export default function Settings() {
                     })
                   }
                   placeholder="Country"
-                  disabled={kycStatus === "verified" || kycStatus === "pending"}
+                  disabled={
+                    !canApplyForKyc ||
+                    kycStatus === "verified" ||
+                    kycStatus === "pending"
+                  }
                 />
               </div>
             </CardContent>
@@ -1353,17 +1187,23 @@ export default function Settings() {
                 accept="image/*,.pdf"
                 onChange={(e) => handleKycFileUpload("proofOfAddress", e)}
                 className="hidden"
-                disabled={kycStatus === "verified" || kycStatus === "pending"}
+                disabled={
+                  !canApplyForKyc ||
+                  kycStatus === "verified" ||
+                  kycStatus === "pending"
+                }
               />
               <div
                 onClick={() =>
+                  canApplyForKyc &&
                   kycStatus !== "verified" &&
                   kycStatus !== "pending" &&
                   proofOfAddressRef.current?.click()
                 }
                 className={cn(
                   "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                  kycStatus !== "verified" &&
+                  canApplyForKyc &&
+                    kycStatus !== "verified" &&
                     kycStatus !== "pending" &&
                     "cursor-pointer hover:border-primary hover:bg-primary/5",
                   kycData.proofOfAddress
@@ -1391,14 +1231,16 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {kycStatus !== "verified" && kycStatus !== "pending" && (
-            <div className="flex justify-end">
-              <Button onClick={handleSubmitKyc}>
-                <Shield className="w-4 h-4 mr-2" />
-                Submit KYC
-              </Button>
-            </div>
-          )}
+          {canApplyForKyc &&
+            kycStatus !== "verified" &&
+            kycStatus !== "pending" && (
+              <div className="flex justify-end">
+                <Button onClick={handleSubmitKyc}>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Submit KYC
+                </Button>
+              </div>
+            )}
         </TabsContent>
 
         {/* Referral Tab */}
@@ -1526,42 +1368,6 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* Referral Stats */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Users className="w-4 h-4" />
-                Referral Stats
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                <div className="p-4 bg-secondary rounded-lg text-center">
-                  <p className="text-2xl font-bold text-primary">
-                    {userProfile?.referralCount || 0}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Total Referrals
-                  </p>
-                </div>
-                <div className="p-4 bg-secondary rounded-lg text-center">
-                  <p className="text-2xl font-bold text-status-approved">
-                    {Math.floor((userProfile?.referralCount || 0) * 0.8)}
-                  </p>
-                  <p className="text-sm text-muted-foreground">Active Users</p>
-                </div>
-                <div className="p-4 bg-secondary rounded-lg text-center col-span-2 md:col-span-1">
-                  <p className="text-2xl font-bold text-primary">
-                    {(userProfile?.referralCount || 0) * 10} B3TR
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Rewards Earned
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
           {/* How It Works */}
           <Card>
             <CardHeader>
@@ -1610,147 +1416,6 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
-        {/* Wallets Tab */}
-        <TabsContent value="wallets" className="space-y-6">
-          {/* Bank Accounts */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-medium flex items-center gap-2">
-                  <CreditCard className="w-4 h-4" />
-                  Bank Accounts
-                </CardTitle>
-                <CardDescription>
-                  Receive funding via traditional banking (NGN & GHS only)
-                </CardDescription>
-              </div>
-              <AddBankDialog
-                open={isAddBankDialogOpen}
-                onOpenChange={setIsAddBankDialogOpen}
-                bankAccount={newBankAccount}
-                onBankAccountChange={setNewBankAccount}
-                paystackBanks={paystackBanks}
-                isLoadingPaystackBanks={isLoadingPaystackBanks}
-                onSubmit={handleAddBankAccount}
-                isPending={createBankAccountMutation.isPending}
-              />
-            </CardHeader>
-            <CardContent>
-              {isLoadingBanks ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground">
-                    Loading bank accounts...
-                  </p>
-                </div>
-              ) : bankAccounts.length === 0 ? (
-                <div className="text-center py-8">
-                  <CreditCard className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <p className="text-muted-foreground">
-                    No bank accounts added yet
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {bankAccounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/30 gap-3"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
-                          <CreditCard className="w-4 h-4 text-primary" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-sm">
-                              {account.bankName}
-                            </p>
-                            <Badge variant="outline" className="text-xs">
-                              {account.currency}
-                            </Badge>
-                            {account.isDefault && (
-                              <Badge variant="secondary" className="text-xs">
-                                Default
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {account.accountName} •{" "}
-                            {maskAccountNumber(account.accountNumber)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 ml-12 sm:ml-0">
-                        {!account.isDefault && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              handleSetDefaultBankAccount(account.id)
-                            }
-                          >
-                            Set Default
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive hover:text-destructive"
-                          onClick={() => handleRemoveBankAccount(account.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Delete Bank Account Confirmation Dialog */}
-          <DeleteBankAlertDialog
-            open={isDeleteDialogOpen}
-            onOpenChange={setIsDeleteDialogOpen}
-            onConfirm={confirmDeleteBankAccount}
-            isPending={deleteBankAccountMutation.isPending}
-            onCancel={() => setDeleteBankId(null)}
-          />
-
-          {/* Web3 Wallet */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Wallet className="w-4 h-4" />
-                Web3 Wallet
-              </CardTitle>
-              <CardDescription>Receive crypto funding</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Wallet Address</Label>
-                <Input
-                  value={profile.walletAddress}
-                  onChange={(e) =>
-                    setProfile({ ...profile, walletAddress: e.target.value })
-                  }
-                  className="font-mono text-sm"
-                />
-              </div>
-              <div className="flex gap-3">
-                <ConnectWalletDialog onConnect={handleConnectWallet} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end">
-            <Button onClick={handleSave}>
-              <Save className="w-4 h-4 mr-2" />
-              Save Wallets
-            </Button>
-          </div>
-        </TabsContent>
-
         {/* Preferences Tab */}
         <TabsContent value="preferences" className="space-y-6">
           {/* Theme */}
@@ -1783,280 +1448,8 @@ export default function Settings() {
                   }}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>Language</Label>
-                <Select
-                  value={preferences.language}
-                  onValueChange={(value) =>
-                    setPreferences({
-                      ...preferences,
-                      language: value as string,
-                    })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SUPPORTED_LANGUAGES.map((language) => (
-                      <SelectItem key={language.code} value={language.code}>
-                        {language.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
             </CardContent>
           </Card>
-
-          {/* Location Access */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Navigation className="w-4 h-4" />
-                Location Access
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Enable Location Access</p>
-                  <p className="text-sm text-muted-foreground">
-                    Allow the app to access your location for nearby cleanups
-                  </p>
-                </div>
-                <Switch
-                  checked={preferences.locationAccess}
-                  onCheckedChange={(checked) => {
-                    setPreferences({ ...preferences, locationAccess: checked });
-                    toast.success(
-                      checked
-                        ? "Location access enabled"
-                        : "Location access disabled"
-                    );
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Notifications */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Bell className="w-4 h-4" />
-                Notifications
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Email Notifications</p>
-                  <p className="text-sm text-muted-foreground">
-                    Receive updates via email
-                  </p>
-                </div>
-                <Switch
-                  checked={preferences.emailNotifications}
-                  onCheckedChange={(checked) => {
-                    setPreferences({
-                      ...preferences,
-                      emailNotifications: checked,
-                    });
-                    toast.success(
-                      checked
-                        ? "Email notifications enabled"
-                        : "Email notifications disabled"
-                    );
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Cleanup Updates</p>
-                  <p className="text-sm text-muted-foreground">
-                    Get notified on cleanup status changes
-                  </p>
-                </div>
-                <Switch
-                  checked={preferences.proposalUpdates}
-                  onCheckedChange={(checked) => {
-                    setPreferences({
-                      ...preferences,
-                      proposalUpdates: checked,
-                    });
-                    toast.success(
-                      checked
-                        ? "Cleanup updates enabled"
-                        : "Cleanup updates disabled"
-                    );
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Reward Alerts</p>
-                  <p className="text-sm text-muted-foreground">
-                    Receive alerts for new rewards
-                  </p>
-                </div>
-                <Switch
-                  checked={preferences.fundingAlerts}
-                  onCheckedChange={(checked) => {
-                    setPreferences({ ...preferences, fundingAlerts: checked });
-                    toast.success(
-                      checked
-                        ? "Reward alerts enabled"
-                        : "Reward alerts disabled"
-                    );
-                  }}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Weekly Digest</p>
-                  <p className="text-sm text-muted-foreground">
-                    Receive a weekly summary of activity
-                  </p>
-                </div>
-                <Switch
-                  checked={preferences.weeklyDigest}
-                  onCheckedChange={(checked) => {
-                    setPreferences({ ...preferences, weeklyDigest: checked });
-                    toast.success(
-                      checked
-                        ? "Weekly digest enabled"
-                        : "Weekly digest disabled"
-                    );
-                  }}
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="flex justify-end">
-            <Button onClick={handleSave}>
-              <Save className="w-4 h-4 mr-2" />
-              Save Preferences
-            </Button>
-          </div>
-        </TabsContent>
-
-        {/* Team Tab */}
-        <TabsContent value="team" className="space-y-6">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <div>
-                <CardTitle className="text-base font-medium flex items-center gap-2">
-                  <Users className="w-4 h-4" />
-                  Team Members
-                </CardTitle>
-                <CardDescription>
-                  Manage who can help organize your cleanups
-                </CardDescription>
-              </div>
-              <InviteTeamMemberDialog
-                open={isInviteDialogOpen}
-                onOpenChange={setIsInviteDialogOpen}
-                email={inviteEmail}
-                onEmailChange={setInviteEmail}
-                permissions={invitePermissions}
-                onPermissionsChange={setInvitePermissions}
-                onSubmit={handleInviteMember}
-              />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {teamMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/30 gap-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary shrink-0">
-                        {member.name
-                          .split(" ")
-                          .map((n) => n[0])
-                          .join("")}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-sm truncate">
-                          {member.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {member.email}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 ml-12 sm:ml-0 flex-wrap">
-                      <div className="flex flex-wrap gap-1">
-                        {
-                          Object.entries(member.permissions).filter(
-                            ([_, v]) => v
-                          ).length
-                        }{" "}
-                        permissions
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => {
-                          setEditingMember(member);
-                          setIsEditDialogOpen(true);
-                        }}
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="w-[95vw] max-w-md">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>
-                              Remove team member?
-                            </AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to remove {member.name} from
-                              your team? They will lose access to all
-                              organization resources.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                            <AlertDialogCancel className="w-full sm:w-auto">
-                              Cancel
-                            </AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleRemoveMember(member.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
-                            >
-                              Remove
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Edit Member Dialog */}
-          <EditTeamMemberDialog
-            open={isEditDialogOpen}
-            onOpenChange={setIsEditDialogOpen}
-            member={editingMember}
-            onMemberChange={setEditingMember}
-            onSave={handleUpdateMember}
-          />
         </TabsContent>
 
         {/* Account Tab */}

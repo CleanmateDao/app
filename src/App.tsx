@@ -20,6 +20,7 @@ import AIChat from "./pages/AIChat";
 import Onboarding from "./pages/Onboarding";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
+import appLogo from "./assets/african-mask.jpg";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -75,6 +76,7 @@ const AppInner = () => {
         loginModalUI={{
           description:
             "Choose between social login through VeChain or by connecting your wallet.",
+          logo: appLogo,
         }}
         network={{ type: import.meta.env.VITE_VECHAIN_NETWORK }}
         allowCustomTokens={false}

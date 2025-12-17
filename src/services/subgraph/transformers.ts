@@ -14,7 +14,6 @@ import type { UserProfile } from "@/types/user";
 import {
   parseCleanupMetadata,
   parseUserMetadata,
-  extractEmailFromMetadata,
   bigIntToNumber,
   bigIntToDate,
   mapCleanupStatus,
@@ -34,23 +33,36 @@ export function transformUserToProfile(
   const metadata = parseUserMetadata(user.metadata);
   // Email is now stored separately in the subgraph, not in metadata
   const email = user.email || "";
+  // Legacy metadata format stores location as a single string; we only parse the simplest cases.
+  const location = metadata?.location?.trim();
+  const countryFromLocation =
+    location && !location.includes(",")
+      ? location
+      : location?.split(",").pop()?.trim();
+  const cityFromLocation =
+    location && location.includes(",")
+      ? location.split(",")[0]?.trim()
+      : undefined;
 
   return {
     id: user.id.toLowerCase(),
     name: metadata?.name || "Unknown User",
     email: email,
     walletAddress: userAddress || user.id.toLowerCase(),
+    bio: metadata?.bio,
+    country: countryFromLocation,
+    city: cityFromLocation,
+    interests: metadata?.interests,
+    profileImage: metadata?.photo,
     totalRewards: bigIntToNumber(user.totalRewardsEarned),
     claimedRewards: bigIntToNumber(user.totalRewardsClaimed),
     pendingRewards: bigIntToNumber(user.pendingRewards),
     cleanupsOrganized: 0, // This needs to be fetched separately
     cleanupsParticipated: 0, // This needs to be fetched separately
-    averageRating: 0, // This is not in subgraph
     isEmailVerified: user.emailVerified,
     kycStatus: mapKycStatus(user.kycStatus),
     referralCode: user.referralCode || undefined,
     referredBy: user.referrer || undefined,
-    referralCount: 0, // This needs to be calculated from referrer relationships
   };
 }
 

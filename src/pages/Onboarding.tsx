@@ -31,12 +31,13 @@ import {
 import { toast } from "sonner";
 import africanPattern from "@/assets/african-pattern-decorative.jpg";
 import africanMask from "@/assets/african-mask.jpg";
+import { WalletButton } from "@vechain/vechain-kit";
 import {
   useRegisterUser,
   useRegisterWithReferral,
   useUpdateProfile,
 } from "@/services/contracts/mutations";
-import type { UserMetadata } from "@/services/subgraph/types";
+import type { UserProfileMetadata } from "@/types/user";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSearchParams } from "react-router-dom";
 import { useUser } from "@/services/subgraph/queries";
@@ -45,6 +46,7 @@ import {
   getStatesForCountry,
   type SupportedCountryCode,
 } from "@/constants/supported";
+import { INTEREST_OPTIONS } from "@/constants/interests";
 
 export interface OnboardingData {
   // Profile
@@ -55,13 +57,9 @@ export interface OnboardingData {
   // Location
   country: string;
   state: string;
-  city: string;
 
   // Interests
   interests: string[];
-
-  // Wallet
-  walletAddress: string;
 
   // Referral
   referralCode: string;
@@ -76,9 +74,7 @@ const initialData: OnboardingData = {
   bio: "",
   country: "",
   state: "",
-  city: "",
   interests: [],
-  walletAddress: "",
   referralCode: "",
   agreeTerms: false,
 };
@@ -104,41 +100,7 @@ const steps = [
   },
 ];
 
-const countries = [
-  "Nigeria",
-  "Kenya",
-  "South Africa",
-  "Ghana",
-  "Tanzania",
-  "Uganda",
-  "Ethiopia",
-  "Rwanda",
-  "Senegal",
-  "Cameroon",
-  "United States",
-  "United Kingdom",
-  "Germany",
-  "France",
-  "Canada",
-  "Australia",
-  "India",
-  "Brazil",
-  "Mexico",
-  "Other",
-];
-
-const interestOptions = [
-  "Beach Cleanup",
-  "Urban Cleanup",
-  "Nature Conservation",
-  "Recycling",
-  "Community Events",
-  "Wildlife Protection",
-  "Water Conservation",
-  "Tree Planting",
-  "Waste Management",
-  "Education & Awareness",
-];
+const countries = ["Nigeria", "Other"];
 
 const achievements = [
   {
@@ -218,14 +180,16 @@ export default function Onboarding() {
     setIsSubmitting(true);
 
     try {
-      // Prepare user metadata using standardized UserMetadata type
-      // Note: email, walletAddress, referralCode are stored in contract, not in metadata
-      const userMetadata: UserMetadata = {
+      // Legacy user metadata (kept consistent with subgraph parsing):
+      // email/referral are stored in contract fields, not in metadata JSON.
+      const location =
+        data.country === "Nigeria" && data.state
+          ? `${data.state}, Nigeria`
+          : data.country || undefined;
+      const userMetadata: UserProfileMetadata = {
         name: data.fullName,
-        bio: data.bio,
-        country: data.country,
-        state: data.state || undefined,
-        city: data.city,
+        bio: data.bio || undefined,
+        location,
         interests: data.interests,
       };
 
@@ -283,7 +247,7 @@ export default function Onboarding() {
       case 1:
         return data.fullName && data.email && data.agreeTerms;
       case 2:
-        return data.country;
+        return data.country && (data.country !== "Nigeria" || !!data.state);
       case 3:
         return true;
       default:
@@ -423,7 +387,7 @@ export default function Onboarding() {
                             Join 5,000+ organizers
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Making impact across Africa
+                            Making impact across the Globe
                           </p>
                         </div>
                       </div>
@@ -495,7 +459,7 @@ export default function Onboarding() {
                     <CardContent className="pt-6 space-y-4">
                       <Label>What types of cleanups interest you?</Label>
                       <div className="flex flex-wrap gap-2">
-                        {interestOptions.map((interest) => (
+                        {INTEREST_OPTIONS.map((interest) => (
                           <Badge
                             key={interest}
                             variant={
@@ -594,23 +558,23 @@ export default function Onboarding() {
                       </div>
 
                       {(() => {
-                        if (!data.country) return null;
-                        
-                        // Get country code from country name
+                        if (data.country !== "Nigeria") return null;
+
+                        // Nigeria states only
                         const country = SUPPORTED_COUNTRIES.find(
-                          (c) => c.name === data.country
+                          (c) => c.name === "Nigeria"
                         );
-                        const countryCode = country?.code || "NG";
-                        const states = getStatesForCountry(
-                          countryCode as SupportedCountryCode
-                        );
-                        
-                        // Only show state dropdown if states are available for the selected country
+                        const states = country?.code
+                          ? getStatesForCountry(
+                              country.code as SupportedCountryCode
+                            )
+                          : [];
+
                         if (states.length === 0) return null;
-                        
+
                         return (
                           <div className="space-y-2">
-                            <Label htmlFor="state">State/Province</Label>
+                            <Label htmlFor="state">State *</Label>
                             <Select
                               value={data.state}
                               onValueChange={(value) =>
@@ -618,11 +582,14 @@ export default function Onboarding() {
                               }
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select state or province" />
+                                <SelectValue placeholder="Select state" />
                               </SelectTrigger>
                               <SelectContent>
                                 {states.map((state) => (
-                                  <SelectItem key={state.code} value={state.name}>
+                                  <SelectItem
+                                    key={state.code}
+                                    value={state.name}
+                                  >
                                     {state.name}
                                   </SelectItem>
                                 ))}
@@ -631,20 +598,6 @@ export default function Onboarding() {
                           </div>
                         );
                       })()}
-
-                      <div className="space-y-2">
-                        <Label htmlFor="city">City</Label>
-                        <Input
-                          id="city"
-                          placeholder="Your city"
-                          value={data.city}
-                          onChange={(e) => updateData({ city: e.target.value })}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          We'll help you discover cleanups and participants
-                          nearby
-                        </p>
-                      </div>
                     </CardContent>
                   </Card>
                 </div>
@@ -692,37 +645,12 @@ export default function Onboarding() {
                         <p className="text-sm text-muted-foreground mb-4">
                           Link a VeChain wallet to receive your B3TR rewards
                         </p>
-                        <Button variant="outline" className="gap-2">
-                          <Wallet className="w-4 h-4" />
-                          Connect Wallet
-                        </Button>
-                      </div>
-
-                      <div className="relative">
-                        <div className="absolute inset-0 flex items-center">
-                          <span className="w-full border-t" />
+                        <div className="flex justify-center">
+                          <WalletButton
+                            mobileVariant="iconAndDomain"
+                            desktopVariant="iconAndDomain"
+                          />
                         </div>
-                        <div className="relative flex justify-center text-xs uppercase">
-                          <span className="bg-card px-2 text-muted-foreground">
-                            Or enter manually
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="walletAddress">Wallet Address</Label>
-                        <Input
-                          id="walletAddress"
-                          placeholder="0x..."
-                          value={data.walletAddress}
-                          onChange={(e) =>
-                            updateData({ walletAddress: e.target.value })
-                          }
-                          className="font-mono text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          You can add or change this later in Settings
-                        </p>
                       </div>
                     </CardContent>
                   </Card>

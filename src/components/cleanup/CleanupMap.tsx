@@ -201,7 +201,7 @@ function formatDistance(km: number): string {
 export function CleanupMap({ cleanups, className }: CleanupMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
+  const markersRef = useRef<google.maps.Marker[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoWindow, setInfoWindow] = useState<google.maps.InfoWindow | null>(
@@ -211,7 +211,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     lat: number;
     lng: number;
   } | null>(null);
-  const [userMarker, setUserMarker] = useState<google.maps.Marker | null>(null);
+  const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const [directionsRenderer, setDirectionsRenderer] =
     useState<google.maps.DirectionsRenderer | null>(null);
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
@@ -299,7 +299,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     setDirectionsRenderer(renderer);
 
     setMap(newMap);
-  }, [isLoaded, userLocation, theme]);
+  }, [isLoaded, map, theme, userLocation]);
 
   // Update map styles when theme changes
   useEffect(() => {
@@ -313,8 +313,8 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     if (!map || !userLocation) return;
 
     // Remove old user marker
-    if (userMarker) {
-      userMarker.setMap(null);
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setMap(null);
     }
 
     const marker = new window.google.maps.Marker({
@@ -331,7 +331,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       },
     });
 
-    setUserMarker(marker);
+    userMarkerRef.current = marker;
   }, [map, userLocation]);
 
   // Add markers for cleanups
@@ -339,7 +339,8 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     if (!map || !isLoaded || !infoWindow) return;
 
     // Clear existing markers
-    markers.forEach((marker) => marker.setMap(null));
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current = [];
 
     const bounds = new window.google.maps.LatLngBounds();
     const newMarkers: google.maps.Marker[] = [];
@@ -473,7 +474,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       bounds.extend(position);
     });
 
-    setMarkers(newMarkers);
+    markersRef.current = newMarkers;
 
     // Fit map to bounds if we have markers
     if (newMarkers.length > 0 || userLocation) {

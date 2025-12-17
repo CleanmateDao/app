@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Send, Sparkles, User, Bot, Loader2 } from 'lucide-react';
@@ -73,6 +73,7 @@ export default function AIChat() {
       timestamp: new Date(),
     }
   ]);
+  const messagesRef = useRef<Message[]>(messages);
   const [input, setInput] = useState('');
   const isLoading = temiChatMutation.isPending;
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -82,18 +83,11 @@ export default function AIChat() {
   };
 
   useEffect(() => {
+    messagesRef.current = messages;
     scrollToBottom();
   }, [messages]);
 
-  // Handle initial query from Insights page
-  useEffect(() => {
-    if (initialQuery && !hasProcessedInitialQuery.current) {
-      hasProcessedInitialQuery.current = true;
-      handleSend(initialQuery);
-    }
-  }, [initialQuery]);
-
-  const handleSend = async (text?: string) => {
+  const handleSend = useCallback(async (text?: string) => {
     const messageText = text || input.trim();
     if (!messageText || isLoading) return;
 
@@ -104,16 +98,11 @@ export default function AIChat() {
       timestamp: new Date(),
     };
 
-    // Get current messages before updating to build history
-    let currentMessages: Message[] = [];
-    setMessages(prev => {
-      currentMessages = prev;
-      return [...prev, userMessage];
-    });
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
 
     // Prepare chat history for the API (exclude initial greeting)
-    const chatHistory = currentMessages
+    const chatHistory = messagesRef.current
       .filter(msg => msg.id !== '1')
       .map(msg => ({
         role: msg.role,
@@ -145,7 +134,15 @@ export default function AIChat() {
       };
       setMessages(prev => [...prev, errorResponse]);
     }
-  };
+  }, [input, isLoading, temiChatMutation]);
+
+  // Handle initial query from Insights page
+  useEffect(() => {
+    if (initialQuery && !hasProcessedInitialQuery.current) {
+      hasProcessedInitialQuery.current = true;
+      handleSend(initialQuery);
+    }
+  }, [initialQuery, handleSend]);
 
   const handleClearChat = () => {
     setMessages([

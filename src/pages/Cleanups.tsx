@@ -49,7 +49,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { CleanupStatus, Cleanup } from "@/types/cleanup";
+import type { Cleanup, CleanupStatusUI } from "@/types/cleanup";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { CleanupMap } from "@/components/cleanup/CleanupMap";
@@ -65,18 +65,18 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 
 const statusTabs: {
   label: string;
-  value: CleanupStatus | "all" | "created";
+  value: CleanupStatusUI | "all" | "created";
 }[] = [
-  { label: "All", value: "all" },
-  { label: "Created", value: "created" },
-  { label: "Open", value: "open" },
-  { label: "In Progress", value: "in_progress" },
-  { label: "Completed", value: "completed" },
-  { label: "Rewarded", value: "rewarded" },
+  { label: "All", value: "all" }, // OPEN, IN_PROGRESS, COMPLETED, REWARDED
+  { label: "Created", value: "created" }, // by user, UNPUBLISHED, OPEN, IN_PROGRESS, COMPLETED, REWARDED
+  { label: "Open", value: "open" }, // OPEN
+  { label: "In Progress", value: "in_progress" }, // IN_PROGRESS
+  { label: "Completed", value: "completed" }, // COMPLETED
+  { label: "Rewarded", value: "rewarded" }, // REWARDED
 ];
 
 const statusConfig: Record<
-  CleanupStatus,
+  CleanupStatusUI,
   { label: string; className: string }
 > = {
   open: {
@@ -101,10 +101,9 @@ const statusConfig: Record<
 export default function Cleanups() {
   const navigate = useNavigate();
   const walletAddress = useWalletAddress();
-  const [activeTab, setActiveTab] = useState<CleanupStatus | "all" | "created">(
-    "all"
-  );
-  const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<
+    CleanupStatusUI | "all" | "created"
+  >("all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cleanupToDelete, setCleanupToDelete] = useState<Cleanup | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">(() => {
@@ -114,10 +113,10 @@ export default function Cleanups() {
 
   // Determine which query to use based on active tab
   const isCreatedTab = activeTab === "created";
-  const statusFilter =
-    activeTab !== "all" && !isCreatedTab
-      ? mapAppStatusToSubgraph(activeTab)
-      : undefined;
+  const statusFilter = useMemo(() => {
+    if (activeTab === "all" || isCreatedTab) return undefined;
+    return mapAppStatusToSubgraph(activeTab);
+  }, [activeTab, isCreatedTab]);
 
   // Fetch all cleanups with infinite scroll
   const {
@@ -129,7 +128,7 @@ export default function Cleanups() {
   } = useInfiniteCleanups(
     {
       where: {
-        status: statusFilter,
+        ...(statusFilter !== undefined ? { status: statusFilter } : {}),
         published: true,
       },
       userAddress: walletAddress || undefined,
@@ -179,58 +178,6 @@ export default function Cleanups() {
     toast.success("Cleanup deletion requires contract interaction");
     setDeleteDialogOpen(false);
     setCleanupToDelete(null);
-  };
-
-  const filteredCleanups = useMemo(() => {
-    return cleanups.filter((cleanup) => {
-      const matchesSearch =
-        cleanup.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cleanup.location.city.toLowerCase().includes(searchQuery.toLowerCase());
-      return matchesSearch;
-    });
-  }, [cleanups, searchQuery]);
-
-  const exportToCSV = () => {
-    const headers = [
-      "Title",
-      "Category",
-      "Status",
-      "Location",
-      "Date",
-      "Participants",
-    ];
-    const rows = filteredCleanups.map((c) => [
-      c.title,
-      c.category,
-      c.status,
-      `${c.location.city}, ${c.location.country}`,
-      c.date,
-      c.participants.filter((p) => p.status === "accepted").length,
-    ]);
-
-    const csvContent = [headers, ...rows]
-      .map((row) => row.join(","))
-      .join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "cleanups.csv";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Cleanups exported successfully");
-  };
-
-  const exportToJSON = () => {
-    const jsonContent = JSON.stringify(filteredCleanups, null, 2);
-    const blob = new Blob([jsonContent], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "cleanups.json";
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("Cleanups exported successfully");
   };
 
   // Full screen map mode
@@ -305,7 +252,7 @@ export default function Cleanups() {
               <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <CleanupMap cleanups={filteredCleanups} className="h-full w-full" />
+            <CleanupMap cleanups={cleanups} className="h-full w-full" />
           )}
         </div>
 
@@ -377,18 +324,6 @@ export default function Cleanups() {
             ))}
           </div>
         </div>
-
-        {/* Search */}
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <input
-            type="text"
-            placeholder="Search cleanups..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full h-10 pl-10 pr-4 bg-card border border-border text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
-          />
-        </div>
       </div>
 
       {/* List View */}
@@ -416,7 +351,7 @@ export default function Cleanups() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredCleanups.map((cleanup) => (
+                  cleanups.map((cleanup) => (
                     <TableRow
                       key={cleanup.id}
                       className="cursor-pointer"
@@ -500,7 +435,7 @@ export default function Cleanups() {
                     </TableRow>
                   ))
                 )}
-                {!isLoading && filteredCleanups.length === 0 && (
+                {!isLoading && cleanups.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center py-12">
                       <p className="text-muted-foreground">No cleanups found</p>
@@ -530,7 +465,7 @@ export default function Cleanups() {
                   <span>Loading more cleanups...</span>
                 </div>
               )}
-              {!hasNextPage && filteredCleanups.length > 0 && (
+              {!hasNextPage && cleanups.length > 0 && (
                 <p className="text-sm text-muted-foreground">
                   No more cleanups to load
                 </p>

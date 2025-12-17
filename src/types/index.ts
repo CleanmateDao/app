@@ -1,35 +1,39 @@
 // Export all contract types
 
 // ICleanup types
-export {
-  CleanupStatus,
-  ParticipantStatus,
+export { CleanupStatus, ParticipantStatus } from "./cleanup";
+
+export type {
   Location,
   Participant,
   ProofMedia,
   CleanupData,
+  CleanupDataMetadata,
+  CleanupStatusUI,
+  ParticipantStatusUI,
   // Extended UI types
   CleanupLocation,
   CleanupMedia,
   CleanupParticipant,
   Cleanup,
   RewardTransaction,
-} from './cleanup';
+} from "./cleanup";
 
 // IUserRegistry types
-export {
-  KYCStatus,
-  Permission,
-  UserProfile,
+export { KYCStatus, Permission } from "./user-registry";
+
+export type {
+  UserProfile as UserRegistryProfile,
   TeamMember,
-} from './user-registry';
+} from "./user-registry";
 
 // IRewardsManager types
-export { Reward } from './rewards-manager';
+export type { Reward } from "./rewards-manager";
 
 // Params types
-export {
-  RewardType,
+export { RewardType } from "./params";
+
+export type {
   RegisterUserParams,
   RegisterWithReferralParams,
   UpdateKYCStatusParams,
@@ -44,5 +48,4 @@ export {
   ClaimRewardsParams,
   ClaimRewardsWithPermitParams,
   SendRewardParams,
-} from './params';
-
+} from "./params";

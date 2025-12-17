@@ -3,6 +3,7 @@ import {
   useInfiniteQuery,
   UseQueryOptions,
   UseInfiniteQueryOptions,
+  type InfiniteData,
 } from "@tanstack/react-query";
 import { subgraphClient } from "./client";
 import type {
@@ -21,6 +22,7 @@ import type {
   GetTeamMembershipsQueryParams,
   GetStreakSubmissionsQueryParams,
   NotificationFilter,
+  StreakSubmissionFilter,
 } from "./types";
 import { parseUserMetadata, extractUserState } from "./utils";
 
@@ -159,7 +161,11 @@ export function useInfiniteCleanups(
   },
   pageSize = 20,
   options?: Omit<
-    UseInfiniteQueryOptions<SubgraphCleanup[]>,
+    UseInfiniteQueryOptions<
+      SubgraphCleanup[],
+      Error,
+      InfiniteData<SubgraphCleanup[]>
+    >,
     "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam"
   >
 ) {
@@ -175,7 +181,11 @@ export function useInfiniteCleanups(
     : null;
   const userState = extractUserState(userMetadata);
 
-  return useInfiniteQuery({
+  return useInfiniteQuery<
+    SubgraphCleanup[],
+    Error,
+    InfiniteData<SubgraphCleanup[]>
+  >({
     queryKey: [
       ...subgraphKeys.cleanupList(params?.where as Record<string, unknown>),
       "infinite",
@@ -264,12 +274,17 @@ export function useNotifications(
   >
 ) {
   return useQuery({
-    queryKey: subgraphKeys.userNotifications(userAddress || ""),
+    queryKey: [...subgraphKeys.userNotifications(userAddress || ""), params],
     queryFn: async () => {
       if (!userAddress) return [];
       const response = await subgraphClient.getNotifications(userAddress, {
         first: params?.first,
         skip: params?.skip,
+        orderBy: params?.orderBy,
+        orderDirection: params?.orderDirection,
+        where: params?.where
+          ? ({ user: userAddress, ...params.where } as NotificationFilter)
+          : ({ user: userAddress } as NotificationFilter),
       });
       return response.notifications;
     },
@@ -282,6 +297,9 @@ export function useNotifications(
 export function useInfiniteNotifications(
   userAddress: string | null | undefined,
   pageSize = 20,
+  params?: Omit<GetNotificationsQueryParams, "first" | "skip" | "where"> & {
+    where?: Omit<NotificationFilter, "user">;
+  },
   options?: Omit<
     UseInfiniteQueryOptions<SubgraphNotification[]>,
     "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam"
@@ -291,12 +309,18 @@ export function useInfiniteNotifications(
     queryKey: [
       ...subgraphKeys.userNotifications(userAddress || ""),
       "infinite",
+      params,
     ],
     queryFn: async ({ pageParam = 0 }) => {
       if (!userAddress) return [];
       const response = await subgraphClient.getNotifications(userAddress, {
         first: pageSize,
         skip: pageParam as number,
+        orderBy: params?.orderBy,
+        orderDirection: params?.orderDirection,
+        where: params?.where
+          ? ({ user: userAddress, ...params.where } as NotificationFilter)
+          : ({ user: userAddress } as NotificationFilter),
       });
       return response.notifications;
     },
@@ -345,10 +369,7 @@ export function useTeamMemberPermission(
   memberAddress: string | null | undefined,
   permission: "canEditCleanups" | "canManageParticipants" | "canSubmitProof"
 ) {
-  const { data: teamMember } = useTeamMember(
-    organizerAddress,
-    memberAddress
-  );
+  const { data: teamMember } = useTeamMember(organizerAddress, memberAddress);
 
   return teamMember ? teamMember[permission] : false;
 }
@@ -399,7 +420,9 @@ export function useStreakSubmissions(
 
 export function useUserStreakSubmissions(
   userAddress: string | null | undefined,
-  params?: Omit<GetStreakSubmissionsQueryParams, "where">,
+  params?: Omit<GetStreakSubmissionsQueryParams, "where"> & {
+    where?: Omit<StreakSubmissionFilter, "user">;
+  },
   options?: Omit<
     UseQueryOptions<SubgraphStreakSubmission[]>,
     "queryKey" | "queryFn"

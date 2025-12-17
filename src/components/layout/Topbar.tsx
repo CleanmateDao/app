@@ -11,33 +11,10 @@ import { useState } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useNotifications as useSubgraphNotifications } from "@/services/subgraph/queries";
-import type { SubgraphNotification } from "@/services/subgraph/types";
+import { formatRelativeTimeFromBigInt } from "@/lib/time";
 
 interface TopbarProps {
   onMenuClick?: () => void;
-}
-
-function toMs(bigIntString: string): number {
-  // subgraph BigInt timestamps are typically seconds; convert to ms for JS Date
-  const n = Number(bigIntString);
-  if (!Number.isFinite(n)) return Date.now();
-  return n > 1e12 ? n : n * 1000;
-}
-
-function formatRelativeTime(createdAt: string): string {
-  const createdAtMs = toMs(createdAt);
-  const diffMs = Date.now() - createdAtMs;
-  const mins = Math.floor(diffMs / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins} min ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days} day${days === 1 ? "" : "s"} ago`;
-}
-
-function unreadCountOf(list: SubgraphNotification[]) {
-  return list.reduce((acc, n) => acc + (n.read ? 0 : 1), 0);
 }
 
 export function Topbar({ onMenuClick }: TopbarProps) {
@@ -47,10 +24,10 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const walletAddress = useWalletAddress();
   const { data: notifications = [], isLoading } = useSubgraphNotifications(
     walletAddress,
-    { first: 8 },
+    { first: 8, where: { read: false } },
     { refetchInterval: 20_000 }
   );
-  const unreadCount = unreadCountOf(notifications);
+  const unreadCount = notifications.length;
 
   return (
     <header className="h-14 lg:h-16 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 bg-background/80 backdrop-blur-sm border-b border-border/50 lg:border-0 lg:bg-transparent">
@@ -184,7 +161,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                           {notification.message}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {formatRelativeTime(notification.createdAt)}
+                          {formatRelativeTimeFromBigInt(notification.createdAt)}
                         </p>
                       </div>
                     </div>

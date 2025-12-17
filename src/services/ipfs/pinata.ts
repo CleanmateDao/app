@@ -116,6 +116,18 @@ export async function uploadFilesToIPFS(files: File[]): Promise<string[]> {
 }
 
 /**
+ * Convert an IPFS CID or ipfs:// URI to a HTTP gateway URL using the configured Pinata gateway.
+ */
+export function toIPFSGatewayUrl(ipfsHashOrUri: string): string {
+  const input = ipfsHashOrUri.trim();
+  if (!input) return "";
+  const hash = input.replace(/^ipfs:\/\//, "");
+  // If the user already stored an http(s) URL, just return it.
+  if (/^https?:\/\//i.test(hash)) return hash;
+  return `https://${PINATA_GATEWAY}/ipfs/${hash}`;
+}
+
+/**
  * Upload participant ratings as JSON to IPFS
  * This is specifically for proof of work submissions
  * @param ratings - Array of participant ratings

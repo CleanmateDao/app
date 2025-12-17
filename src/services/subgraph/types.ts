@@ -236,37 +236,6 @@ export interface GetTeamMembershipsResponse {
   teamMemberships: SubgraphTeamMembership[];
 }
 
-// Metadata types (parsed from JSON strings)
-export interface CleanupMetadata {
-  title?: string;
-  description?: string;
-  // Add other metadata fields as needed
-}
-
-/**
- * Standardized UserMetadata type
- * Note: This should NOT include fields already covered by the contract's UserProfile:
- * - email (stored in contract)
- * - isEmailVerified (stored in contract)
- * - kycStatus (stored in contract)
- * - referralCode (stored in contract)
- * - referredBy (stored in contract)
- *
- * Metadata should only contain display/UI-related data not stored on-chain
- */
-export interface UserMetadata {
-  name?: string; // Display name
-  bio?: string; // User bio/description
-  avatar?: string; // IPFS hash or URL for profile picture
-  country?: string; // Country (optional location data)
-  city?: string; // City (optional location data)
-  state?: string; // State/Province (optional location data)
-  interests?: string[]; // User interests
-  focusAreas?: string[]; // Focus areas for organizers
-  profileImage?: string; // Profile image URL or IPFS hash
-  // Add other non-contract metadata fields as needed
-}
-
 // Query Parameter Types
 
 /**

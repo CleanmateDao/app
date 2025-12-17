@@ -11,6 +11,7 @@ import type {
   GetTransactionsQueryParams,
   GetCleanupsQueryParams,
   GetTeamMembershipsQueryParams,
+  GetNotificationsQueryParams,
   GetStreakSubmissionResponse,
   GetStreakSubmissionsResponse,
   GetUserStreakStatsResponse,
@@ -252,13 +253,13 @@ const GET_TRANSACTIONS_QUERY = `
 `;
 
 const GET_NOTIFICATIONS_QUERY = `
-  query GetNotifications($user: Bytes!, $first: Int, $skip: Int) {
+  query GetNotifications($first: Int, $skip: Int, $where: Notification_filter, $orderBy: Notification_orderBy, $orderDirection: OrderDirection) {
     notifications(
       first: $first
       skip: $skip
-      where: { user: $user }
-      orderBy: createdAt
-      orderDirection: desc
+      where: $where
+      orderBy: $orderBy
+      orderDirection: $orderDirection
     ) {
       id
       user
@@ -497,13 +498,31 @@ export const subgraphClient = {
 
   async getNotifications(
     userAddress: string,
-    params?: { first?: number; skip?: number }
+    params?: GetNotificationsQueryParams
   ): Promise<GetNotificationsResponse> {
-    return client.request<GetNotificationsResponse>(GET_NOTIFICATIONS_QUERY, {
-      user: normalizeAddress(userAddress),
+    const variables: Record<string, unknown> = {
       first: params?.first ?? 100,
       skip: params?.skip ?? 0,
-    });
+      orderBy: params?.orderBy ?? "createdAt",
+      orderDirection: params?.orderDirection ?? "desc",
+    };
+
+    const where: Record<string, unknown> = {
+      user: normalizeAddress(userAddress),
+    };
+
+    if (params?.where) {
+      if (params.where.type) where.type = params.where.type;
+      if (params.where.read !== undefined) where.read = params.where.read;
+      if (params.where.relatedEntity)
+        where.relatedEntity = normalizeAddress(params.where.relatedEntity);
+      if (params.where.relatedEntityType)
+        where.relatedEntityType = params.where.relatedEntityType;
+    }
+
+    variables.where = where;
+
+    return client.request<GetNotificationsResponse>(GET_NOTIFICATIONS_QUERY, variables);
   },
 
   async getTeamMemberships(

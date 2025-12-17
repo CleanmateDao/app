@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -63,6 +63,39 @@ export default function StreakSubmit() {
   const animationFrameRef = useRef<number>(0);
   const chunksRef = useRef<Blob[]>([]);
 
+  const stopCamera = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+  }, []);
+
+  const initCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: "environment",
+          width: { ideal: 1080 },
+          height: { ideal: 1920 },
+        },
+        audio: true,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      toast({
+        title: "Camera Error",
+        description: "Unable to access camera. Please grant permissions.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
   // Check if rules should be skipped
   useEffect(() => {
     const skipRules = localStorage.getItem("skipStreakRules") === "true";
@@ -93,7 +126,7 @@ export default function StreakSubmit() {
         stopCamera();
       }
     };
-  }, [step]);
+  }, [initCamera, step, stopCamera]);
 
   // Pulse animation for record button
   useEffect(() => {
@@ -105,39 +138,6 @@ export default function StreakSubmit() {
       return () => clearInterval(interval);
     }
   }, [step, isRecording]);
-
-  const initCamera = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
-        },
-        audio: true,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (error) {
-      toast({
-        title: "Camera Error",
-        description: "Unable to access camera. Please grant permissions.",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
-      streamRef.current = null;
-    }
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
-  };
 
   const startRecording = useCallback(() => {
     if (!streamRef.current) return;

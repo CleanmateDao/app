@@ -69,6 +69,10 @@ export interface CleanupData {
   proofSubmittedAt: string; // uint256 timestamp
 }
 
+export interface CleanupDataMetadata {
+  title: string;
+  description: string;
+}
 // Extended types for UI (not in contract but useful for frontend)
 export interface CleanupLocation {
   address: string;

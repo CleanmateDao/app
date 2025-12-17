@@ -1,14 +1,14 @@
-import { useState, useMemo } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate, Link } from 'react-router-dom';
-import { 
-  ArrowLeft, 
-  ArrowRight, 
-  Save, 
-  Send, 
-  FileText, 
-  Upload, 
-  MapPin, 
+import { useState, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate, Link } from "react-router-dom";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Save,
+  Send,
+  FileText,
+  Upload,
+  MapPin,
   Calendar as CalendarIcon,
   Clock,
   Check,
@@ -19,43 +19,58 @@ import {
   Video,
   Users,
   Shield,
-  AlertCircle
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Progress } from '@/components/ui/progress';
+  AlertCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import africanPattern from '@/assets/african-pattern-decorative.jpg';
-import { RichTextEditor } from '@/components/ui/rich-text-editor';
-import { GoogleMap } from '@/components/ui/google-map';
-import { PlacesAutocomplete } from '@/components/ui/places-autocomplete';
-import { useUser } from '@/services/subgraph/queries';
-import { transformUserToProfile } from '@/services/subgraph/transformers';
-import { useWalletAddress } from '@/hooks/use-wallet-address';
-import { uploadFilesToIPFS } from '@/services/ipfs';
-import { useCreateCleanup } from '@/services/contracts/mutations';
+} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import africanPattern from "@/assets/african-pattern-decorative.jpg";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
+import { GoogleMap } from "@/components/ui/google-map";
+import { PlacesAutocomplete } from "@/components/ui/places-autocomplete";
+import { useUser } from "@/services/subgraph/queries";
+import { transformUserToProfile } from "@/services/subgraph/transformers";
+import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { uploadFilesToIPFS } from "@/services/ipfs";
+import { useCreateCleanup } from "@/services/contracts/mutations";
 
 const steps = [
-  { id: 1, title: 'Basic Info', icon: FileText, description: 'Cleanup title and description' },
-  { id: 2, title: 'Location', icon: MapPin, description: 'Where will it take place' },
-  { id: 3, title: 'Schedule', icon: CalendarIcon, description: 'Date and time' },
-  { id: 4, title: 'Media', icon: Image, description: 'Cover images' },
+  {
+    id: 1,
+    title: "Basic Info",
+    icon: FileText,
+    description: "Cleanup title and description",
+  },
+  {
+    id: 2,
+    title: "Location",
+    icon: MapPin,
+    description: "Where will it take place",
+  },
+  {
+    id: 3,
+    title: "Schedule",
+    icon: CalendarIcon,
+    description: "Date and time",
+  },
+  { id: 4, title: "Media", icon: Image, description: "Cover images" },
 ];
 
 interface MediaItem {
   id: string;
   file: File;
-  type: 'image' | 'video';
+  type: "image" | "video";
   preview: string;
 }
 
@@ -63,22 +78,22 @@ export default function OrganizeCleanup() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    category: '',
+    title: "",
+    description: "",
+    category: "",
   });
   const [location, setLocation] = useState({
-    address: '',
-    city: '',
-    country: '',
+    address: "",
+    city: "",
+    country: "",
     latitude: 0,
     longitude: 0,
   });
   const [schedule, setSchedule] = useState({
-    date: '',
-    startTime: '',
-    endTime: '',
-    maxParticipants: '',
+    date: "",
+    startTime: "",
+    endTime: "",
+    maxParticipants: "",
   });
   const [media, setMedia] = useState<MediaItem[]>([]);
 
@@ -100,37 +115,42 @@ export default function OrganizeCleanup() {
   const createCleanupMutation = useCreateCleanup();
 
   const handleSaveDraft = () => {
-    toast.success('Draft saved successfully');
+    toast.success("Draft saved successfully");
   };
 
   const handleSubmit = async () => {
     if (!walletAddress) {
-      toast.error('Wallet not connected');
+      toast.error("Wallet not connected");
       return;
     }
 
     try {
       // Validate required fields
       if (!formData.title || !formData.description || !formData.category) {
-        toast.error('Please fill in all required fields');
+        toast.error("Please fill in all required fields");
         return;
       }
 
       if (!location.address || !location.city || !location.country) {
-        toast.error('Please select a location');
+        toast.error("Please select a location");
         return;
       }
 
-      if (!schedule.date || !schedule.startTime || !schedule.endTime || !schedule.maxParticipants) {
-        toast.error('Please fill in all schedule details');
+      if (
+        !schedule.date ||
+        !schedule.startTime ||
+        !schedule.endTime ||
+        !schedule.maxParticipants
+      ) {
+        toast.error("Please fill in all schedule details");
         return;
       }
 
       // Upload media files to Pinata IPFS
       let mediaIpfsHashes: string[] = [];
       if (media.length > 0) {
-        toast.info('Uploading media to IPFS...');
-        const files = media.map(item => item.file);
+        toast.info("Uploading media to IPFS...");
+        const files = media.map((item) => item.file);
         mediaIpfsHashes = await uploadFilesToIPFS(files);
       }
 
@@ -150,9 +170,13 @@ export default function OrganizeCleanup() {
       const metadataJsonString = JSON.stringify(metadata);
 
       // Convert date/time to timestamps
-      const dateTimestamp = Math.floor(new Date(schedule.date).getTime() / 1000);
-      const [startHour, startMinute] = schedule.startTime.split(':').map(Number);
-      const [endHour, endMinute] = schedule.endTime.split(':').map(Number);
+      const dateTimestamp = Math.floor(
+        new Date(schedule.date).getTime() / 1000
+      );
+      const [startHour, startMinute] = schedule.startTime
+        .split(":")
+        .map(Number);
+      const [endHour, endMinute] = schedule.endTime.split(":").map(Number);
       const startDate = new Date(schedule.date);
       startDate.setHours(startHour, startMinute, 0, 0);
       const endDate = new Date(schedule.date);
@@ -162,43 +186,43 @@ export default function OrganizeCleanup() {
       const endTime = Math.floor(endDate.getTime() / 1000);
 
       // Submit to contract
-      toast.info('Creating cleanup on blockchain...');
-      await createCleanupMutation.mutateAsync({
+      toast.info("Creating cleanup on blockchain...");
+      await createCleanupMutation.sendTransaction({
         metadata: metadataJsonString,
         category: formData.category,
         location: {
           address_: location.address,
           city: location.city,
           country: location.country,
-          latitude: Math.round(location.latitude * 1e6) / 1e6, // Round to 6 decimal places
-          longitude: Math.round(location.longitude * 1e6) / 1e6,
+          latitude: Math.round(location.latitude * 1e6).toString(),
+          longitude: Math.round(location.longitude * 1e6).toString(),
         },
-        date: dateTimestamp,
-        startTime,
-        endTime,
-        maxParticipants: parseInt(schedule.maxParticipants),
+        date: dateTimestamp.toString(),
+        startTime: startTime.toString(),
+        endTime: endTime.toString(),
+        maxParticipants: schedule.maxParticipants.toString(),
       });
 
-      toast.success('Cleanup created successfully!');
-      navigate('/cleanups');
+      toast.success("Cleanup created successfully!");
+      navigate("/cleanups");
     } catch (error) {
-      console.error('Error creating cleanup:', error);
+      console.error("Error creating cleanup:", error);
       toast.error(
-        error instanceof Error 
-          ? `Failed to create cleanup: ${error.message}` 
-          : 'Failed to create cleanup'
+        error instanceof Error
+          ? `Failed to create cleanup: ${error.message}`
+          : "Failed to create cleanup"
       );
     }
   };
 
   const handleMediaChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const newMedia = Array.from(e.target.files).map(file => {
-        const isVideo = file.type.startsWith('video/');
+      const newMedia = Array.from(e.target.files).map((file) => {
+        const isVideo = file.type.startsWith("video/");
         return {
           id: Date.now().toString() + Math.random(),
           file,
-          type: isVideo ? 'video' as const : 'image' as const,
+          type: isVideo ? ("video" as const) : ("image" as const),
           preview: URL.createObjectURL(file),
         };
       });
@@ -207,22 +231,25 @@ export default function OrganizeCleanup() {
   };
 
   const removeMedia = (id: string) => {
-    const item = media.find(m => m.id === id);
+    const item = media.find((m) => m.id === id);
     if (item) {
       URL.revokeObjectURL(item.preview);
     }
-    setMedia(media.filter(m => m.id !== id));
+    setMedia(media.filter((m) => m.id !== id));
   };
 
   // Fetch user data
   const { data: userData } = useUser(walletAddress);
-  const userProfile = useMemo(() => 
-    userData ? transformUserToProfile(userData, walletAddress || undefined) : null,
+  const userProfile = useMemo(
+    () =>
+      userData
+        ? transformUserToProfile(userData, walletAddress || undefined)
+        : null,
     [userData, walletAddress]
   );
 
   // Check if user has completed KYC
-  const isKycVerified = userProfile?.kycStatus === 'verified';
+  const isKycVerified = userProfile?.kycStatus === "verified";
 
   if (!isKycVerified) {
     return (
@@ -233,9 +260,13 @@ export default function OrganizeCleanup() {
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                 <Shield className="w-8 h-8 text-primary" />
               </div>
-              <h2 className="text-xl font-semibold">KYC Verification Required</h2>
+              <h2 className="text-xl font-semibold">
+                KYC Verification Required
+              </h2>
               <p className="text-muted-foreground">
-                You need to complete your KYC verification before you can organize cleanups. This helps us ensure the safety and trust of our community.
+                You need to complete your KYC verification before you can
+                organize cleanups. This helps us ensure the safety and trust of
+                our community.
               </p>
               <div className="flex flex-col gap-2 pt-4">
                 <Button asChild>
@@ -259,32 +290,46 @@ export default function OrganizeCleanup() {
     <div className="min-h-screen bg-background flex flex-col pb-20 lg:pb-0">
       {/* Sticky Header with Pattern Background */}
       <header className="sticky top-0 z-50 mx-2 sm:mx-4 mt-2 sm:mt-4">
-        <div 
+        <div
           className="relative rounded-xl overflow-hidden"
-          style={{ 
+          style={{
             backgroundImage: `url(${africanPattern})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center'
+            backgroundSize: "cover",
+            backgroundPosition: "center",
           }}
         >
           {/* Overlay */}
           <div className="absolute inset-0 bg-background/85 backdrop-blur-sm" />
-          
+
           {/* Content */}
           <div className="relative max-w-4xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <div className="flex items-center gap-2 sm:gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate('/cleanups')} className="h-8 w-8 sm:h-10 sm:w-10">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/cleanups")}
+                className="h-8 w-8 sm:h-10 sm:w-10"
+              >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
               <div>
                 <div className="flex items-center gap-2">
                   <div className="w-1 sm:w-1.5 h-5 sm:h-6 bg-primary rounded-full" />
-                  <h1 className="text-base sm:text-lg font-semibold tracking-tight">Organize Cleanup</h1>
+                  <h1 className="text-base sm:text-lg font-semibold tracking-tight">
+                    Organize Cleanup
+                  </h1>
                 </div>
-                <p className="text-xs text-muted-foreground ml-3 sm:ml-3.5">Step {currentStep} of {steps.length}</p>
+                <p className="text-xs text-muted-foreground ml-3 sm:ml-3.5">
+                  Step {currentStep} of {steps.length}
+                </p>
               </div>
             </div>
-            <Button variant="secondary" size="sm" onClick={handleSaveDraft} className="gap-1 sm:gap-2 text-xs sm:text-sm">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleSaveDraft}
+              className="gap-1 sm:gap-2 text-xs sm:text-sm"
+            >
               <Save className="w-3 h-3 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Save Draft</span>
               <span className="sm:hidden">Save</span>
@@ -296,38 +341,42 @@ export default function OrganizeCleanup() {
       {/* Progress Bar & Step Indicators */}
       <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 w-full">
         <Progress value={progress} className="h-1.5" />
-        
+
         {/* Compact Step Indicators - scrollable on mobile */}
         <div className="flex justify-between mt-3 gap-2 sm:gap-4 overflow-x-auto scrollbar-hide">
           {steps.map((step) => {
             const Icon = step.icon;
             const isActive = step.id === currentStep;
             const isComplete = step.id < currentStep;
-            
+
             return (
               <button
                 key={step.id}
                 onClick={() => setCurrentStep(step.id)}
                 className={`flex items-center gap-2 transition-all ${
-                  step.id <= currentStep ? 'cursor-pointer' : 'cursor-default'
+                  step.id <= currentStep ? "cursor-pointer" : "cursor-default"
                 }`}
               >
-                <div className={cn(
-                  'w-5 h-5 flex items-center justify-center transition-all',
-                  isComplete && 'text-primary',
-                  isActive && 'text-primary',
-                  !isActive && !isComplete && 'text-muted-foreground'
-                )}>
+                <div
+                  className={cn(
+                    "w-5 h-5 flex items-center justify-center transition-all",
+                    isComplete && "text-primary",
+                    isActive && "text-primary",
+                    !isActive && !isComplete && "text-muted-foreground"
+                  )}
+                >
                   {isComplete ? (
                     <Check className="w-4 h-4" />
                   ) : (
                     <Icon className="w-4 h-4" />
                   )}
                 </div>
-                <span className={cn(
-                  'text-xs font-medium hidden sm:block',
-                  isActive ? 'text-foreground' : 'text-muted-foreground'
-                )}>
+                <span
+                  className={cn(
+                    "text-xs font-medium hidden sm:block",
+                    isActive ? "text-foreground" : "text-muted-foreground"
+                  )}
+                >
                   {step.title}
                 </span>
               </button>
@@ -349,8 +398,12 @@ export default function OrganizeCleanup() {
             >
               {/* Step Header */}
               <div className="mb-8">
-                <h2 className="text-2xl font-semibold">{steps[currentStep - 1].title}</h2>
-                <p className="text-muted-foreground mt-1">{steps[currentStep - 1].description}</p>
+                <h2 className="text-2xl font-semibold">
+                  {steps[currentStep - 1].title}
+                </h2>
+                <p className="text-muted-foreground mt-1">
+                  {steps[currentStep - 1].description}
+                </p>
               </div>
 
               {/* Step 1: Basic Info */}
@@ -364,14 +417,18 @@ export default function OrganizeCleanup() {
                           id="title"
                           placeholder="e.g., Beach Cleanup Drive at Bar Beach"
                           value={formData.title}
-                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                          onChange={(e) =>
+                            setFormData({ ...formData, title: e.target.value })
+                          }
                         />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="category">Category *</Label>
                         <Select
                           value={formData.category}
-                          onValueChange={(value) => setFormData({ ...formData, category: value })}
+                          onValueChange={(value) =>
+                            setFormData({ ...formData, category: value })
+                          }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select a category" />
@@ -380,8 +437,12 @@ export default function OrganizeCleanup() {
                             <SelectItem value="beach">Beach</SelectItem>
                             <SelectItem value="urban">Urban</SelectItem>
                             <SelectItem value="park">Park</SelectItem>
-                            <SelectItem value="waterfront">Waterfront</SelectItem>
-                            <SelectItem value="nature_reserve">Nature Reserve</SelectItem>
+                            <SelectItem value="waterfront">
+                              Waterfront
+                            </SelectItem>
+                            <SelectItem value="nature_reserve">
+                              Nature Reserve
+                            </SelectItem>
                             <SelectItem value="other">Other</SelectItem>
                           </SelectContent>
                         </Select>
@@ -390,7 +451,9 @@ export default function OrganizeCleanup() {
                         <Label>Description *</Label>
                         <RichTextEditor
                           value={formData.description}
-                          onChange={(value) => setFormData({ ...formData, description: value })}
+                          onChange={(value) =>
+                            setFormData({ ...formData, description: value })
+                          }
                           placeholder="Describe the cleanup event, what participants should expect, and what to bring..."
                         />
                       </div>
@@ -420,10 +483,11 @@ export default function OrganizeCleanup() {
                           }}
                         />
                         <p className="text-xs text-muted-foreground">
-                          Start typing to search for locations using Google Places
+                          Start typing to search for locations using Google
+                          Places
                         </p>
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label htmlFor="city">City</Label>
@@ -431,7 +495,9 @@ export default function OrganizeCleanup() {
                             id="city"
                             placeholder="City"
                             value={location.city}
-                            onChange={(e) => setLocation({ ...location, city: e.target.value })}
+                            onChange={(e) =>
+                              setLocation({ ...location, city: e.target.value })
+                            }
                           />
                         </div>
                         <div className="space-y-2">
@@ -440,7 +506,12 @@ export default function OrganizeCleanup() {
                             id="country"
                             placeholder="Country"
                             value={location.country}
-                            onChange={(e) => setLocation({ ...location, country: e.target.value })}
+                            onChange={(e) =>
+                              setLocation({
+                                ...location,
+                                country: e.target.value,
+                              })
+                            }
                           />
                         </div>
                       </div>
@@ -450,7 +521,7 @@ export default function OrganizeCleanup() {
                         city={location.city}
                         country={location.country}
                         onLocationSelect={(lat, lng, addr) => {
-                          setLocation(prev => ({
+                          setLocation((prev) => ({
                             ...prev,
                             latitude: lat,
                             longitude: lng,
@@ -474,7 +545,9 @@ export default function OrganizeCleanup() {
                           id="date"
                           type="date"
                           value={schedule.date}
-                          onChange={(e) => setSchedule({ ...schedule, date: e.target.value })}
+                          onChange={(e) =>
+                            setSchedule({ ...schedule, date: e.target.value })
+                          }
                         />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -484,7 +557,12 @@ export default function OrganizeCleanup() {
                             id="startTime"
                             type="time"
                             value={schedule.startTime}
-                            onChange={(e) => setSchedule({ ...schedule, startTime: e.target.value })}
+                            onChange={(e) =>
+                              setSchedule({
+                                ...schedule,
+                                startTime: e.target.value,
+                              })
+                            }
                           />
                         </div>
                         <div className="space-y-2">
@@ -493,22 +571,35 @@ export default function OrganizeCleanup() {
                             id="endTime"
                             type="time"
                             value={schedule.endTime}
-                            onChange={(e) => setSchedule({ ...schedule, endTime: e.target.value })}
+                            onChange={(e) =>
+                              setSchedule({
+                                ...schedule,
+                                endTime: e.target.value,
+                              })
+                            }
                           />
                         </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="maxParticipants">Maximum Participants *</Label>
+                        <Label htmlFor="maxParticipants">
+                          Maximum Participants *
+                        </Label>
                         <Input
                           id="maxParticipants"
                           type="number"
                           min="1"
                           placeholder="e.g., 50"
                           value={schedule.maxParticipants}
-                          onChange={(e) => setSchedule({ ...schedule, maxParticipants: e.target.value })}
+                          onChange={(e) =>
+                            setSchedule({
+                              ...schedule,
+                              maxParticipants: e.target.value,
+                            })
+                          }
                         />
                         <p className="text-xs text-muted-foreground">
-                          Set a limit to manage the cleanup effectively (includes you as the creator, minimum 1)
+                          Set a limit to manage the cleanup effectively
+                          (includes you as the creator, minimum 1)
                         </p>
                       </div>
                     </CardContent>
@@ -537,7 +628,10 @@ export default function OrganizeCleanup() {
                           id="media-upload"
                         />
                         <Button variant="outline" asChild>
-                          <label htmlFor="media-upload" className="cursor-pointer">
+                          <label
+                            htmlFor="media-upload"
+                            className="cursor-pointer"
+                          >
                             Browse Images
                           </label>
                         </Button>
@@ -595,7 +689,7 @@ export default function OrganizeCleanup() {
             <ArrowLeft className="w-4 h-4" />
             <span className="hidden sm:inline">Back</span>
           </Button>
-          
+
           {currentStep < steps.length ? (
             <Button onClick={nextStep} className="gap-2" size="sm">
               Next
