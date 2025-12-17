@@ -3,7 +3,6 @@ import type {
   GetUserResponse,
   GetCleanupResponse,
   GetCleanupsResponse,
-  GetRewardsResponse,
   GetTransactionsResponse,
   GetNotificationsResponse,
   GetUserCleanupsResponse,
@@ -229,24 +228,6 @@ const GET_CLEANUP_PARTICIPANTS_QUERY = `
   }
 `;
 
-const GET_REWARDS_QUERY = `
-  query GetRewards($user: Bytes!, $first: Int, $skip: Int) {
-    rewards(
-      first: $first
-      skip: $skip
-      where: { user: $user }
-      orderBy: earnedAt
-      orderDirection: desc
-    ) {
-      id
-      user
-      cleanupId
-      amount
-      earnedAt
-    }
-  }
-`;
-
 const GET_TRANSACTIONS_QUERY = `
   query GetTransactions($first: Int, $skip: Int, $where: Transaction_filter, $orderBy: Transaction_orderBy, $orderDirection: OrderDirection) {
     transactions(
@@ -259,6 +240,7 @@ const GET_TRANSACTIONS_QUERY = `
       id
       user
       cleanupId
+      streakSubmissionId
       amount
       transactionType
       rewardType
@@ -325,6 +307,7 @@ const GET_STREAK_SUBMISSION_QUERY = `
       submittedAt
       reviewedAt
       amount
+      rewardAmount
       rejectionReason
       ipfsHashes
       mimetypes
@@ -357,6 +340,7 @@ const GET_STREAK_SUBMISSIONS_QUERY = `
       submittedAt
       reviewedAt
       amount
+      rewardAmount
       rejectionReason
       ipfsHashes
       mimetypes
@@ -474,17 +458,6 @@ export const subgraphClient = {
     );
   },
 
-  async getRewards(
-    userAddress: string,
-    params?: { first?: number; skip?: number }
-  ): Promise<GetRewardsResponse> {
-    return client.request<GetRewardsResponse>(GET_REWARDS_QUERY, {
-      user: normalizeAddress(userAddress),
-      first: params?.first ?? 100,
-      skip: params?.skip ?? 0,
-    });
-  },
-
   async getTransactions(
     params?: GetTransactionsQueryParams
   ): Promise<GetTransactionsResponse> {
@@ -502,6 +475,10 @@ export const subgraphClient = {
       }
       if (params.where.cleanupId) {
         where.cleanupId = normalizeAddress(params.where.cleanupId);
+      }
+      if (params.where.streakSubmissionId !== undefined) {
+        // Graph expects BigInt for this filter; graphql-request will serialize strings fine.
+        where.streakSubmissionId = params.where.streakSubmissionId;
       }
       if (params.where.transactionType) {
         where.transactionType = params.where.transactionType;

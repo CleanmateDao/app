@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import {
   useCleanups,
   useUserCleanups,
-  useRewards,
+  useTransactions,
   useUser,
   useUserStreakStats,
 } from "@/services/subgraph/queries";
@@ -118,10 +118,12 @@ export default function Insights() {
 
   const isLoadingCleanups = isLoadingOrganizedCleanups || isLoadingAllCleanups;
 
-  // Fetch rewards (transactions)
-  const { data: rewardsData, isLoading: isLoadingRewards } = useRewards(
-    walletAddress || undefined,
-    { first: 1000 }
+  // Fetch earned rewards (transactions)
+  const { data: rewardsData, isLoading: isLoadingRewards } = useTransactions(
+    {
+      where: { user: walletAddress || undefined, transactionType: "RECEIVE" },
+      first: 1000,
+    }
   );
   const rewards = useMemo(() => {
     if (!rewardsData) return [];

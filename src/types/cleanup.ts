@@ -14,6 +14,10 @@ export enum ParticipantStatus {
   REJECTED = 2,
 }
 
+// UI-friendly status unions (used by the frontend views & transformers)
+export type CleanupStatusUI = "open" | "in_progress" | "completed" | "rewarded";
+export type ParticipantStatusUI = "pending" | "accepted" | "rejected";
+
 /**
  * Location struct from ICleanup
  * Note: address_ is used in Solidity to avoid conflict with address type
@@ -88,7 +92,7 @@ export interface CleanupParticipant {
   name: string;
   email: string;
   avatar?: string;
-  status: ParticipantStatus;
+  status: ParticipantStatusUI;
   appliedAt: string;
   rating?: number; // 1-5 stars given by organizer
   isKyced?: boolean; // KYC verification status
@@ -99,7 +103,7 @@ export interface Cleanup {
   title: string;
   description: string;
   category: string;
-  status: CleanupStatus;
+  status: CleanupStatusUI;
   location: CleanupLocation;
   date: string;
   startTime: string;
@@ -121,8 +125,10 @@ export interface RewardTransaction {
   id: string;
   type: "earned" | "claimed";
   amount: number;
-  cleanupId: string;
-  cleanupTitle: string;
+  cleanupId: string | null;
+  streakSubmissionId?: string | null;
+  rewardType?: number | null;
+  title: string;
   date: string;
   txHash?: string;
   status: "pending" | "completed";

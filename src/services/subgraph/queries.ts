@@ -207,26 +207,6 @@ export function useInfiniteCleanups(
   });
 }
 
-// Rewards Queries (deprecated, use useTransactions instead)
-// This maps to transactions with type "RECEIVE" for backward compatibility
-export function useRewards(
-  userAddress: string | null | undefined,
-  params?: { first?: number; skip?: number },
-  options?: Omit<UseQueryOptions<SubgraphTransaction[]>, "queryKey" | "queryFn">
-) {
-  return useTransactions(
-    {
-      where: { 
-        user: userAddress || undefined,
-        transactionType: "RECEIVE", // Only get earned rewards
-      },
-      first: params?.first,
-      skip: params?.skip,
-    },
-    options
-  );
-}
-
 // Transaction Queries (replaces rewards)
 export function useTransactions(
   params?: GetTransactionsQueryParams,

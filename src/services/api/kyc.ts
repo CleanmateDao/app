@@ -2,7 +2,8 @@ import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
 
-const KYC_SERVICE_URL = import.meta.env.VITE_KYC_SERVICE_URL || "http://localhost:3001";
+const KYC_SERVICE_URL =
+  import.meta.env.VITE_KYC_SERVICE_URL || "http://localhost:3001";
 
 export interface Address {
   street?: string;
@@ -32,14 +33,15 @@ export interface KYCSubmissionResponse {
   submissionId: string;
   userId: string;
   mediaUrls: string[];
-  jsonUrl: string;
   submittedAt: string;
 }
 
 /**
  * Submit KYC data to KYC service with file uploads
  */
-async function submitKYCToAPI(data: KYCSubmissionData): Promise<KYCSubmissionResponse> {
+async function submitKYCToAPI(
+  data: KYCSubmissionData
+): Promise<KYCSubmissionResponse> {
   try {
     const formData = new FormData();
 
@@ -107,10 +109,10 @@ async function submitKYCToAPI(data: KYCSubmissionData): Promise<KYCSubmissionRes
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.response?.data?.error ||
-        error.message || 
-        "Failed to submit KYC data"
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          error.message ||
+          "Failed to submit KYC data"
       );
     }
     throw error;
@@ -128,4 +130,3 @@ export function useSubmitKYCToAPI() {
     },
   });
 }
-

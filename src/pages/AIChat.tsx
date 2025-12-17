@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { ClearChatAlertDialog } from '@/components/ClearChatAlertDialog';
-import { useCleanups, useRewards, useUser } from '@/services/subgraph/queries';
-import { transformCleanup, transformReward, transformUserToProfile, calculateInsights } from '@/services/subgraph/transformers';
+import { useCleanups, useTransactions, useUser } from '@/services/subgraph/queries';
+import { transformCleanup, transformTransaction, transformUserToProfile, calculateInsights } from '@/services/subgraph/transformers';
 import { useWalletAddress } from '@/hooks/use-wallet-address';
 import { useTemiChat } from '@/services/api/temi';
 
@@ -45,11 +45,16 @@ export default function AIChat() {
     return cleanupsData.map(c => transformCleanup(c));
   }, [cleanupsData]);
 
-  // Fetch rewards
-  const { data: rewardsData } = useRewards(walletAddress || undefined, { first: 1000 });
+  // Fetch earned rewards (transactions)
+  const { data: rewardsData } = useTransactions(
+    {
+      where: { user: walletAddress || undefined, transactionType: "RECEIVE" },
+      first: 1000,
+    }
+  );
   const rewards = useMemo(() => {
     if (!rewardsData) return [];
-    return rewardsData.map(r => transformReward(r));
+    return rewardsData.map(r => transformTransaction(r));
   }, [rewardsData]);
 
   // Calculate insights

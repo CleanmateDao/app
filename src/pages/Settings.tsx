@@ -101,6 +101,17 @@ import {
   useBanksListByCurrency,
   type BankAccount,
 } from "@/services/api/banks";
+import {
+  AlertDialog,
+  AlertDialogHeader,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface TeamMemberPermissions {
   canOrganizeCleanups: boolean;

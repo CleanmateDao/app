@@ -140,7 +140,7 @@ export default function Rewards() {
     if (infiniteData.pages) {
       return infiniteData.pages.flatMap((page) =>
         page.map((tx) => {
-          const txData = tx as { cleanupId?: string };
+          const txData = tx as { cleanupId?: string | null };
           const cleanup = cleanupsMap.get(
             txData.cleanupId?.toLowerCase() || ""
           );
@@ -155,7 +155,7 @@ export default function Rewards() {
     }
     // Fallback for direct array format
     return (infiniteTransactionsData as Array<unknown>).map((tx) => {
-      const txData = tx as { cleanupId?: string };
+      const txData = tx as { cleanupId?: string | null };
       const cleanup = cleanupsMap.get(txData.cleanupId?.toLowerCase() || "");
       return transformTransaction(
         tx as Parameters<typeof transformTransaction>[0],
@@ -400,7 +400,7 @@ export default function Rewards() {
       tx.date,
       tx.type,
       tx.amount,
-      tx.cleanupTitle,
+      tx.title,
       tx.status,
       tx.txHash || "",
     ]);
@@ -1171,7 +1171,7 @@ export default function Rewards() {
                         </TableCell>
                         <TableCell>
                           <span className="text-sm truncate max-w-[150px] block">
-                            {tx.cleanupTitle}
+                            {tx.title}
                           </span>
                         </TableCell>
                         <TableCell>

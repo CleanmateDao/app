@@ -72,7 +72,9 @@ export function transformStreakSubmission(
     status: statusMap[submission.status] || "pending",
     submittedAt: bigIntToDate(submission.submittedAt) || "",
     reviewedAt: submission.reviewedAt ? bigIntToDate(submission.reviewedAt) || null : null,
-    amount: submission.amount ? bigIntToNumber(submission.amount) : null,
+    amount: (submission.rewardAmount ?? submission.amount)
+      ? bigIntToNumber((submission.rewardAmount ?? submission.amount) as string)
+      : null,
     rejectionReason: submission.rejectionReason,
     ipfsHashes: submission.ipfsHashes,
     mimetypes: submission.mimetypes,

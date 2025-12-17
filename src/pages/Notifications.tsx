@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from 'react';
+import { useMemo, useRef, useEffect, useState } from "react";
 import { Bell, Check, CheckCheck, Trash2, Filter, Search, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,58 +12,105 @@ import {
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useInfiniteNotifications } from "@/services/subgraph/queries";
+import type { SubgraphNotification } from "@/services/subgraph/types";
 
-interface Notification {
-  id: string;
-  title: string;
-  message: string;
-  time: string;
-  date: string;
-  type: 'proposal' | 'vote' | 'funding' | 'system';
-  unread: boolean;
+function toMs(bigIntString: string): number {
+  const n = Number(bigIntString);
+  if (!Number.isFinite(n)) return Date.now();
+  return n > 1e12 ? n : n * 1000;
 }
 
-const sampleNotifications: Notification[] = [
-  { id: '1', title: 'Proposal Approved', message: 'Clean Water Initiative has been approved by the committee. You can now proceed with the next steps.', time: '2 min ago', date: 'Today', type: 'proposal', unread: true },
-  { id: '2', title: 'New Vote Received', message: 'Your proposal "Solar Power for Schools" received 5 new votes in the last hour.', time: '1 hour ago', date: 'Today', type: 'vote', unread: true },
-  { id: '3', title: 'Review Complete', message: 'The review for Solar Power project is complete. Check the feedback from reviewers.', time: '3 hours ago', date: 'Today', type: 'proposal', unread: false },
-  { id: '4', title: 'Funding Received', message: 'You received a funding of $5,000 for the Agricultural Development project.', time: '5 hours ago', date: 'Today', type: 'funding', unread: false },
-  { id: '5', title: 'Milestone Deadline', message: 'Reminder: Phase 1 milestone for Clean Water Initiative is due in 3 days.', time: '8 hours ago', date: 'Today', type: 'system', unread: true },
-  { id: '6', title: 'Proposal Submitted', message: 'Your proposal "Youth Education Program" has been successfully submitted for review.', time: '1 day ago', date: 'Yesterday', type: 'proposal', unread: false },
-  { id: '7', title: 'Vote Threshold Reached', message: 'Agricultural Development proposal has reached the required 51% approval threshold.', time: '1 day ago', date: 'Yesterday', type: 'vote', unread: false },
-  { id: '8', title: 'New Comment', message: 'A reviewer left a comment on your Solar Power for Schools proposal.', time: '2 days ago', date: '2 days ago', type: 'proposal', unread: false },
-  { id: '9', title: 'Wallet Connected', message: 'Your VeWorld wallet has been successfully connected to your account.', time: '3 days ago', date: '3 days ago', type: 'system', unread: false },
-  { id: '10', title: 'Funding Disbursed', message: 'Phase 2 funding of $10,000 has been disbursed for Clean Water Initiative.', time: '5 days ago', date: '5 days ago', type: 'funding', unread: false },
-  { id: '11', title: 'Proposal Draft Saved', message: 'Your proposal draft "Community Health Center" has been saved.', time: '6 days ago', date: '6 days ago', type: 'proposal', unread: false },
-  { id: '12', title: 'New Collaborator', message: 'John Doe has been added as a collaborator on your project.', time: '1 week ago', date: '1 week ago', type: 'system', unread: false },
-  { id: '13', title: 'Funding Milestone', message: 'You have reached 50% of your funding goal for Solar Power project.', time: '1 week ago', date: '1 week ago', type: 'funding', unread: false },
-  { id: '14', title: 'Vote Reminder', message: 'Reminder: The voting period for Youth Education Program ends in 2 days.', time: '1 week ago', date: '1 week ago', type: 'vote', unread: false },
-  { id: '15', title: 'System Maintenance', message: 'Scheduled maintenance completed successfully. All systems operational.', time: '2 weeks ago', date: '2 weeks ago', type: 'system', unread: false },
-];
+function formatRelativeTime(createdAt: string): string {
+  const createdAtMs = toMs(createdAt);
+  const diffMs = Date.now() - createdAtMs;
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days} day${days === 1 ? "" : "s"} ago`;
+}
 
-const typeColors: Record<Notification['type'], string> = {
-  proposal: 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  vote: 'bg-purple-500/10 text-purple-500 border-purple-500/20',
-  funding: 'bg-green-500/10 text-green-500 border-green-500/20',
-  system: 'bg-orange-500/10 text-orange-500 border-orange-500/20',
-};
+function formatDateBucket(createdAt: string): string {
+  const d = new Date(toMs(createdAt));
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate()
+  ).getTime();
+  const startOfThatDay = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate()
+  ).getTime();
+  const diffDays = Math.floor(
+    (startOfToday - startOfThatDay) / (24 * 60 * 60 * 1000)
+  );
+  if (diffDays === 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function labelForType(type: string): string {
+  return type.replaceAll("_", " ");
+}
+
+function typeClass(type: string): string {
+  // Simple deterministic color mapping
+  const t = type.toLowerCase();
+  if (t.includes("reward")) return "bg-green-500/10 text-green-500 border-green-500/20";
+  if (t.includes("cleanup")) return "bg-blue-500/10 text-blue-500 border-blue-500/20";
+  if (t.includes("participant")) return "bg-purple-500/10 text-purple-500 border-purple-500/20";
+  return "bg-orange-500/10 text-orange-500 border-orange-500/20";
+}
 
 
 const ITEMS_PER_LOAD = 10;
 
 export default function Notifications() {
-  const [notifications, setNotifications] = useState(sampleNotifications);
-  const [filter, setFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [displayedCount, setDisplayedCount] = useState(ITEMS_PER_LOAD);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const walletAddress = useWalletAddress();
+  const [filter, setFilter] = useState<string>("all");
+  const [search, setSearch] = useState("");
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfiniteNotifications(walletAddress, ITEMS_PER_LOAD, {
+    enabled: !!walletAddress,
+    refetchInterval: 20_000,
+  });
+
+  const notifications = useMemo<SubgraphNotification[]>(
+    () => (data?.pages ?? []).flat(),
+    [data]
+  );
+
+  const unreadCount = useMemo(
+    () => notifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0),
+    [notifications]
+  );
+
+  const availableTypes = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of notifications) set.add(n.type);
+    return Array.from(set).sort();
+  }, [notifications]);
 
   const filteredNotifications = useMemo(() => {
     return notifications.filter(n => {
       const matchesFilter = filter === 'all' || 
-        (filter === 'unread' && n.unread) || 
+        (filter === 'unread' && !n.read) || 
         n.type === filter;
       const matchesSearch = n.title.toLowerCase().includes(search.toLowerCase()) ||
         n.message.toLowerCase().includes(search.toLowerCase());
@@ -71,40 +118,29 @@ export default function Notifications() {
     });
   }, [notifications, filter, search]);
 
-  // Infinite scroll: show more items
-  const displayedNotifications = useMemo(() => {
-    return filteredNotifications.slice(0, displayedCount);
-  }, [filteredNotifications, displayedCount]);
-
-  const hasMore = displayedCount < filteredNotifications.length;
-
   const groupedNotifications = useMemo(() => {
-    return displayedNotifications.reduce((acc, notification) => {
-      if (!acc[notification.date]) {
-        acc[notification.date] = [];
+    return filteredNotifications.reduce((acc, notification) => {
+      const bucket = formatDateBucket(notification.createdAt);
+      if (!acc[bucket]) {
+        acc[bucket] = [];
       }
-      acc[notification.date].push(notification);
+      acc[bucket].push(notification);
       return acc;
-    }, {} as Record<string, Notification[]>);
-  }, [displayedNotifications]);
+    }, {} as Record<string, SubgraphNotification[]>);
+  }, [filteredNotifications]);
 
   // Infinite scroll sentinel ref
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
-    if (!sentinel || !hasMore || isLoadingMore) return;
+    if (!sentinel || !hasNextPage || isFetchingNextPage) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         const [entry] = entries;
-        if (entry.isIntersecting && hasMore && !isLoadingMore) {
-          setIsLoadingMore(true);
-          // Simulate loading delay
-          setTimeout(() => {
-            setDisplayedCount(prev => Math.min(prev + ITEMS_PER_LOAD, filteredNotifications.length));
-            setIsLoadingMore(false);
-          }, 300);
+        if (entry.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
         }
       },
       {
@@ -118,34 +154,14 @@ export default function Notifications() {
     return () => {
       observer.disconnect();
     };
-  }, [hasMore, isLoadingMore, filteredNotifications.length]);
-
-  const markAsRead = (id: string) => {
-    setNotifications(notifications.map(n => 
-      n.id === id ? { ...n, unread: false } : n
-    ));
-  };
-
-  const markAllAsRead = () => {
-    setNotifications(notifications.map(n => ({ ...n, unread: false })));
-  };
-
-  const deleteNotification = (id: string) => {
-    setNotifications(notifications.filter(n => n.id !== id));
-  };
-
-  const clearAll = () => {
-    setNotifications([]);
-  };
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const handleFilterChange = (value: string) => {
     setFilter(value);
-    setDisplayedCount(ITEMS_PER_LOAD);
   };
 
   const handleSearchChange = (value: string) => {
     setSearch(value);
-    setDisplayedCount(ITEMS_PER_LOAD);
   };
 
   return (
@@ -167,9 +183,9 @@ export default function Notifications() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={markAllAsRead}
-            disabled={unreadCount === 0}
+            disabled
             className="gap-2"
+            title="Read status is sourced from the subgraph"
           >
             <CheckCheck className="w-4 h-4" />
             Mark all read
@@ -177,9 +193,9 @@ export default function Notifications() {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={clearAll}
-            disabled={notifications.length === 0}
+            disabled
             className="gap-2 text-destructive hover:text-destructive"
+            title="Notifications are sourced from the subgraph"
           >
             <Trash2 className="w-4 h-4" />
             Clear all
@@ -206,17 +222,31 @@ export default function Notifications() {
           <SelectContent>
             <SelectItem value="all">All</SelectItem>
             <SelectItem value="unread">Unread</SelectItem>
-            <SelectItem value="proposal">Proposals</SelectItem>
-            <SelectItem value="vote">Votes</SelectItem>
-            <SelectItem value="funding">Funding</SelectItem>
-            <SelectItem value="system">System</SelectItem>
+            {availableTypes.map((t) => (
+              <SelectItem key={t} value={t}>
+                {labelForType(t)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
       {/* Notifications List */}
       <div className="space-y-6">
-        {Object.keys(groupedNotifications).length === 0 ? (
+        {!walletAddress ? (
+          <div className="text-center py-16">
+            <Bell className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+            <h3 className="font-medium text-muted-foreground">Connect wallet</h3>
+            <p className="text-sm text-muted-foreground/70 mt-1">
+              Connect your wallet to load notifications from the subgraph.
+            </p>
+          </div>
+        ) : isLoading ? (
+          <div className="text-center py-16">
+            <Loader2 className="w-6 h-6 mx-auto animate-spin text-muted-foreground/70 mb-3" />
+            <p className="text-sm text-muted-foreground">Loading notifications...</p>
+          </div>
+        ) : Object.keys(groupedNotifications).length === 0 ? (
           <div className="text-center py-16">
             <Bell className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
             <h3 className="font-medium text-muted-foreground">No notifications</h3>
@@ -256,36 +286,27 @@ export default function Notifications() {
                               <h4 className="font-medium text-sm">{notification.title}</h4>
                               <Badge 
                                 variant="outline" 
-                                className={cn('text-[10px] px-1.5 py-0 capitalize', typeColors[notification.type])}
+                                className={cn('text-[10px] px-1.5 py-0 capitalize', typeClass(notification.type))}
                               >
-                                {notification.type}
+                                {labelForType(notification.type)}
                               </Badge>
                             </div>
                             <p className="text-sm text-muted-foreground line-clamp-2">
                               {notification.message}
                             </p>
                             <p className="text-xs text-muted-foreground/70 mt-2">
-                              {notification.time}
+                              {formatRelativeTime(notification.createdAt)}
                             </p>
                           </div>
                           
                           {/* Actions */}
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            {notification.unread && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => markAsRead(notification.id)}
-                              >
-                                <Check className="w-4 h-4" />
-                              </Button>
-                            )}
                             <Button
                               variant="ghost"
                               size="icon"
                               className="h-8 w-8 text-destructive hover:text-destructive"
-                              onClick={() => deleteNotification(notification.id)}
+                              disabled
+                              title="Notifications are sourced from the subgraph"
                             >
                               <Trash2 className="w-4 h-4" />
                             </Button>
@@ -304,13 +325,13 @@ export default function Notifications() {
       {/* Infinite Scroll Sentinel */}
       {filteredNotifications.length > 0 && (
         <div ref={sentinelRef} className="h-4 flex items-center justify-center py-4">
-          {isLoadingMore && (
+          {isFetchingNextPage && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
               <span>Loading more notifications...</span>
             </div>
           )}
-          {!hasMore && displayedNotifications.length > 0 && (
+          {!hasNextPage && notifications.length > 0 && (
             <p className="text-sm text-muted-foreground">
               No more notifications to load
             </p>

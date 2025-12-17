@@ -2,7 +2,6 @@ import type {
   SubgraphUser,
   SubgraphCleanup,
   SubgraphCleanupParticipant,
-  SubgraphReward,
   SubgraphTransaction,
   SubgraphProofOfWorkMedia,
 } from "./types";
@@ -10,8 +9,8 @@ import type {
   Cleanup,
   CleanupParticipant,
   RewardTransaction,
-  UserProfile,
 } from "@/types/cleanup";
+import type { UserProfile } from "@/types/user";
 import {
   parseCleanupMetadata,
   parseUserMetadata,
@@ -161,26 +160,6 @@ export function transformCleanup(
 }
 
 /**
- * Transform subgraph reward to app reward transaction
- * @deprecated Use transformTransaction instead
- */
-export function transformReward(
-  reward: SubgraphReward,
-  cleanupMetadata?: { title?: string }
-): RewardTransaction {
-  return {
-    id: reward.id,
-    type: "earned", // All rewards in Reward entity are earned rewards
-    amount: bigIntToNumber(reward.amount),
-    cleanupId: reward.cleanupId?.toLowerCase() || "",
-    cleanupTitle: cleanupMetadata?.title || "Unknown Cleanup",
-    date: bigIntToDate(reward.earnedAt) || "",
-    status: "pending", // Claim status is no longer tracked in Reward entity
-    txHash: undefined, // Transaction hash is not in subgraph reward entity
-  };
-}
-
-/**
  * Transform subgraph transaction to app reward transaction
  */
 export function transformTransaction(
@@ -196,12 +175,39 @@ export function transformTransaction(
     ? "completed"
     : "pending";
 
+  const fallbackTitle = (() => {
+    // Prefer cleanup title if we have a cleanupId
+    if (transaction.cleanupId)
+      return cleanupMetadata?.title || "Cleanup reward";
+    // Streak rewards
+    if (transaction.streakSubmissionId) {
+      return `Streak reward #${transaction.streakSubmissionId}`;
+    }
+    // Other rewards: infer from rewardType when available
+    switch (transaction.rewardType) {
+      case 0:
+        return "Referral reward";
+      case 1:
+        return "Bonus reward";
+      case 2:
+        return "Cleanup reward";
+      case 3:
+        return "Streak reward";
+      case 4:
+        return "Other reward";
+      default:
+        return "Reward";
+    }
+  })();
+
   return {
     id: transaction.id,
     type,
     amount: bigIntToNumber(transaction.amount),
-    cleanupId: transaction.cleanupId?.toLowerCase() || "",
-    cleanupTitle: cleanupMetadata?.title || "Unknown Cleanup",
+    cleanupId: transaction.cleanupId?.toLowerCase() || null,
+    streakSubmissionId: transaction.streakSubmissionId ?? null,
+    rewardType: transaction.rewardType ?? null,
+    title: fallbackTitle,
     date: bigIntToDate(transaction.timestamp) || "",
     status,
     txHash: transaction.transactionHash || undefined,

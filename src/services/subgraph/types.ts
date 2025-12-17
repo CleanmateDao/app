@@ -101,23 +101,13 @@ export interface SubgraphTransaction {
   id: string; // ID - transaction hash + log index
   user: string; // Bytes - address
   cleanupId: string | null; // Bytes - address (null for non-cleanup rewards)
+  streakSubmissionId: string | null; // BigInt (null for non-streak rewards)
   amount: string; // BigInt - uint256
   transactionType: string; // String - "CLAIM" or "RECEIVE"
-  rewardType: number | null; // Int - rewardType from event (0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=OTHERS) (null for CLAIM transactions)
+  rewardType: number | null; // Int - rewardType from event (0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=STREAK, 4=OTHERS) (null for CLAIM transactions)
   timestamp: string; // BigInt
   blockNumber: string; // BigInt
   transactionHash: string; // Bytes
-}
-
-/**
- * @deprecated Use SubgraphTransaction instead. This is kept for backward compatibility.
- */
-export interface SubgraphReward {
-  id: string;
-  user: string;
-  cleanupId: string | null;
-  amount: string;
-  earnedAt: string | null;
 }
 
 /**
@@ -209,14 +199,6 @@ export interface GetCleanupResponse {
  */
 export interface GetCleanupsResponse {
   cleanups: SubgraphCleanup[];
-}
-
-/**
- * Response type for getRewards query
- * @deprecated Use GetTransactionsResponse instead
- */
-export interface GetRewardsResponse {
-  rewards: SubgraphReward[];
 }
 
 /**
@@ -346,8 +328,9 @@ export interface GetCleanupParticipantsQueryParams {
 export interface TransactionFilter {
   user?: string; // Bytes - address
   cleanupId?: string; // Bytes - address
+  streakSubmissionId?: string; // BigInt (string)
   transactionType?: "CLAIM" | "RECEIVE";
-  rewardType?: number; // Int - 0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=OTHERS
+  rewardType?: number; // Int - 0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=STREAK, 4=OTHERS
 }
 
 /**
@@ -359,15 +342,6 @@ export interface GetTransactionsQueryParams {
   where?: TransactionFilter;
   orderBy?: "timestamp" | "blockNumber";
   orderDirection?: "asc" | "desc";
-}
-
-/**
- * Parameters for getRewards query (deprecated, use getTransactions)
- */
-export interface GetRewardsQueryParams {
-  user: string; // Bytes - address
-  first?: number;
-  skip?: number;
 }
 
 /**
@@ -434,6 +408,7 @@ export interface SubgraphStreakSubmission {
   submittedAt: string; // BigInt
   reviewedAt: string | null; // BigInt
   amount: string | null; // BigInt - amount approved (null if not approved)
+  rewardAmount?: string | null; // BigInt - preferred alias of amount (may be absent on older subgraphs)
   rejectionReason: string | null; // reason for rejection (null if not rejected)
   ipfsHashes: string[]; // IPFS hashes
   mimetypes: string[]; // MIME types

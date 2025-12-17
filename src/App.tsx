@@ -7,7 +7,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeProvider, useTheme } from "@/components/ThemeProvider";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import Insights from "./pages/Insights";
 import Cleanups from "./pages/Cleanups";
@@ -41,9 +41,12 @@ const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
   return <>{children}</>;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
+const AppInner = () => {
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
+
+  return (
+    <QueryClientProvider client={queryClient}>
       <VeChainKitProvider
         feeDelegation={{
           delegatorUrl: import.meta.env.VITE_DELEGATOR_URL!,
@@ -75,6 +78,7 @@ const App = () => (
         }}
         network={{ type: import.meta.env.VITE_VECHAIN_NETWORK }}
         allowCustomTokens={false}
+        darkMode={isDarkMode}
       >
         <TransactionModalProvider>
           <TooltipProvider>
@@ -82,7 +86,10 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Navigate to="/onboarding" replace />} />
+                <Route
+                  path="/"
+                  element={<Navigate to="/onboarding" replace />}
+                />
                 <Route path="/onboarding" element={<Onboarding />} />
                 <Route
                   path="/dashboard"
@@ -180,8 +187,14 @@ const App = () => (
           </TooltipProvider>
         </TransactionModalProvider>
       </VeChainKitProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+    </QueryClientProvider>
+  );
+};
+
+const App = () => (
+  <ThemeProvider>
+    <AppInner />
+  </ThemeProvider>
 );
 
 export default App;
