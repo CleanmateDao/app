@@ -32,7 +32,7 @@ export function RemoveTeamMemberAlertDialog({
           <Trash2 className="w-4 h-4" />
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="w-[95vw] max-w-md">
+      <AlertDialogContent className="w-[90%] max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>Remove team member?</AlertDialogTitle>
           <AlertDialogDescription>

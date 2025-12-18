@@ -21,10 +21,10 @@ export function parseCleanupMetadata(
  */
 export function parseUserMetadata(
   metadata: string | null
-): UserProfileMetadata | null {
+): UserProfileMetadata<true> | null {
   if (!metadata) return null;
   try {
-    return JSON.parse(metadata) as UserProfileMetadata;
+    return JSON.parse(metadata) as UserProfileMetadata<true>;
   } catch (error) {
     console.error("Failed to parse user metadata:", error);
     return null;

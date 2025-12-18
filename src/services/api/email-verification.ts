@@ -1,8 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
-import axios from "axios";
 import { toast } from "sonner";
-
-const EMAIL_SERVICE_URL = import.meta.env.VITE_EMAIL_SERVICE_URL || "http://localhost:3000";
+import { emailClient } from "../clients/email";
+import axios from "axios";
 
 export interface RequestVerificationCodeRequest {
   email: string;
@@ -34,23 +33,18 @@ async function requestVerificationCode(
   data: RequestVerificationCodeRequest
 ): Promise<RequestVerificationCodeResponse> {
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    const response = await axios.post<RequestVerificationCodeResponse>(
-      `${EMAIL_SERVICE_URL}/email-verification/request`,
-      data,
-      { headers }
+    const response = await emailClient.post<RequestVerificationCodeResponse>(
+      `/email-verification/request`,
+      data
     );
-    
+
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to request verification code"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to request verification code"
       );
     }
     throw error;
@@ -64,23 +58,18 @@ async function verifyCode(
   data: VerifyCodeRequest
 ): Promise<VerifyCodeResponse> {
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    const response = await axios.post<VerifyCodeResponse>(
-      `${EMAIL_SERVICE_URL}/email-verification/verify`,
-      data,
-      { headers }
+    const response = await emailClient.post<VerifyCodeResponse>(
+      `/email-verification/verify`,
+      data
     );
-    
+
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to verify code"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to verify code"
       );
     }
     throw error;
@@ -94,23 +83,18 @@ async function regenerateCode(
   data: RequestVerificationCodeRequest
 ): Promise<RequestVerificationCodeResponse> {
   try {
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    const response = await axios.post<RequestVerificationCodeResponse>(
-      `${EMAIL_SERVICE_URL}/email-verification/regenerate`,
-      data,
-      { headers }
+    const response = await emailClient.post<RequestVerificationCodeResponse>(
+      `/email-verification/regenerate`,
+      data
     );
-    
+
     return response.data;
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to regenerate verification code"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to regenerate verification code"
       );
     }
     throw error;
@@ -161,4 +145,3 @@ export function useRegenerateVerificationCode() {
     },
   });
 }
-

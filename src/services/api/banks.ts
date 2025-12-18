@@ -1,9 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-import { SUPPORTED_CURRENCIES, type SupportedCurrencyCode } from "@/constants/supported";
-
-const BANK_SERVICE_URL = import.meta.env.VITE_BANK_SERVICE_URL || "https://api.cleanmate.app";
+import { type SupportedCurrencyCode } from "@/constants/supported";
+import { bankClient } from "../clients/bank";
 
 export interface BankAccount {
   id: string;
@@ -66,26 +65,21 @@ export interface DeleteBankResponse {
  */
 async function getBanks(userId: string): Promise<BankAccount[]> {
   try {
-    const response = await axios.get<GetBanksResponse>(
-      `${BANK_SERVICE_URL}/api/banks?userId=${userId}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.get<GetBanksResponse>(
+      `/banks?userId=${userId}`
     );
-    
+
     if (response.data.success && response.data.data) {
       return response.data.data;
     }
-    
+
     throw new Error(response.data.message || "Failed to fetch banks");
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to fetch bank accounts"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to fetch bank accounts"
       );
     }
     throw error;
@@ -99,26 +93,21 @@ async function getBanksListByCurrency(
   currency: SupportedCurrencyCode
 ): Promise<PaystackBank[]> {
   try {
-    const response = await axios.get<GetBanksListResponse>(
-      `${BANK_SERVICE_URL}/api/banks/list/${currency}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.get<GetBanksListResponse>(
+      `/banks/list/${currency}`
     );
-    
+
     if (response.data.success && response.data.data) {
       return response.data.data;
     }
-    
+
     throw new Error(response.data.message || "Failed to fetch banks list");
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to fetch banks list"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to fetch banks list"
       );
     }
     throw error;
@@ -132,27 +121,22 @@ async function createBankAccount(
   data: CreateBankAccountRequest & { userId: string }
 ): Promise<BankAccount> {
   try {
-    const response = await axios.post<CreateBankAccountResponse>(
-      `${BANK_SERVICE_URL}/api/banks`,
-      data,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.post<CreateBankAccountResponse>(
+      `/banks`,
+      data
     );
-    
+
     if (response.data.success && response.data.data) {
       return response.data.data;
     }
-    
+
     throw new Error(response.data.message || "Failed to create bank account");
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to create bank account"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to create bank account"
       );
     }
     throw error;
@@ -162,29 +146,21 @@ async function createBankAccount(
 /**
  * Delete a bank account
  */
-async function deleteBankAccount(
-  id: string,
-  userId: string
-): Promise<void> {
+async function deleteBankAccount(id: string, userId: string): Promise<void> {
   try {
-    const response = await axios.delete<DeleteBankResponse>(
-      `${BANK_SERVICE_URL}/api/banks/${id}?userId=${userId}`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.delete<DeleteBankResponse>(
+      `/banks/${id}?userId=${userId}`
     );
-    
+
     if (!response.data.success) {
       throw new Error(response.data.message || "Failed to delete bank account");
     }
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to delete bank account"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to delete bank account"
       );
     }
     throw error;
@@ -199,27 +175,23 @@ async function setDefaultBankAccount(
   userId: string
 ): Promise<BankAccount> {
   try {
-    const response = await axios.patch<SetDefaultBankResponse>(
-      `${BANK_SERVICE_URL}/api/banks/${id}/default?userId=${userId}`,
-      {},
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.patch<SetDefaultBankResponse>(
+      `/banks/${id}/default?userId=${userId}`
     );
-    
+
     if (response.data.success && response.data.data) {
       return response.data.data;
     }
-    
-    throw new Error(response.data.message || "Failed to set default bank account");
+
+    throw new Error(
+      response.data.message || "Failed to set default bank account"
+    );
   } catch (error) {
     if (axios.isAxiosError(error)) {
       throw new Error(
-        error.response?.data?.message || 
-        error.message || 
-        "Failed to set default bank account"
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to set default bank account"
       );
     }
     throw error;
@@ -255,7 +227,7 @@ export function useBanksListByCurrency(currency: SupportedCurrencyCode) {
  */
 export function useCreateBankAccount() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: createBankAccount,
     onSuccess: () => {
@@ -273,7 +245,7 @@ export function useCreateBankAccount() {
  */
 export function useDeleteBankAccount() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: ({ id, userId }: { id: string; userId: string }) =>
       deleteBankAccount(id, userId),
@@ -292,7 +264,7 @@ export function useDeleteBankAccount() {
  */
 export function useSetDefaultBankAccount() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
     mutationFn: ({ id, userId }: { id: string; userId: string }) =>
       setDefaultBankAccount(id, userId),
@@ -305,4 +277,3 @@ export function useSetDefaultBankAccount() {
     },
   });
 }
-

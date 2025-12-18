@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
+import {
+  SUPPORTED_CURRENCIES,
+  type SupportedCurrencyCode,
+} from "@/constants/supported";
+import { bankClient } from "../clients/bank";
 import axios from "axios";
-import { SUPPORTED_CURRENCIES, type SupportedCurrencyCode } from "@/constants/supported";
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "https://api.cleanmate.app";
 
 export interface CurrencyRate {
   code: SupportedCurrencyCode;
@@ -23,19 +25,14 @@ export interface CurrencyRatesResponse {
  */
 async function getCurrencyRates(): Promise<CurrencyRate[]> {
   try {
-    const response = await axios.get<CurrencyRatesResponse>(
-      `${API_BASE_URL}/api/currency-rates`,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.get<CurrencyRatesResponse>(
+      `/currency-rates`
     );
-    
+
     if (response.data.success && response.data.data) {
       return response.data.data;
     }
-    
+
     // Fallback to default rates if API fails
     return SUPPORTED_CURRENCIES.map((currency) => ({
       code: currency.code,
@@ -47,7 +44,7 @@ async function getCurrencyRates(): Promise<CurrencyRate[]> {
     if (axios.isAxiosError(error)) {
       console.error("Failed to fetch currency rates:", error);
     }
-    
+
     // Fallback to default rates
     return SUPPORTED_CURRENCIES.map((currency) => ({
       code: currency.code,
@@ -69,4 +66,3 @@ export function useCurrencyRates() {
     gcTime: 1000 * 60 * 60, // 1 hour
   });
 }
-

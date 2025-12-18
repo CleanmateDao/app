@@ -9,7 +9,6 @@ import {
   X,
   Link2,
   LogOut,
-  AlertTriangle,
   Upload,
   Trash2,
   Shield,
@@ -25,6 +24,9 @@ import {
   Copy,
   Gift,
   Share2,
+  CreditCard,
+  Star,
+  Loader2,
 } from "lucide-react";
 import africanPattern from "@/assets/african-pattern.jpg";
 import { cn } from "@/lib/utils";
@@ -57,28 +59,42 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { SignOutAlertDialog } from "@/components/SignOutAlertDialog";
-import { DeactivateAccountAlertDialog } from "@/components/DeactivateAccountAlertDialog";
-import { DeleteAccountAlertDialog } from "@/components/DeleteAccountAlertDialog";
+import { EmailVerificationDialog } from "@/components/EmailVerificationDialog";
+import { AddBankDialog } from "@/components/AddBankDialog";
+import { DeleteBankAlertDialog } from "@/components/DeleteBankAlertDialog";
 import { useTheme } from "@/components/ThemeProvider";
-import { useUser } from "@/services/subgraph/queries";
+import { useUser, subgraphKeys } from "@/services/subgraph/queries";
 import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSubmitKYCToAPI } from "@/services/api/kyc";
+import {
+  useBanks,
+  useBanksListByCurrency,
+  useCreateBankAccount,
+  useDeleteBankAccount,
+  useSetDefaultBankAccount,
+  type BankAccount,
+} from "@/services/api/banks";
 import { uploadFileToIPFS, toIPFSGatewayUrl } from "@/services/ipfs";
 import {
   useMarkKYCPending,
   useUpdateProfile,
 } from "@/services/contracts/mutations";
-import type { UserProfileMetadata } from "@/types/user";
+import type { UserProfile, UserProfileMetadata } from "@/types/user";
 import {
   SUPPORTED_COUNTRIES,
+  SUPPORTED_CURRENCIES,
   getStatesForCountry,
   type SupportedCountryCode,
+  type SupportedCurrencyCode,
 } from "@/constants/supported";
+import { INTEREST_OPTIONS } from "@/constants/interests";
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const walletAddress = useWalletAddress();
+  const queryClient = useQueryClient();
 
   // Fetch user data
   const { data: userData } = useUser(walletAddress);
@@ -92,19 +108,19 @@ export default function Settings() {
   const isEmailVerified = !!userProfile?.isEmailVerified;
   const canApplyForKyc = isEmailVerified;
 
-  const [profile, setProfile] = useState({
+  const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: "",
-    description: "",
-    interests: [] as string[],
+    bio: "",
+    interests: [],
     email: "",
-    country: SUPPORTED_COUNTRIES[0]?.name || "",
+    country: "NG" as SupportedCountryCode,
     state: "",
     walletAddress: "",
   });
-  const [newInterest, setNewInterest] = useState("");
   const [profileImage, setProfileImage] = useState<string | null>(null);
   const [profilePhotoFile, setProfilePhotoFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
 
   // KYC status is sourced from the subgraph/contract via `useUser`.
   const kycStatus = userProfile?.kycStatus ?? ("not_started" as const);
@@ -142,6 +158,16 @@ export default function Settings() {
   const markKYCPendingMutation = useMarkKYCPending();
   const updateProfileMutation = useUpdateProfile();
 
+  // Bank management
+  const { data: bankAccounts = [], isLoading: isLoadingBanks } =
+    useBanks(walletAddress);
+  const deleteBankMutation = useDeleteBankAccount();
+  const setDefaultBankMutation = useSetDefaultBankAccount();
+
+  const [deleteBankOpen, setDeleteBankOpen] = useState(false);
+  const [selectedBankToDelete, setSelectedBankToDelete] =
+    useState<BankAccount | null>(null);
+
   // Load profile metadata from contract if available
   useEffect(() => {
     if (!walletAddress || !userProfile) return;
@@ -151,16 +177,9 @@ export default function Settings() {
       setProfile((prev) => ({
         ...prev,
         name: userProfile.name || prev.name,
-        description: userProfile.bio || prev.description,
-        country:
-          userProfile.country ||
-          prev.country ||
-          SUPPORTED_COUNTRIES[0]?.name ||
-          "",
-        state:
-          userProfile.country === "Nigeria"
-            ? userProfile.city || prev.state
-            : prev.state,
+        bio: userProfile.bio || prev.bio,
+        country: userProfile.country || prev.country,
+        state: userProfile.state || prev.state,
         interests: userProfile.interests || prev.interests,
         email: userProfile.email || prev.email,
         walletAddress: walletAddress || prev.walletAddress,
@@ -198,6 +217,7 @@ export default function Settings() {
     const file = e.target.files?.[0];
     if (file) {
       // Store the File object and create a preview
+      // Upload happens when the user clicks "Submit KYC"
       const reader = new FileReader();
       reader.onloadend = () => {
         const previewField = `${field}Preview` as
@@ -209,7 +229,7 @@ export default function Settings() {
           [field]: file,
           [previewField]: reader.result as string,
         }));
-        toast.success("Document uploaded successfully");
+        toast.success("Document selected. Click Submit KYC to upload.");
       };
       reader.readAsDataURL(file);
     }
@@ -317,16 +337,14 @@ export default function Settings() {
         photoToStore = `ipfs://${cid}`;
       }
 
-      // Update legacy profile metadata JSON (single source of truth for the subgraph parser)
-      const location =
-        profile.country === "Nigeria" && profile.state
-          ? `${profile.state}, Nigeria`
-          : profile.country || undefined;
-      const profileMetadata: UserProfileMetadata = {
+      const profileMetadata: UserProfileMetadata<true> = {
         name: profile.name,
-        bio: profile.description || undefined,
+        bio: profile.bio || undefined,
         photo: photoToStore,
-        location,
+        location: {
+          country: profile.country,
+          state: profile.state,
+        },
         interests: profile.interests,
       };
 
@@ -351,23 +369,20 @@ export default function Settings() {
     }
   };
 
-  const addInterest = () => {
-    if (newInterest.trim()) {
+  const toggleInterest = (interest: string) => {
+    if (profile.interests.includes(interest)) {
       setProfile({
         ...profile,
-        interests: [...profile.interests, newInterest.trim()],
+        interests: profile.interests.filter((i) => i !== interest),
       });
-      setNewInterest("");
+      toast.success("Interest removed");
+    } else {
+      setProfile({
+        ...profile,
+        interests: [...profile.interests, interest],
+      });
       toast.success("Interest added");
     }
-  };
-
-  const removeInterest = (interest: string) => {
-    setProfile({
-      ...profile,
-      interests: profile.interests.filter((a) => a !== interest),
-    });
-    toast.success("Interest removed");
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -383,14 +398,6 @@ export default function Settings() {
 
   const handleSignOut = () => {
     toast.info("Signed out successfully");
-  };
-
-  const handleDeactivate = () => {
-    toast.warning("Account deactivated");
-  };
-
-  const handleDeleteAccount = () => {
-    toast.error("Account deleted");
   };
 
   return (
@@ -419,6 +426,9 @@ export default function Settings() {
             <TabsTrigger value="referral" className="text-xs sm:text-sm">
               Referral
             </TabsTrigger>
+            <TabsTrigger value="banks" className="text-xs sm:text-sm">
+              Banks
+            </TabsTrigger>
             <TabsTrigger value="preferences" className="text-xs sm:text-sm">
               Preferences
             </TabsTrigger>
@@ -430,35 +440,51 @@ export default function Settings() {
 
         {/* Profile Tab */}
         <TabsContent value="profile" className="space-y-6">
-          {/* Email Verification Warning */}
-          {!isEmailVerified && (
-            <Card className="border-l-4 border-l-primary">
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+          {/* Email Verification Status */}
+          <Card
+            className={cn(
+              "border-l-4",
+              isEmailVerified ? "border-l-green-500" : "border-l-primary"
+            )}
+          >
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div
+                  className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center shrink-0",
+                    isEmailVerified ? "bg-green-500/10" : "bg-primary/10"
+                  )}
+                >
+                  {isEmailVerified ? (
+                    <CheckCircle2 className="w-6 h-6 text-green-500" />
+                  ) : (
                     <Mail className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold">Verify Your Email</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Verify your email to unlock referrals and apply for KYC.
-                    </p>
-                  </div>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold">
+                    {isEmailVerified ? "Email Verified" : "Verify Your Email"}
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {isEmailVerified
+                      ? `Your email ${
+                          profile.email || ""
+                        } has been verified. You can now use referrals and apply for KYC.`
+                      : "Verify your email to unlock referrals and apply for KYC."}
+                  </p>
+                </div>
+                {!isEmailVerified && (
                   <Button
                     size="sm"
                     className="w-full sm:w-auto"
-                    onClick={() =>
-                      toast.info(
-                        "Email verification is not implemented yet in the frontend."
-                      )
-                    }
+                    onClick={() => setEmailVerificationOpen(true)}
                   >
                     Verify Email
                   </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                )}
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Profile Image */}
           <Card>
@@ -557,9 +583,9 @@ export default function Settings() {
                   id="bio"
                   rows={3}
                   placeholder="Tell us about yourself..."
-                  value={profile.description}
+                  value={profile.bio}
                   onChange={(e) =>
-                    setProfile({ ...profile, description: e.target.value })
+                    setProfile({ ...profile, bio: e.target.value })
                   }
                 />
               </div>
@@ -583,8 +609,8 @@ export default function Settings() {
                     onValueChange={(value) =>
                       setProfile({
                         ...profile,
-                        country: value,
-                        state: value === "Nigeria" ? profile.state : "",
+                        country: value as SupportedCountryCode,
+                        state: profile.state,
                       })
                     }
                   >
@@ -593,15 +619,14 @@ export default function Settings() {
                     </SelectTrigger>
                     <SelectContent>
                       {SUPPORTED_COUNTRIES.map((country) => (
-                        <SelectItem key={country.code} value={country.name}>
+                        <SelectItem key={country.code} value={country.code}>
                           {country.name}
                         </SelectItem>
                       ))}
-                      <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-                {profile.country === "Nigeria" && (
+                {getStatesForCountry(profile.country).length > 0 && (
                   <div className="space-y-2">
                     <Label htmlFor="state">State</Label>
                     <Select
@@ -614,13 +639,11 @@ export default function Settings() {
                         <SelectValue placeholder="Select state" />
                       </SelectTrigger>
                       <SelectContent>
-                        {getStatesForCountry("NG" as SupportedCountryCode).map(
-                          (s) => (
-                            <SelectItem key={s.code} value={s.name}>
-                              {s.name}
-                            </SelectItem>
-                          )
-                        )}
+                        {getStatesForCountry(profile.country).map((s) => (
+                          <SelectItem key={s.code} value={s.name}>
+                            {s.name}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -633,32 +656,51 @@ export default function Settings() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base font-medium">Interests</CardTitle>
+              <CardDescription>
+                Select the types of cleanups that interest you
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
-                {profile.interests.map((area) => (
-                  <Badge key={area} variant="secondary" className="gap-1 pr-1">
-                    {area}
-                    <button
-                      onClick={() => removeInterest(area)}
-                      className="ml-1 hover:bg-muted rounded p-0.5"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                {INTEREST_OPTIONS.map((interest) => (
+                  <Badge
+                    key={interest}
+                    variant={
+                      profile.interests.includes(interest)
+                        ? "default"
+                        : "outline"
+                    }
+                    className="cursor-pointer transition-colors"
+                    onClick={() => toggleInterest(interest)}
+                  >
+                    {interest}
                   </Badge>
                 ))}
               </div>
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Add interest..."
-                  value={newInterest}
-                  onChange={(e) => setNewInterest(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addInterest()}
-                />
-                <Button variant="outline" onClick={addInterest}>
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </div>
+              {profile.interests.length > 0 && (
+                <div className="pt-2">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Selected interests:
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {profile.interests.map((interest) => (
+                      <Badge
+                        key={interest}
+                        variant="secondary"
+                        className="gap-1 pr-1"
+                      >
+                        {interest}
+                        <button
+                          onClick={() => toggleInterest(interest)}
+                          className="ml-1 hover:bg-muted rounded p-0.5"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -1280,7 +1322,11 @@ export default function Settings() {
                       others.
                     </p>
                   </div>
-                  <Button size="sm" className="w-full sm:w-auto">
+                  <Button
+                    size="sm"
+                    className="w-full sm:w-auto"
+                    onClick={() => setEmailVerificationOpen(true)}
+                  >
                     Verify Email
                   </Button>
                 </div>
@@ -1416,6 +1462,142 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
+        {/* Banks Tab */}
+        <TabsContent value="banks" className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <CreditCard className="w-5 h-5" />
+                Bank Accounts
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Manage your bank accounts for receiving payments
+              </p>
+            </div>
+            <Button disabled={!walletAddress}>
+              <Plus className="w-4 h-4 mr-2" />
+              Add Bank Account
+            </Button>
+          </div>
+
+          {isLoadingBanks ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">
+                    Loading bank accounts...
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : bankAccounts.length === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <CreditCard className="w-12 h-12 text-muted-foreground/50" />
+                  <div className="text-center">
+                    <h3 className="font-medium text-muted-foreground">
+                      No bank accounts
+                    </h3>
+                    <p className="text-sm text-muted-foreground/70 mt-1">
+                      Add a bank account to receive payments
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {bankAccounts.map((account) => (
+                <Card
+                  key={account.id}
+                  className={cn(
+                    "transition-all",
+                    account.isDefault && "border-primary/50 bg-primary/5"
+                  )}
+                >
+                  <CardContent className="pt-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-semibold">{account.bankName}</h3>
+                          {account.isDefault && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-primary/10 text-primary border-primary/20"
+                            >
+                              <Star className="w-3 h-3 mr-1 fill-primary" />
+                              Default
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="space-y-1 text-sm text-muted-foreground">
+                          <p>
+                            <span className="font-medium">Account Name:</span>{" "}
+                            {account.accountName}
+                          </p>
+                          <p>
+                            <span className="font-medium">Account Number:</span>{" "}
+                            {account.accountNumber}
+                          </p>
+                          <p>
+                            <span className="font-medium">Currency:</span>{" "}
+                            {SUPPORTED_CURRENCIES.find(
+                              (c) => c.code === account.currency
+                            )?.symbol || ""}{" "}
+                            {account.currency}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {!account.isDefault && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              if (walletAddress) {
+                                setDefaultBankMutation.mutate({
+                                  id: account.id,
+                                  userId: walletAddress,
+                                });
+                              }
+                            }}
+                            disabled={
+                              setDefaultBankMutation.isPending || !walletAddress
+                            }
+                          >
+                            {setDefaultBankMutation.isPending ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Star className="w-4 h-4 mr-2" />
+                                Set Default
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedBankToDelete(account);
+                            setDeleteBankOpen(true);
+                          }}
+                          disabled={!walletAddress}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
         {/* Preferences Tab */}
         <TabsContent value="preferences" className="space-y-6">
           {/* Theme */}
@@ -1473,37 +1655,50 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
-
-          <Card className="border-destructive/30">
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2 text-destructive">
-                <AlertTriangle className="w-4 h-4" />
-                Danger Zone
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Deactivate Account</p>
-                  <p className="text-sm text-muted-foreground">
-                    Temporarily disable your account
-                  </p>
-                </div>
-                <DeactivateAccountAlertDialog onDeactivate={handleDeactivate} />
-              </div>
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div>
-                  <p className="font-medium text-sm">Delete Account</p>
-                  <p className="text-sm text-muted-foreground">
-                    Permanently delete your account and data
-                  </p>
-                </div>
-                <DeleteAccountAlertDialog onDelete={handleDeleteAccount} />
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Email Verification Dialog */}
+      <EmailVerificationDialog
+        open={emailVerificationOpen}
+        onOpenChange={setEmailVerificationOpen}
+        email={profile.email}
+        isVerified={isEmailVerified}
+        onVerified={() => {
+          // Invalidate user query to refetch updated verification status
+          if (walletAddress) {
+            queryClient.invalidateQueries({
+              queryKey: subgraphKeys.user(walletAddress),
+            });
+          }
+        }}
+      />
+
+      {/* Delete Bank Dialog */}
+      <DeleteBankAlertDialog
+        open={deleteBankOpen}
+        onOpenChange={setDeleteBankOpen}
+        onConfirm={() => {
+          if (selectedBankToDelete && walletAddress) {
+            deleteBankMutation.mutate(
+              {
+                id: selectedBankToDelete.id,
+                userId: walletAddress,
+              },
+              {
+                onSuccess: () => {
+                  setDeleteBankOpen(false);
+                  setSelectedBankToDelete(null);
+                },
+              }
+            );
+          }
+        }}
+        isPending={deleteBankMutation.isPending}
+        onCancel={() => {
+          setSelectedBankToDelete(null);
+        }}
+      />
     </div>
   );
 }

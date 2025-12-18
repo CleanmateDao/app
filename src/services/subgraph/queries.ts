@@ -97,23 +97,10 @@ export function useCleanups(
   params?: GetCleanupsQueryParams & { userAddress?: string | null },
   options?: Omit<UseQueryOptions<SubgraphCleanup[]>, "queryKey" | "queryFn">
 ) {
-  // Fetch user data if userAddress is provided
-  const { data: userData, isLoading: isLoadingUser } = useUser(
-    params?.userAddress || null,
-    { enabled: !!params?.userAddress }
-  );
-
-  // Extract user state from metadata
-  const userMetadata = userData?.metadata
-    ? parseUserMetadata(userData.metadata)
-    : null;
-  const userState = extractUserState(userMetadata);
-
   return useQuery({
     queryKey: [
       ...subgraphKeys.cleanupList(params?.where as Record<string, unknown>),
-      params?.userAddress || "no-user",
-      userState || "no-state",
+      params?.userAddress || "",
       params?.orderBy,
       params?.orderDirection,
     ],
@@ -122,15 +109,12 @@ export function useCleanups(
         first: params?.first,
         skip: params?.skip,
         where: params?.where,
-        orderBy: userState ? "city" : params?.orderBy, // Use city for state-based ordering if userState exists
         orderDirection: params?.orderDirection,
-        userState: userState || undefined, // Pass user state to API for ordering
       };
       const response = await subgraphClient.getCleanups(queryParams);
 
       return response.cleanups;
     },
-    enabled: !params?.userAddress || !isLoadingUser,
     ...options,
   });
 }
@@ -169,18 +153,6 @@ export function useInfiniteCleanups(
     "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam"
   >
 ) {
-  // Fetch user data if userAddress is provided
-  const { data: userData, isLoading: isLoadingUser } = useUser(
-    params?.userAddress || null,
-    { enabled: !!params?.userAddress }
-  );
-
-  // Extract user state from metadata
-  const userMetadata = userData?.metadata
-    ? parseUserMetadata(userData.metadata)
-    : null;
-  const userState = extractUserState(userMetadata);
-
   return useInfiniteQuery<
     SubgraphCleanup[],
     Error,
@@ -189,8 +161,7 @@ export function useInfiniteCleanups(
     queryKey: [
       ...subgraphKeys.cleanupList(params?.where as Record<string, unknown>),
       "infinite",
-      params?.userAddress || "no-user",
-      userState || "no-state",
+      params?.userAddress || "",
       params?.orderBy,
       params?.orderDirection,
     ],
@@ -199,9 +170,7 @@ export function useInfiniteCleanups(
         first: pageSize,
         skip: pageParam as number,
         where: params?.where,
-        orderBy: userState ? "city" : params?.orderBy, // Use city for state-based ordering if userState exists
         orderDirection: params?.orderDirection,
-        userState: userState || undefined, // Pass user state to API for ordering
       };
       const response = await subgraphClient.getCleanups(queryParams);
 
@@ -212,7 +181,6 @@ export function useInfiniteCleanups(
       return allPages.length * pageSize;
     },
     initialPageParam: 0,
-    enabled: !params?.userAddress || !isLoadingUser,
     ...options,
   });
 }

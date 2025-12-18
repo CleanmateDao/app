@@ -1,9 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-
-const KYC_SERVICE_URL =
-  import.meta.env.VITE_KYC_SERVICE_URL || "http://localhost:3001";
+import { kycClient } from "../clients/kyc";
 
 export interface Address {
   street?: string;
@@ -96,14 +94,9 @@ async function submitKYCToAPI(
       });
     }
 
-    const headers: Record<string, string> = {};
-
-    const response = await axios.post<KYCSubmissionResponse>(
-      `${KYC_SERVICE_URL}/kyc/submit`,
-      formData,
-      {
-        headers,
-      }
+    const response = await kycClient.post<KYCSubmissionResponse>(
+      `/kyc/submit`,
+      formData
     );
     return response.data;
   } catch (error) {

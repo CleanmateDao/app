@@ -23,7 +23,7 @@ export function DeleteAccountAlertDialog({
       <AlertDialogTrigger asChild>
         <Button variant="destructive">Delete Account</Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="w-[95vw] max-w-md">
+      <AlertDialogContent className="w-[90%] max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>Delete account permanently?</AlertDialogTitle>
           <AlertDialogDescription>

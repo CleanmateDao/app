@@ -1,6 +1,6 @@
-import { useWallet } from "@vechain/dapp-kit-react";
+import { useWallet } from "@vechain/vechain-kit";
 
 export function useWalletAddress(): string | null {
   const { account } = useWallet();
-  return account || null;
+  return account?.address || null;
 }

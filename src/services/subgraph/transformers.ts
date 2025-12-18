@@ -31,27 +31,15 @@ export function transformUserToProfile(
   if (!user) return null;
 
   const metadata = parseUserMetadata(user.metadata);
-  // Email is now stored separately in the subgraph, not in metadata
-  const email = user.email || "";
-  // Legacy metadata format stores location as a single string; we only parse the simplest cases.
-  const location = metadata?.location?.trim();
-  const countryFromLocation =
-    location && !location.includes(",")
-      ? location
-      : location?.split(",").pop()?.trim();
-  const cityFromLocation =
-    location && location.includes(",")
-      ? location.split(",")[0]?.trim()
-      : undefined;
 
   return {
     id: user.id.toLowerCase(),
     name: metadata?.name || "Unknown User",
-    email: email,
+    email: user.email,
     walletAddress: userAddress || user.id.toLowerCase(),
     bio: metadata?.bio,
-    country: countryFromLocation,
-    city: cityFromLocation,
+    country: metadata.location.country,
+    state: metadata.location.state,
     interests: metadata?.interests,
     profileImage: metadata?.photo,
     totalRewards: bigIntToNumber(user.totalRewardsEarned),

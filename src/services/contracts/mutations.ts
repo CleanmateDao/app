@@ -1,4 +1,8 @@
-import { useDAppKitWallet, useSendTransaction } from "@vechain/vechain-kit";
+import {
+  useWallet,
+  useSendTransaction,
+  useTransactionModal,
+} from "@vechain/vechain-kit";
 import { ABIContract, Address, Clause } from "@vechain/sdk-core";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -18,7 +22,6 @@ import type {
   ClaimRewardsParams,
   SubmitStreakParams,
 } from "@/types/params";
-import type { Location } from "@/types/cleanup";
 
 // Helper to create a clause for a contract function call
 function createClause(
@@ -38,8 +41,9 @@ function createClause(
 
 // UserRegistry Mutations
 export function useRegisterUser() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -50,7 +54,7 @@ export function useRegisterUser() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("User registered successfully");
@@ -75,6 +79,8 @@ export function useRegisterUser() {
       [params]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -90,8 +96,9 @@ export function useRegisterUser() {
 }
 
 export function useRegisterWithReferral() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -102,7 +109,7 @@ export function useRegisterWithReferral() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("User registered with referral successfully");
@@ -127,6 +134,8 @@ export function useRegisterWithReferral() {
       [params]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -142,8 +151,9 @@ export function useRegisterWithReferral() {
 }
 
 export function useUpdateProfile() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -154,7 +164,7 @@ export function useUpdateProfile() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("Profile updated successfully");
@@ -179,6 +189,8 @@ export function useUpdateProfile() {
       [metadata]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -194,8 +206,9 @@ export function useUpdateProfile() {
 }
 
 export function useSetReferralCode() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -206,7 +219,7 @@ export function useSetReferralCode() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("Referral code set successfully");
@@ -231,6 +244,8 @@ export function useSetReferralCode() {
       [referralCode]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -246,8 +261,9 @@ export function useSetReferralCode() {
 }
 
 export function useAddTeamMember() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -258,7 +274,7 @@ export function useAddTeamMember() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("Team member added successfully");
@@ -283,6 +299,8 @@ export function useAddTeamMember() {
       [params]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -298,8 +316,9 @@ export function useAddTeamMember() {
 }
 
 export function useRemoveTeamMember() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -310,7 +329,7 @@ export function useRemoveTeamMember() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("Team member removed successfully");
@@ -335,6 +354,8 @@ export function useRemoveTeamMember() {
       [member]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -350,8 +371,9 @@ export function useRemoveTeamMember() {
 }
 
 export function useMarkKYCPending() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -362,7 +384,7 @@ export function useMarkKYCPending() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
       toast.success("KYC status updated to pending");
@@ -387,6 +409,8 @@ export function useMarkKYCPending() {
       []
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -403,8 +427,9 @@ export function useMarkKYCPending() {
 
 // CleanupFactory Mutations
 export function useCreateCleanup() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -415,7 +440,7 @@ export function useCreateCleanup() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
       toast.success("Cleanup created successfully");
@@ -451,6 +476,8 @@ export function useCreateCleanup() {
       [contractParams]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -467,8 +494,9 @@ export function useCreateCleanup() {
 
 // Cleanup Mutations (individual cleanup contract)
 export function useApplyToCleanup() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -479,7 +507,7 @@ export function useApplyToCleanup() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       // Note: cleanupAddress needs to be passed via closure or ref
       // This will be handled by the execute function
@@ -500,6 +528,8 @@ export function useApplyToCleanup() {
       "applyToCleanup",
       []
     );
+
+    open();
 
     await sendTransaction([clause]);
 
@@ -523,8 +553,9 @@ export function useApplyToCleanup() {
 }
 
 export function useAcceptParticipant() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -535,7 +566,7 @@ export function useAcceptParticipant() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       // Handled in execute function
     },
@@ -562,6 +593,8 @@ export function useAcceptParticipant() {
       [participant]
     );
 
+    open();
+
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
@@ -582,8 +615,9 @@ export function useAcceptParticipant() {
 }
 
 export function useRejectParticipant() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -594,7 +628,7 @@ export function useRejectParticipant() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       // Handled in execute function
     },
@@ -621,6 +655,8 @@ export function useRejectParticipant() {
       [participant]
     );
 
+    open();
+
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
@@ -641,8 +677,9 @@ export function useRejectParticipant() {
 }
 
 export function useUpdateCleanupStatus() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -653,7 +690,7 @@ export function useUpdateCleanupStatus() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       // Handled in execute function
     },
@@ -680,6 +717,8 @@ export function useUpdateCleanupStatus() {
       [newStatus]
     );
 
+    open();
+
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
@@ -701,8 +740,9 @@ export function useUpdateCleanupStatus() {
 }
 
 export function useSubmitProofOfWork() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -713,7 +753,7 @@ export function useSubmitProofOfWork() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       // Handled in execute function
     },
@@ -747,6 +787,8 @@ export function useSubmitProofOfWork() {
       [params]
     );
 
+    open();
+
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
@@ -768,8 +810,9 @@ export function useSubmitProofOfWork() {
 
 // RewardsManager Mutations
 export function useClaimRewards() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -780,7 +823,7 @@ export function useClaimRewards() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.rewards() });
       toast.success("Rewards claimed successfully");
@@ -805,6 +848,8 @@ export function useClaimRewards() {
       [params]
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -821,8 +866,9 @@ export function useClaimRewards() {
 
 // Streak Mutations
 export function useJoinStreak() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -833,7 +879,7 @@ export function useJoinStreak() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
       toast.success("Successfully joined the streak program!");
@@ -858,6 +904,8 @@ export function useJoinStreak() {
       []
     );
 
+    open();
+
     await sendTransaction([clause]);
   };
 
@@ -873,8 +921,9 @@ export function useJoinStreak() {
 }
 
 export function useSubmitStreak() {
-  const { account } = useDAppKitWallet();
+  const { account } = useWallet();
   const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
 
   const {
     sendTransaction,
@@ -885,7 +934,7 @@ export function useSubmitStreak() {
     resetStatus,
     error,
   } = useSendTransaction({
-    signerAccountAddress: account ?? null,
+    signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
       toast.success("Streak submitted successfully!");
@@ -906,7 +955,9 @@ export function useSubmitStreak() {
       throw new Error("At least one IPFS hash is required");
     }
     if (params.ipfsHashes.length !== params.mimetypes.length) {
-      throw new Error("IPFS hashes and mimetypes arrays must have the same length");
+      throw new Error(
+        "IPFS hashes and mimetypes arrays must have the same length"
+      );
     }
 
     const clause = createClause(
@@ -915,6 +966,8 @@ export function useSubmitStreak() {
       "submit",
       [params]
     );
+
+    open();
 
     await sendTransaction([clause]);
   };

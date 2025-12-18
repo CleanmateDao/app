@@ -49,22 +49,13 @@ import {
 import { INTEREST_OPTIONS } from "@/constants/interests";
 
 export interface OnboardingData {
-  // Profile
   fullName: string;
   email: string;
   bio: string;
-
-  // Location
-  country: string;
+  country: SupportedCountryCode;
   state: string;
-
-  // Interests
   interests: string[];
-
-  // Referral
   referralCode: string;
-
-  // Terms
   agreeTerms: boolean;
 }
 
@@ -72,7 +63,7 @@ const initialData: OnboardingData = {
   fullName: "",
   email: "",
   bio: "",
-  country: "",
+  country: "NG",
   state: "",
   interests: [],
   referralCode: "",
@@ -99,8 +90,6 @@ const steps = [
     description: "Get rewarded for your impact",
   },
 ];
-
-const countries = ["Nigeria", "Other"];
 
 const achievements = [
   {
@@ -166,6 +155,8 @@ export default function Onboarding() {
   };
 
   const handleComplete = async () => {
+    console.log({ walletAddress });
+
     if (!walletAddress) {
       toast.error("Wallet not connected");
       return;
@@ -180,16 +171,13 @@ export default function Onboarding() {
     setIsSubmitting(true);
 
     try {
-      // Legacy user metadata (kept consistent with subgraph parsing):
-      // email/referral are stored in contract fields, not in metadata JSON.
-      const location =
-        data.country === "Nigeria" && data.state
-          ? `${data.state}, Nigeria`
-          : data.country || undefined;
-      const userMetadata: UserProfileMetadata = {
+      const userMetadata: UserProfileMetadata<true> = {
         name: data.fullName,
         bio: data.bio || undefined,
-        location,
+        location: {
+          country: data.country,
+          state: data.state,
+        },
         interests: data.interests,
       };
 
@@ -217,9 +205,6 @@ export default function Onboarding() {
         }
       }
 
-      localStorage.setItem("onboardingComplete", "true");
-      localStorage.setItem("userProfile", JSON.stringify(data));
-
       toast.success(
         "Welcome, Cleanup Champion! Start organizing your first cleanup."
       );
@@ -237,7 +222,7 @@ export default function Onboarding() {
   };
 
   const handleSkip = () => {
-    localStorage.setItem("onboardingComplete", "true");
+    localStorage.setItem("skipOnboarding", "true");
     toast.info("You can complete your profile anytime in Settings.");
     navigate("/dashboard");
   };
@@ -247,7 +232,7 @@ export default function Onboarding() {
       case 1:
         return data.fullName && data.email && data.agreeTerms;
       case 2:
-        return data.country && (data.country !== "Nigeria" || !!data.state);
+        return data.country;
       case 3:
         return true;
       default:
@@ -541,16 +526,22 @@ export default function Onboarding() {
                         <Select
                           value={data.country}
                           onValueChange={(value) =>
-                            updateData({ country: value, state: "" })
+                            updateData({
+                              country: value as SupportedCountryCode,
+                              state: "",
+                            })
                           }
                         >
                           <SelectTrigger>
                             <SelectValue placeholder="Select your country" />
                           </SelectTrigger>
                           <SelectContent>
-                            {countries.map((country) => (
-                              <SelectItem key={country} value={country}>
-                                {country}
+                            {SUPPORTED_COUNTRIES.map((country) => (
+                              <SelectItem
+                                key={country.code}
+                                value={country.code}
+                              >
+                                {country.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -558,18 +549,7 @@ export default function Onboarding() {
                       </div>
 
                       {(() => {
-                        if (data.country !== "Nigeria") return null;
-
-                        // Nigeria states only
-                        const country = SUPPORTED_COUNTRIES.find(
-                          (c) => c.name === "Nigeria"
-                        );
-                        const states = country?.code
-                          ? getStatesForCountry(
-                              country.code as SupportedCountryCode
-                            )
-                          : [];
-
+                        const states = getStatesForCountry(data.country);
                         if (states.length === 0) return null;
 
                         return (

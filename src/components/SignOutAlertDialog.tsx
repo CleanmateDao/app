@@ -21,7 +21,7 @@ export function SignOutAlertDialog({ onSignOut }: SignOutAlertDialogProps) {
       <AlertDialogTrigger asChild>
         <Button variant="outline">Sign Out</Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="w-[95vw] max-w-md">
+      <AlertDialogContent className="w-[90%] max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>Sign out?</AlertDialogTitle>
           <AlertDialogDescription>

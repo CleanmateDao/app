@@ -18,11 +18,7 @@ import type {
   GetStreakSubmissionsQueryParams,
 } from "./types";
 
-const SUBGRAPH_URL =
-  import.meta.env.VITE_SUBGRAPH_URL ||
-  "http://localhost:8000/subgraphs/name/cleanmate";
-
-const client = new GraphQLClient(SUBGRAPH_URL);
+const client = new GraphQLClient(import.meta.env.VITE_SUBGRAPH_URL);
 
 // GraphQL Queries
 const GET_USER_QUERY = `
@@ -522,7 +518,10 @@ export const subgraphClient = {
 
     variables.where = where;
 
-    return client.request<GetNotificationsResponse>(GET_NOTIFICATIONS_QUERY, variables);
+    return client.request<GetNotificationsResponse>(
+      GET_NOTIFICATIONS_QUERY,
+      variables
+    );
   },
 
   async getTeamMemberships(

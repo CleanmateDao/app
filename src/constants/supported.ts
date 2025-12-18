@@ -6,6 +6,10 @@ export const SUPPORTED_COUNTRIES = [
     code: "NG",
     name: "Nigeria",
   },
+  {
+    code: "OTHER",
+    name: "Other",
+  },
 ] as const;
 
 /**
@@ -26,6 +30,7 @@ export const SUPPORTED_CURRENCIES = [
     code: "NGN",
     name: "Nigerian Naira",
     symbol: "₦",
+    countryCode: "NG",
   },
 ] as const;
 
@@ -41,7 +46,7 @@ export type SupportedCurrencyCode =
  */
 export const SUPPORTED_COUNTRY_STATES: Record<
   SupportedCountryCode,
-  Array<{ code: string; name: string }>
+  readonly { code: string; name: string }[]
 > = {
   NG: [
     { code: "AB", name: "Abia" },
@@ -82,6 +87,7 @@ export const SUPPORTED_COUNTRY_STATES: Record<
     { code: "YO", name: "Yobe" },
     { code: "ZA", name: "Zamfara" },
   ],
+  OTHER: [],
 } as const;
 
 /**
@@ -90,7 +96,7 @@ export const SUPPORTED_COUNTRY_STATES: Record<
 export function getStatesForCountry(
   countryCode: SupportedCountryCode
 ): Array<{ code: string; name: string }> {
-  return SUPPORTED_COUNTRY_STATES[countryCode] || [];
+  return Array.from(SUPPORTED_COUNTRY_STATES[countryCode] || []);
 }
 
 export type SupportedStateCode =

@@ -21,6 +21,9 @@ import Onboarding from "./pages/Onboarding";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
 import appLogo from "./assets/african-mask.jpg";
+import Streaks from "./pages/Streaks";
+import StreakSubmit from "./pages/StreakSubmit";
+import { useWalletAddress } from "./hooks/use-wallet-address";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,10 +38,13 @@ const queryClient = new QueryClient({
 
 // Check if user has completed onboarding
 const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
-  const isOnboarded = localStorage.getItem("onboardingComplete") === "true";
-  if (!isOnboarded) {
+  const walletAddress = useWalletAddress();
+  const skipOnboarding = localStorage.getItem("skipOnboarding") === "true";
+
+  if (!walletAddress && !skipOnboarding) {
     return <Navigate to="/onboarding" replace />;
   }
+
   return <>{children}</>;
 };
 
@@ -179,6 +185,26 @@ const AppInner = () => {
                     <RequireOnboarding>
                       <DashboardLayout>
                         <Settings />
+                      </DashboardLayout>
+                    </RequireOnboarding>
+                  }
+                />
+                <Route
+                  path="/streaks"
+                  element={
+                    <RequireOnboarding>
+                      <DashboardLayout>
+                        <Streaks />
+                      </DashboardLayout>
+                    </RequireOnboarding>
+                  }
+                />
+                <Route
+                  path="/streaks/submit"
+                  element={
+                    <RequireOnboarding>
+                      <DashboardLayout>
+                        <StreakSubmit />
                       </DashboardLayout>
                     </RequireOnboarding>
                   }

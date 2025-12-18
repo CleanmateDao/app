@@ -1,23 +1,7 @@
 import { useMemo, useRef, useEffect, useState } from "react";
-import {
-  Bell,
-  Check,
-  CheckCheck,
-  Trash2,
-  Filter,
-  Search,
-  Loader2,
-} from "lucide-react";
+import { Bell, CheckCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
@@ -48,17 +32,19 @@ const ITEMS_PER_LOAD = 10;
 
 export default function Notifications() {
   const walletAddress = useWalletAddress();
-  const [filter, setFilter] = useState<string>("all");
-  const [search, setSearch] = useState("");
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
-    useInfiniteNotifications(walletAddress, ITEMS_PER_LOAD, {
-      enabled: !!walletAddress,
-      refetchInterval: 20_000,
-    });
+    useInfiniteNotifications(
+      walletAddress,
+      ITEMS_PER_LOAD,
+      {},
+      {
+        refetchInterval: 20_000,
+      }
+    );
 
   const notifications = useMemo<SubgraphNotification[]>(
-    () => (data?.pages ?? []).flat(),
+    () => (data ?? []).flat(),
     [data]
   );
 
@@ -67,27 +53,8 @@ export default function Notifications() {
     [notifications]
   );
 
-  const availableTypes = useMemo(() => {
-    const set = new Set<string>();
-    for (const n of notifications) set.add(n.type);
-    return Array.from(set).sort();
-  }, [notifications]);
-
-  const filteredNotifications = useMemo(() => {
-    return notifications.filter((n) => {
-      const matchesFilter =
-        filter === "all" ||
-        (filter === "unread" && !n.read) ||
-        n.type === filter;
-      const matchesSearch =
-        n.title.toLowerCase().includes(search.toLowerCase()) ||
-        n.message.toLowerCase().includes(search.toLowerCase());
-      return matchesFilter && matchesSearch;
-    });
-  }, [notifications, filter, search]);
-
   const groupedNotifications = useMemo(() => {
-    return filteredNotifications.reduce((acc, notification) => {
+    return notifications.reduce((acc, notification) => {
       const bucket = formatDateBucketFromBigInt(notification.createdAt);
       if (!acc[bucket]) {
         acc[bucket] = [];
@@ -95,7 +62,7 @@ export default function Notifications() {
       acc[bucket].push(notification);
       return acc;
     }, {} as Record<string, SubgraphNotification[]>);
-  }, [filteredNotifications]);
+  }, [notifications]);
 
   // Infinite scroll sentinel ref
   const sentinelRef = useRef<HTMLDivElement>(null);
@@ -123,14 +90,6 @@ export default function Notifications() {
       observer.disconnect();
     };
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
-
-  const handleFilterChange = (value: string) => {
-    setFilter(value);
-  };
-
-  const handleSearchChange = (value: string) => {
-    setSearch(value);
-  };
 
   return (
     <div className="space-y-6 px-4 lg:px-6 py-4 lg:py-6 pb-24 lg:pb-6">
@@ -160,45 +119,7 @@ export default function Notifications() {
             <CheckCheck className="w-4 h-4" />
             Mark all read
           </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled
-            className="gap-2 text-destructive hover:text-destructive"
-            title="Notifications are sourced from the subgraph"
-          >
-            <Trash2 className="w-4 h-4" />
-            Clear all
-          </Button>
         </div>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search notifications..."
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="pl-9"
-          />
-        </div>
-        <Select value={filter} onValueChange={handleFilterChange}>
-          <SelectTrigger className="w-full sm:w-40">
-            <Filter className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Filter" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="unread">Unread</SelectItem>
-            {availableTypes.map((t) => (
-              <SelectItem key={t} value={t}>
-                {labelForType(t)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Notifications List */}
@@ -227,9 +148,7 @@ export default function Notifications() {
               No notifications
             </h3>
             <p className="text-sm text-muted-foreground/70 mt-1">
-              {search || filter !== "all"
-                ? "Try adjusting your filters"
-                : "You're all caught up!"}
+              You're all caught up!
             </p>
           </div>
         ) : (
@@ -248,15 +167,15 @@ export default function Notifications() {
                     exit={{ opacity: 0, x: -100 }}
                     className={cn(
                       "group relative p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-card transition-all",
-                      notification.unread && "bg-primary/5 border-primary/20"
+                      notification.read && "bg-muted/5 border-muted/20"
                     )}
                   >
                     <div className="flex items-start gap-4">
-                      {/* Unread indicator */}
+                      {/* Read indicator */}
                       <div
                         className={cn(
                           "w-2 h-2 rounded-full mt-2 shrink-0 transition-colors",
-                          notification.unread ? "bg-primary" : "bg-muted"
+                          notification.read ? "bg-muted" : "bg-primary"
                         )}
                       />
 
@@ -287,19 +206,6 @@ export default function Notifications() {
                               )}
                             </p>
                           </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-destructive hover:text-destructive"
-                              disabled
-                              title="Notifications are sourced from the subgraph"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
                         </div>
                       </div>
                     </div>
@@ -312,7 +218,7 @@ export default function Notifications() {
       </div>
 
       {/* Infinite Scroll Sentinel */}
-      {filteredNotifications.length > 0 && (
+      {notifications.length > 0 && (
         <div
           ref={sentinelRef}
           className="h-4 flex items-center justify-center py-4"

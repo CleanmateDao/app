@@ -1,9 +1,7 @@
 import { useMutation } from "@tanstack/react-query";
 import axios from "axios";
 import { toast } from "sonner";
-
-const BANK_SERVICE_URL =
-  import.meta.env.VITE_BANK_SERVICE_URL || "https://api.cleanmate.app";
+import { bankClient } from "../clients/bank";
 
 export interface ClaimWithPermitRequest {
   userId: string;
@@ -36,14 +34,9 @@ async function claimWithPermit(
   data: ClaimWithPermitRequest
 ): Promise<ClaimWithPermitResponse["data"]> {
   try {
-    const response = await axios.post<ClaimWithPermitResponse>(
-      `${BANK_SERVICE_URL}/api/banks/claim`,
-      data,
-      {
-        headers: {
-          "Content-Type": "application/json",
-        },
-      }
+    const response = await bankClient.post<ClaimWithPermitResponse>(
+      `/banks/claim`,
+      data
     );
 
     if (response.data.success && response.data.data) {

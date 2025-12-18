@@ -28,7 +28,7 @@ export function DeactivateAccountAlertDialog({
           Deactivate
         </Button>
       </AlertDialogTrigger>
-      <AlertDialogContent className="w-[95vw] max-w-md">
+      <AlertDialogContent className="w-[90%] max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>Deactivate account?</AlertDialogTitle>
           <AlertDialogDescription>

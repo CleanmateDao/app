@@ -26,7 +26,7 @@ export function ParticipantInfoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md w-[90%]">
         <DialogHeader>
           <DialogTitle>Participant Details</DialogTitle>
         </DialogHeader>
