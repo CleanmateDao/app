@@ -33,8 +33,6 @@ import { AcceptParticipantAlertDialog } from "@/components/AcceptParticipantAler
 import { RejectParticipantAlertDialog } from "@/components/RejectParticipantAlertDialog";
 import { ParticipantInfoDialog } from "@/components/ParticipantInfoDialog";
 import { JoinRequestDialog } from "@/components/JoinRequestDialog";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { CleanupStatus, CleanupParticipant } from "@/types/cleanup";
 import { toast } from "sonner";
@@ -53,8 +51,10 @@ import {
 } from "@/services/contracts/mutations";
 import { useTeamMember } from "@/services/subgraph/queries";
 
+export type CleanupStatusUI = "open" | "in_progress" | "completed" | "rewarded";
+
 const statusConfig: Record<
-  CleanupStatus,
+  CleanupStatusUI,
   { label: string; className: string }
 > = {
   open: {
@@ -276,7 +276,7 @@ export default function CleanupDetail() {
       actionParticipant.id.split("-")[1] || actionParticipant.id;
 
     try {
-      await acceptParticipantMutation.mutateAsync({
+      await acceptParticipantMutation.sendTransaction({
         cleanupAddress: id,
         participant: participantAddress,
       });
@@ -294,7 +294,7 @@ export default function CleanupDetail() {
       actionParticipant.id.split("-")[1] || actionParticipant.id;
 
     try {
-      await rejectParticipantMutation.mutateAsync({
+      await rejectParticipantMutation.sendTransaction({
         cleanupAddress: id,
         participant: participantAddress,
       });
@@ -356,7 +356,7 @@ export default function CleanupDetail() {
     setIsSubmittingJoin(true);
 
     try {
-      await applyToCleanupMutation.mutateAsync(id);
+      await applyToCleanupMutation.sendTransaction(id);
       setJoinDialogOpen(false);
       setJoinMessage("");
     } catch (error) {
@@ -620,14 +620,18 @@ export default function CleanupDetail() {
                         size="sm"
                         variant="outline"
                         onClick={() => openRejectDialog(participant)}
-                        disabled={rejectParticipantMutation.isPending}
+                        disabled={
+                          rejectParticipantMutation.isTransactionPending
+                        }
                       >
                         <X className="w-4 h-4" />
                       </Button>
                       <Button
                         size="sm"
                         onClick={() => openAcceptDialog(participant)}
-                        disabled={acceptParticipantMutation.isPending}
+                        disabled={
+                          acceptParticipantMutation.isTransactionPending
+                        }
                       >
                         <Check className="w-4 h-4" />
                       </Button>
