@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -115,18 +115,56 @@ export default function Onboarding() {
   const walletAddress = useWalletAddress();
   const [currentStep, setCurrentStep] = useState(1);
   const [data, setData] = useState<OnboardingData>(() => {
-    // Check for referral code in URL
-    const refCode = searchParams.get("ref");
-    return { ...initialData, referralCode: refCode || "" };
+    // Check for referral code in URL first, then localStorage
+    const refCodeFromUrl = searchParams.get("ref");
+    const refCodeFromStorage = localStorage.getItem("referral");
+    const refCode = refCodeFromUrl || refCodeFromStorage || "";
+
+    // Save URL ref code to localStorage if present
+    if (refCodeFromUrl) {
+      localStorage.setItem("referral", refCodeFromUrl);
+    }
+
+    return { ...initialData, referralCode: refCode };
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Save referral code to localStorage when URL param changes
+  useEffect(() => {
+    const refCode = searchParams.get("ref");
+    if (refCode) {
+      localStorage.setItem("referral", refCode);
+      // Update the form data if it's different
+      setData((prev) => {
+        if (prev.referralCode !== refCode) {
+          return { ...prev, referralCode: refCode };
+        }
+        return prev;
+      });
+    }
+  }, [searchParams]);
 
   const { data: existingUser } = useUser(walletAddress);
   const userExists = !!existingUser;
 
-  const registerUserMutation = useRegisterUser();
-  const registerWithReferralMutation = useRegisterWithReferral();
-  const updateProfileMutation = useUpdateProfile();
+  const registerUserMutation = useRegisterUser(() => {
+    toast.success(
+      "Welcome, Cleanup Champion! Start organizing your first cleanup."
+    );
+    navigate("/dashboard");
+  });
+  const registerWithReferralMutation = useRegisterWithReferral(() => {
+    toast.success(
+      "Welcome, Cleanup Champion! Start organizing your first cleanup."
+    );
+    navigate("/dashboard");
+  });
+  const updateProfileMutation = useUpdateProfile(() => {
+    toast.success(
+      "Welcome, Cleanup Champion! Start organizing your first cleanup."
+    );
+    navigate("/dashboard");
+  });
 
   const progress = (currentStep / steps.length) * 100;
 
@@ -204,11 +242,6 @@ export default function Onboarding() {
           });
         }
       }
-
-      toast.success(
-        "Welcome, Cleanup Champion! Start organizing your first cleanup."
-      );
-      navigate("/dashboard");
     } catch (error) {
       console.error("Error completing onboarding:", error);
       toast.error(

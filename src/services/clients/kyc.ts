@@ -1,10 +1,9 @@
 import axios from "axios";
 
 export const kycClient = axios.create({
-  baseURL: import.meta.env.VITE_KYC_SERCIVE_API_URL,
+  baseURL: import.meta.env.VITE_KYC_SERVICE_API_URL,
   headers: {
     "Content-Type": "application/json",
-    "x-api-key": import.meta.env.VITE_KYC_SERCIVE_API_KEY,
   },
-  timeout: 10000,
+  timeout: 90000,
 });

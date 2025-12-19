@@ -40,7 +40,7 @@ function createClause(
 }
 
 // UserRegistry Mutations
-export function useRegisterUser() {
+export function useRegisterUser(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -57,7 +57,11 @@ export function useRegisterUser() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("User registered successfully");
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -95,7 +99,7 @@ export function useRegisterUser() {
   };
 }
 
-export function useRegisterWithReferral() {
+export function useRegisterWithReferral(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -112,7 +116,11 @@ export function useRegisterWithReferral() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("User registered with referral successfully");
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -150,7 +158,7 @@ export function useRegisterWithReferral() {
   };
 }
 
-export function useUpdateProfile() {
+export function useUpdateProfile(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -167,7 +175,11 @@ export function useUpdateProfile() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("Profile updated successfully");
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -205,6 +217,18 @@ export function useUpdateProfile() {
   };
 }
 
+/**
+ * Generate a random 8-character referral code with mixed lowercase and uppercase alphabets
+ */
+function generateRandomReferralCode(): string {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  let code = "";
+  for (let i = 0; i < 8; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 export function useSetReferralCode() {
   const { account } = useWallet();
   const queryClient = useQueryClient();
@@ -222,6 +246,9 @@ export function useSetReferralCode() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("Referral code set successfully");
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
@@ -231,17 +258,20 @@ export function useSetReferralCode() {
     },
   });
 
-  const execute = async (referralCode: string) => {
+  const execute = async (referralCode?: string) => {
     if (!account) throw new Error("Wallet not connected");
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
 
+    // Generate random code if none provided or empty
+    const codeToUse = referralCode?.trim() || generateRandomReferralCode();
+
     const clause = createClause(
       UserRegistryABI,
       CONTRACT_ADDRESSES.USER_REGISTRY,
       "setReferralCode",
-      [referralCode]
+      [codeToUse]
     );
 
     open();
@@ -277,6 +307,9 @@ export function useAddTeamMember() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("Team member added successfully");
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
@@ -332,6 +365,9 @@ export function useRemoveTeamMember() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("Team member removed successfully");
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
@@ -370,7 +406,7 @@ export function useRemoveTeamMember() {
   };
 }
 
-export function useMarkKYCPending() {
+export function useMarkKYCPending(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -387,7 +423,11 @@ export function useMarkKYCPending() {
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
       toast.success("KYC status updated to pending");
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -426,7 +466,7 @@ export function useMarkKYCPending() {
 }
 
 // CleanupFactory Mutations
-export function useCreateCleanup() {
+export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -444,6 +484,7 @@ export function useCreateCleanup() {
     onTxConfirmed: () => {
       queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
       toast.success("Cleanup created successfully");
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -739,7 +780,7 @@ export function useUpdateCleanupStatus() {
   };
 }
 
-export function useSubmitProofOfWork() {
+export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -755,7 +796,7 @@ export function useSubmitProofOfWork() {
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
-      // Handled in execute function
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -795,6 +836,7 @@ export function useSubmitProofOfWork() {
       queryKey: subgraphKeys.cleanup(cleanupAddress),
     });
     toast.success("Proof of work submitted successfully");
+    // Note: onTxConfirmedCallback is called in onTxConfirmed above
   };
 
   return {

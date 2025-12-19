@@ -112,7 +112,9 @@ export default function OrganizeCleanup() {
   };
 
   const walletAddress = useWalletAddress();
-  const createCleanupMutation = useCreateCleanup();
+  const createCleanupMutation = useCreateCleanup(() => {
+    navigate("/cleanups");
+  });
 
   const handleSaveDraft = () => {
     toast.success("Draft saved successfully");
@@ -202,9 +204,6 @@ export default function OrganizeCleanup() {
         endTime: endTime.toString(),
         maxParticipants: schedule.maxParticipants.toString(),
       });
-
-      toast.success("Cleanup created successfully!");
-      navigate("/cleanups");
     } catch (error) {
       console.error("Error creating cleanup:", error);
       toast.error(

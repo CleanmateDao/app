@@ -80,6 +80,7 @@ import { uploadFileToIPFS } from "@/services/ipfs";
 import {
   useMarkKYCPending,
   useUpdateProfile,
+  useSetReferralCode,
 } from "@/services/contracts/mutations";
 import type { UserProfile, UserProfileMetadata } from "@/types/user";
 import {
@@ -122,7 +123,8 @@ export default function Settings() {
   const [emailVerificationOpen, setEmailVerificationOpen] = useState(false);
 
   // KYC status is sourced from the subgraph/contract via `useUser`.
-  const kycStatus = userProfile?.kycStatus ?? ("not_started" as const);
+  const kycStatus: "not_started" | "pending" | "verified" | "rejected" =
+    userProfile?.kycStatus ?? "not_started";
   const [kycData, setKycData] = useState({
     firstName: "",
     lastName: "",
@@ -156,6 +158,7 @@ export default function Settings() {
   const submitKYCToAPIMutation = useSubmitKYCToAPI();
   const markKYCPendingMutation = useMarkKYCPending();
   const updateProfileMutation = useUpdateProfile();
+  const setReferralCodeMutation = useSetReferralCode();
 
   // Bank management
   const { data: bankAccounts = [], isLoading: isLoadingBanks } =
@@ -300,8 +303,6 @@ export default function Settings() {
       // Step 2: After successful POST, call smart contract mutation
       toast.info("Submitting KYC to blockchain...");
       await markKYCPendingMutation.sendTransaction();
-
-      toast.success("KYC submitted for review");
     } catch (error) {
       console.error("Error submitting KYC:", error);
       toast.error(
@@ -355,8 +356,6 @@ export default function Settings() {
         setProfileImage(photoUrl);
         setProfilePhotoFile(null);
       }
-
-      toast.success("Profile updated successfully");
     } catch (error) {
       console.error("Error saving settings:", error);
       toast.error(
@@ -781,512 +780,462 @@ export default function Settings() {
             </CardContent>
           </Card>
 
-          {/* ID Document */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Identity Document
-              </CardTitle>
-              <CardDescription>
-                Upload your National ID or Passport
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Document Type</Label>
-                  <Select
-                    value={kycData.documentType}
-                    onValueChange={(
-                      value:
-                        | "passport"
-                        | "national_id"
-                        | "drivers_license"
-                        | "other"
-                    ) => setKycData({ ...kycData, documentType: value })}
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="national_id">National ID</SelectItem>
-                      <SelectItem value="passport">Passport</SelectItem>
-                      <SelectItem value="drivers_license">
-                        Driver's License
-                      </SelectItem>
-                      <SelectItem value="other">Other</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>
-                    {kycData.documentType === "passport"
-                      ? "Passport Number"
-                      : kycData.documentType === "drivers_license"
-                      ? "License Number"
-                      : "ID Number"}
-                  </Label>
-                  <Input
-                    value={kycData.documentNumber}
-                    onChange={(e) =>
-                      setKycData({ ...kycData, documentNumber: e.target.value })
-                    }
-                    placeholder={
-                      kycData.documentType === "passport"
-                        ? "Enter passport number"
-                        : kycData.documentType === "drivers_license"
-                        ? "Enter license number"
-                        : "Enter ID number"
-                    }
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Upload Document</Label>
-                <input
-                  ref={idDocumentRef}
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={(e) => handleKycFileUpload("idDocument", e)}
-                  className="hidden"
-                  disabled={
-                    !canApplyForKyc ||
-                    kycStatus === "verified" ||
-                    kycStatus === "pending"
-                  }
-                />
-                <div
-                  onClick={() =>
-                    canApplyForKyc &&
-                    kycStatus !== "verified" &&
-                    kycStatus !== "pending" &&
-                    idDocumentRef.current?.click()
-                  }
-                  className={cn(
-                    "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                    canApplyForKyc &&
-                      kycStatus !== "verified" &&
-                      kycStatus !== "pending" &&
-                      "cursor-pointer hover:border-primary hover:bg-primary/5",
-                    kycData.idDocument
-                      ? "border-green-500 bg-green-500/5"
-                      : "border-border"
-                  )}
-                >
-                  {kycData.idDocument ? (
-                    <div className="flex items-center justify-center gap-2 text-green-600">
-                      <CheckCircle2 className="w-5 h-5" />
-                      <span className="font-medium">Document uploaded</span>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                      <p className="text-sm text-muted-foreground">
-                        Click to upload ID document
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        PNG, JPG or PDF up to 10MB
-                      </p>
-                    </>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Photograph */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <Camera className="w-4 h-4" />
-                Photograph
-              </CardTitle>
-              <CardDescription>
-                Upload a clear photo of yourself
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <input
-                ref={photographRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => handleKycFileUpload("photograph", e)}
-                className="hidden"
-                disabled={
-                  !canApplyForKyc ||
-                  kycStatus === "verified" ||
-                  kycStatus === "pending"
-                }
-              />
-              <div className="flex items-center gap-6">
-                <div
-                  onClick={() =>
-                    canApplyForKyc &&
-                    kycStatus !== "verified" &&
-                    kycStatus !== "pending" &&
-                    photographRef.current?.click()
-                  }
-                  className={cn(
-                    "w-32 h-32 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors",
-                    canApplyForKyc &&
-                      kycStatus !== "verified" &&
-                      kycStatus !== "pending" &&
-                      "cursor-pointer hover:border-primary hover:bg-primary/5",
-                    kycData.photograph ? "border-green-500" : "border-border"
-                  )}
-                >
-                  {kycData.photographPreview ? (
-                    <img
-                      src={kycData.photographPreview}
-                      alt="Your photo"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Camera className="w-8 h-8 text-muted-foreground" />
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  <p>Requirements:</p>
-                  <ul className="list-disc list-inside mt-1 space-y-1">
-                    <li>Clear, front-facing photo</li>
-                    <li>Good lighting</li>
-                    <li>Plain background</li>
-                    <li>No sunglasses or hats</li>
-                  </ul>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Personal Details */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <User className="w-4 h-4" />
-                Personal Details
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>First Name *</Label>
-                  <Input
-                    value={kycData.firstName}
-                    onChange={(e) =>
-                      setKycData({ ...kycData, firstName: e.target.value })
-                    }
-                    placeholder="Enter your first name"
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Last Name *</Label>
-                  <Input
-                    value={kycData.lastName}
-                    onChange={(e) =>
-                      setKycData({ ...kycData, lastName: e.target.value })
-                    }
-                    placeholder="Enter your last name"
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <Input
-                    value={kycData.phoneNumber}
-                    onChange={(e) =>
-                      setKycData({ ...kycData, phoneNumber: e.target.value })
-                    }
-                    placeholder="Enter your phone number"
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Nationality</Label>
-                  <Input
-                    value={kycData.nationality}
-                    onChange={(e) =>
-                      setKycData({ ...kycData, nationality: e.target.value })
-                    }
-                    placeholder="Enter your nationality"
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Date of Birth *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !kycData.dateOfBirth && "text-muted-foreground"
-                      )}
-                      disabled={
-                        !canApplyForKyc ||
-                        kycStatus === "verified" ||
-                        kycStatus === "pending"
-                      }
-                    >
-                      <Calendar className="mr-2 h-4 w-4" />
-                      {kycData.dateOfBirth
-                        ? format(kycData.dateOfBirth, "PPP")
-                        : "Select your date of birth"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={kycData.dateOfBirth}
-                      onSelect={(date) =>
-                        setKycData({ ...kycData, dateOfBirth: date })
-                      }
-                      disabled={(date) =>
-                        date > new Date() || date < new Date("1900-01-01")
-                      }
-                      initialFocus
-                      className="p-3 pointer-events-auto"
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Address */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <MapPin className="w-4 h-4" />
-                Address
-              </CardTitle>
-              <CardDescription>
-                Your residential address for verification
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Street Address</Label>
-                <Textarea
-                  value={kycData.address.street}
-                  onChange={(e) =>
-                    setKycData({
-                      ...kycData,
-                      address: { ...kycData.address, street: e.target.value },
-                    })
-                  }
-                  placeholder="Enter your full street address"
-                  rows={2}
-                  disabled={
-                    !canApplyForKyc ||
-                    kycStatus === "verified" ||
-                    kycStatus === "pending"
-                  }
-                />
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>City</Label>
-                  <Input
-                    value={kycData.address.city}
-                    onChange={(e) =>
-                      setKycData({
-                        ...kycData,
-                        address: { ...kycData.address, city: e.target.value },
-                      })
-                    }
-                    placeholder="City"
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>State/Province</Label>
-                  <Select
-                    value={kycData.address.state}
-                    onValueChange={(value) =>
-                      setKycData({
-                        ...kycData,
-                        address: { ...kycData.address, state: value },
-                      })
-                    }
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select state or province" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(() => {
-                        // Get country code from country name
-                        const country = SUPPORTED_COUNTRIES.find(
-                          (c) => c.name === kycData.address.country
-                        );
-                        const countryCode = country?.code || "NG";
-                        const states = getStatesForCountry(
-                          countryCode as SupportedCountryCode
-                        );
-                        return states.map((state) => (
-                          <SelectItem key={state.code} value={state.name}>
-                            {state.name}
+          {/* KYC Form - Only show when status is not pending or verified */}
+          {kycStatus !== "pending" && kycStatus !== "verified" && (
+            <>
+              {/* ID Document */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Identity Document
+                  </CardTitle>
+                  <CardDescription>
+                    Upload your National ID or Passport
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Document Type</Label>
+                      <Select
+                        value={kycData.documentType}
+                        onValueChange={(
+                          value:
+                            | "passport"
+                            | "national_id"
+                            | "drivers_license"
+                            | "other"
+                        ) => setKycData({ ...kycData, documentType: value })}
+                        disabled={!canApplyForKyc}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="national_id">
+                            National ID
                           </SelectItem>
-                        ));
-                      })()}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Postal Code</Label>
-                  <Input
-                    value={kycData.address.zipCode}
-                    onChange={(e) =>
-                      setKycData({
-                        ...kycData,
-                        address: {
-                          ...kycData.address,
-                          zipCode: e.target.value,
-                        },
-                      })
-                    }
-                    placeholder="Postal code"
-                    disabled={
-                      !canApplyForKyc ||
-                      kycStatus === "verified" ||
-                      kycStatus === "pending"
-                    }
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>Country *</Label>
-                <Input
-                  value={kycData.address.country}
-                  onChange={(e) =>
-                    setKycData({
-                      ...kycData,
-                      address: { ...kycData.address, country: e.target.value },
-                    })
-                  }
-                  placeholder="Country"
-                  disabled={
-                    !canApplyForKyc ||
-                    kycStatus === "verified" ||
-                    kycStatus === "pending"
-                  }
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Proof of Address */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Proof of Address
-              </CardTitle>
-              <CardDescription>
-                Utility bill, bank statement, or government letter (dated within
-                3 months)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <input
-                ref={proofOfAddressRef}
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => handleKycFileUpload("proofOfAddress", e)}
-                className="hidden"
-                disabled={
-                  !canApplyForKyc ||
-                  kycStatus === "verified" ||
-                  kycStatus === "pending"
-                }
-              />
-              <div
-                onClick={() =>
-                  canApplyForKyc &&
-                  kycStatus !== "verified" &&
-                  kycStatus !== "pending" &&
-                  proofOfAddressRef.current?.click()
-                }
-                className={cn(
-                  "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
-                  canApplyForKyc &&
-                    kycStatus !== "verified" &&
-                    kycStatus !== "pending" &&
-                    "cursor-pointer hover:border-primary hover:bg-primary/5",
-                  kycData.proofOfAddress
-                    ? "border-green-500 bg-green-500/5"
-                    : "border-border"
-                )}
-              >
-                {kycData.proofOfAddress ? (
-                  <div className="flex items-center justify-center gap-2 text-green-600">
-                    <CheckCircle2 className="w-5 h-5" />
-                    <span className="font-medium">Document uploaded</span>
+                          <SelectItem value="passport">Passport</SelectItem>
+                          <SelectItem value="drivers_license">
+                            Driver's License
+                          </SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>
+                        {kycData.documentType === "passport"
+                          ? "Passport Number"
+                          : kycData.documentType === "drivers_license"
+                          ? "License Number"
+                          : "ID Number"}
+                      </Label>
+                      <Input
+                        value={kycData.documentNumber}
+                        onChange={(e) =>
+                          setKycData({
+                            ...kycData,
+                            documentNumber: e.target.value,
+                          })
+                        }
+                        placeholder={
+                          kycData.documentType === "passport"
+                            ? "Enter passport number"
+                            : kycData.documentType === "drivers_license"
+                            ? "Enter license number"
+                            : "Enter ID number"
+                        }
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
-                    <p className="text-sm text-muted-foreground">
-                      Click to upload proof of address
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      PNG, JPG or PDF up to 10MB
-                    </p>
-                  </>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="space-y-2">
+                    <Label>Upload Document</Label>
+                    <input
+                      ref={idDocumentRef}
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => handleKycFileUpload("idDocument", e)}
+                      className="hidden"
+                      disabled={!canApplyForKyc}
+                    />
+                    <div
+                      onClick={() =>
+                        canApplyForKyc && idDocumentRef.current?.click()
+                      }
+                      className={cn(
+                        "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+                        canApplyForKyc &&
+                          "cursor-pointer hover:border-primary hover:bg-primary/5",
+                        kycData.idDocument
+                          ? "border-green-500 bg-green-500/5"
+                          : "border-border"
+                      )}
+                    >
+                      {kycData.idDocument ? (
+                        <div className="flex items-center justify-center gap-2 text-green-600">
+                          <CheckCircle2 className="w-5 h-5" />
+                          <span className="font-medium">Document uploaded</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                          <p className="text-sm text-muted-foreground">
+                            Click to upload ID document
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            PNG, JPG or PDF up to 10MB
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-          {canApplyForKyc &&
-            kycStatus !== "verified" &&
-            kycStatus !== "pending" && (
-              <div className="flex justify-end">
-                <Button onClick={handleSubmitKyc}>
-                  <Shield className="w-4 h-4 mr-2" />
-                  Submit KYC
-                </Button>
-              </div>
-            )}
+              {/* Photograph */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <Camera className="w-4 h-4" />
+                    Photograph
+                  </CardTitle>
+                  <CardDescription>
+                    Upload a clear photo of yourself
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <input
+                    ref={photographRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => handleKycFileUpload("photograph", e)}
+                    className="hidden"
+                    disabled={!canApplyForKyc}
+                  />
+                  <div className="flex items-center gap-6">
+                    <div
+                      onClick={() =>
+                        canApplyForKyc && photographRef.current?.click()
+                      }
+                      className={cn(
+                        "w-32 h-32 rounded-lg border-2 border-dashed flex items-center justify-center overflow-hidden transition-colors",
+                        canApplyForKyc &&
+                          "cursor-pointer hover:border-primary hover:bg-primary/5",
+                        kycData.photograph
+                          ? "border-green-500"
+                          : "border-border"
+                      )}
+                    >
+                      {kycData.photographPreview ? (
+                        <img
+                          src={kycData.photographPreview}
+                          alt="Your photo"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <Camera className="w-8 h-8 text-muted-foreground" />
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <p>Requirements:</p>
+                      <ul className="list-disc list-inside mt-1 space-y-1">
+                        <li>Clear, front-facing photo</li>
+                        <li>Good lighting</li>
+                        <li>Plain background</li>
+                        <li>No sunglasses or hats</li>
+                      </ul>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Personal Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <User className="w-4 h-4" />
+                    Personal Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>First Name *</Label>
+                      <Input
+                        value={kycData.firstName}
+                        onChange={(e) =>
+                          setKycData({ ...kycData, firstName: e.target.value })
+                        }
+                        placeholder="Enter your first name"
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Last Name *</Label>
+                      <Input
+                        value={kycData.lastName}
+                        onChange={(e) =>
+                          setKycData({ ...kycData, lastName: e.target.value })
+                        }
+                        placeholder="Enter your last name"
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Phone Number</Label>
+                      <Input
+                        value={kycData.phoneNumber}
+                        onChange={(e) =>
+                          setKycData({
+                            ...kycData,
+                            phoneNumber: e.target.value,
+                          })
+                        }
+                        placeholder="Enter your phone number"
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Nationality</Label>
+                      <Input
+                        value={kycData.nationality}
+                        onChange={(e) =>
+                          setKycData({
+                            ...kycData,
+                            nationality: e.target.value,
+                          })
+                        }
+                        placeholder="Enter your nationality"
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date of Birth *</Label>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !kycData.dateOfBirth && "text-muted-foreground"
+                          )}
+                          disabled={!canApplyForKyc}
+                        >
+                          <Calendar className="mr-2 h-4 w-4" />
+                          {kycData.dateOfBirth
+                            ? format(kycData.dateOfBirth, "PPP")
+                            : "Select your date of birth"}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={kycData.dateOfBirth}
+                          onSelect={(date) =>
+                            setKycData({ ...kycData, dateOfBirth: date })
+                          }
+                          disabled={(date) =>
+                            date > new Date() || date < new Date("1900-01-01")
+                          }
+                          initialFocus
+                          className="p-3 pointer-events-auto"
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Address */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <MapPin className="w-4 h-4" />
+                    Address
+                  </CardTitle>
+                  <CardDescription>
+                    Your residential address for verification
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Street Address</Label>
+                    <Textarea
+                      value={kycData.address.street}
+                      onChange={(e) =>
+                        setKycData({
+                          ...kycData,
+                          address: {
+                            ...kycData.address,
+                            street: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Enter your full street address"
+                      rows={2}
+                      disabled={!canApplyForKyc}
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <Label>City</Label>
+                      <Input
+                        value={kycData.address.city}
+                        onChange={(e) =>
+                          setKycData({
+                            ...kycData,
+                            address: {
+                              ...kycData.address,
+                              city: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="City"
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>State/Province</Label>
+                      <Select
+                        value={kycData.address.state}
+                        onValueChange={(value) =>
+                          setKycData({
+                            ...kycData,
+                            address: { ...kycData.address, state: value },
+                          })
+                        }
+                        disabled={!canApplyForKyc}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select state or province" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            // Get country code from country name
+                            const country = SUPPORTED_COUNTRIES.find(
+                              (c) => c.name === kycData.address.country
+                            );
+                            const countryCode = country?.code || "NG";
+                            const states = getStatesForCountry(
+                              countryCode as SupportedCountryCode
+                            );
+                            return states.map((state) => (
+                              <SelectItem key={state.code} value={state.name}>
+                                {state.name}
+                              </SelectItem>
+                            ));
+                          })()}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Postal Code</Label>
+                      <Input
+                        value={kycData.address.zipCode}
+                        onChange={(e) =>
+                          setKycData({
+                            ...kycData,
+                            address: {
+                              ...kycData.address,
+                              zipCode: e.target.value,
+                            },
+                          })
+                        }
+                        placeholder="Postal code"
+                        disabled={!canApplyForKyc}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Country *</Label>
+                    <Input
+                      value={kycData.address.country}
+                      onChange={(e) =>
+                        setKycData({
+                          ...kycData,
+                          address: {
+                            ...kycData.address,
+                            country: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Country"
+                      disabled={!canApplyForKyc}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Proof of Address */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    Proof of Address
+                  </CardTitle>
+                  <CardDescription>
+                    Utility bill, bank statement, or government letter (dated
+                    within 3 months)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <input
+                    ref={proofOfAddressRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={(e) => handleKycFileUpload("proofOfAddress", e)}
+                    className="hidden"
+                    disabled={!canApplyForKyc}
+                  />
+                  <div
+                    onClick={() =>
+                      canApplyForKyc && proofOfAddressRef.current?.click()
+                    }
+                    className={cn(
+                      "border-2 border-dashed rounded-lg p-6 text-center transition-colors",
+                      canApplyForKyc &&
+                        "cursor-pointer hover:border-primary hover:bg-primary/5",
+                      kycData.proofOfAddress
+                        ? "border-green-500 bg-green-500/5"
+                        : "border-border"
+                    )}
+                  >
+                    {kycData.proofOfAddress ? (
+                      <div className="flex items-center justify-center gap-2 text-green-600">
+                        <CheckCircle2 className="w-5 h-5" />
+                        <span className="font-medium">Document uploaded</span>
+                      </div>
+                    ) : (
+                      <>
+                        <Upload className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm text-muted-foreground">
+                          Click to upload proof of address
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          PNG, JPG or PDF up to 10MB
+                        </p>
+                      </>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {canApplyForKyc && (
+                <div className="flex justify-end">
+                  <Button onClick={handleSubmitKyc}>
+                    <Shield className="w-4 h-4 mr-2" />
+                    Submit KYC
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
         </TabsContent>
 
         {/* Referral Tab */}
@@ -1353,59 +1302,107 @@ export default function Settings() {
             <CardContent className="space-y-4">
               {userProfile?.isEmailVerified ? (
                 <>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 p-4 bg-secondary rounded-lg border-2 border-dashed border-border">
-                      <p className="text-2xl font-bold tracking-widest text-center">
-                        {userProfile.referralCode || "N/A"}
-                      </p>
+                  {!userProfile.referralCode ? (
+                    <div className="text-center py-6 space-y-4">
+                      <AlertCircle className="w-12 h-12 mx-auto text-muted-foreground" />
+                      <div>
+                        <p className="font-medium mb-2">No referral code yet</p>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Generate a unique referral code to start inviting
+                          friends
+                        </p>
+                        <Button
+                          onClick={async () => {
+                            try {
+                              await setReferralCodeMutation.sendTransaction();
+                              // Query will be invalidated automatically by the mutation
+                              queryClient.invalidateQueries({
+                                queryKey: subgraphKeys.user(walletAddress),
+                              });
+                            } catch (error) {
+                              console.error(
+                                "Failed to generate referral code:",
+                                error
+                              );
+                            }
+                          }}
+                          disabled={
+                            setReferralCodeMutation.isTransactionPending
+                          }
+                        >
+                          {setReferralCodeMutation.isTransactionPending ? (
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Generating...
+                            </>
+                          ) : (
+                            <>
+                              <Gift className="w-4 h-4 mr-2" />
+                              Generate Referral Code
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={() => {
-                        navigator.clipboard.writeText(
-                          userProfile.referralCode || ""
-                        );
-                        toast.success("Referral code copied to clipboard!");
-                      }}
-                    >
-                      <Copy className="w-4 h-4" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => {
-                        const url = `${window.location.origin}/onboarding?ref=${userProfile.referralCode}`;
-                        navigator.clipboard.writeText(url);
-                        toast.success("Referral link copied to clipboard!");
-                      }}
-                    >
-                      <Link2 className="w-4 h-4 mr-2" />
-                      Copy Referral Link
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="flex-1"
-                      onClick={() => {
-                        const url = `${window.location.origin}/onboarding?ref=${userProfile.referralCode}`;
-                        if (navigator.share) {
-                          navigator.share({
-                            title: "Join CleanApp",
-                            text: "Join me on CleanApp and help make our environment cleaner!",
-                            url: url,
-                          });
-                        } else {
-                          navigator.clipboard.writeText(url);
-                          toast.success("Referral link copied to clipboard!");
-                        }
-                      }}
-                    >
-                      <Share2 className="w-4 h-4 mr-2" />
-                      Share
-                    </Button>
-                  </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 p-4 bg-secondary rounded-lg border-2 border-dashed border-border">
+                          <p className="text-2xl font-bold tracking-widest text-center">
+                            {userProfile.referralCode}
+                          </p>
+                        </div>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              userProfile.referralCode || ""
+                            );
+                            toast.success("Referral code copied to clipboard!");
+                          }}
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => {
+                            const url = `${window.location.origin}/onboarding?ref=${userProfile.referralCode}`;
+                            navigator.clipboard.writeText(url);
+                            toast.success("Referral link copied to clipboard!");
+                          }}
+                        >
+                          <Link2 className="w-4 h-4 mr-2" />
+                          Copy Referral Link
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => {
+                            const url = `${window.location.origin}/onboarding?ref=${userProfile.referralCode}`;
+                            if (navigator.share) {
+                              navigator.share({
+                                title: "Join CleanApp",
+                                text: "Join me on CleanApp and help make our environment cleaner!",
+                                url: url,
+                              });
+                            } else {
+                              navigator.clipboard.writeText(url);
+                              toast.success(
+                                "Referral link copied to clipboard!"
+                              );
+                            }
+                          }}
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Share
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </>
               ) : (
                 <div className="text-center py-8">

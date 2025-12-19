@@ -59,7 +59,10 @@ export default function SubmitProofOfWork() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const submitProofMutation = useSubmitProofOfWork();
+  const submitProofMutation = useSubmitProofOfWork(() => {
+    // Navigate back to cleanup detail page after transaction is confirmed
+    navigate(`/cleanups/${id}`);
+  });
 
   // Only accepted participants can be rated
   const acceptedParticipants =
@@ -189,12 +192,6 @@ export default function SubmitProofOfWork() {
       });
 
       setUploadProgress(100);
-      toast.success("Proof of work submitted successfully!");
-
-      // Navigate back to cleanup detail page
-      setTimeout(() => {
-        navigate(`/cleanups/${id}`);
-      }, 1000);
     } catch (error) {
       console.error("Error submitting proof of work:", error);
       toast.error(

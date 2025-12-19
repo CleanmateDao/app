@@ -94,9 +94,20 @@ async function submitKYCToAPI(
       });
     }
 
+    // When sending FormData, we need to let axios automatically set Content-Type to multipart/form-data with boundary
+    // The default application/json header from kycClient would interfere, so we create a custom config
     const response = await kycClient.post<KYCSubmissionResponse>(
       `/kyc/submit`,
-      formData
+      formData,
+      {
+        transformRequest: [
+          (data, headers) => {
+            // Remove Content-Type header to let axios set it automatically with boundary for FormData
+            delete headers['Content-Type'];
+            return data;
+          },
+        ],
+      }
     );
     return response.data;
   } catch (error) {

@@ -52,7 +52,7 @@ Top navigation bar with:
 - Mobile hamburger menu trigger
 - Breadcrumb navigation
 - AI Assistant quick access
-- Currency selector (USD, NGN, VET)
+- Currency selector (USD, NGN, B3TR)
 - Notifications popover with unread count
 - User profile dropdown
 
@@ -319,7 +319,7 @@ TypeScript interfaces:
 - **Responsive Design**: Mobile-first approach with tablet and desktop layouts
 - **Dark/Light Theme**: System preference detection with manual toggle
 - **Web3 Integration**: Wallet connection and transaction tracking
-- **Multi-currency Support**: USD, NGN, VET
+- **Multi-currency Support**: USD, NGN, B3TR
 - **Rich Text Editing**: TipTap-powered content editing
 - **File Uploads**: Media and document management
 - **Voting System**: Community governance for proposals
