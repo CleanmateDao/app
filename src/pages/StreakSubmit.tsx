@@ -31,6 +31,27 @@ type SubmitStep = "rules" | "record" | "preview" | "submitting" | "success";
 
 const MAX_DURATION = 5000; // 5 seconds in ms
 
+/**
+ * Detects the device type from the user agent
+ * @returns "ios" | "android" | "desktop"
+ */
+function getDeviceType(): "ios" | "android" | "desktop" {
+  const userAgent = navigator.userAgent.toLowerCase();
+
+  // Check for iOS devices
+  if (/iphone|ipad|ipod/.test(userAgent)) {
+    return "ios";
+  }
+
+  // Check for Android devices
+  if (/android/.test(userAgent)) {
+    return "android";
+  }
+
+  // Default to desktop
+  return "desktop";
+}
+
 export default function StreakSubmit() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -46,7 +67,7 @@ export default function StreakSubmit() {
   }, [streakStatsData]);
 
   // Submit streak mutation
-  const { sendTransaction, isTransactionPending } = useSubmitStreak();
+  const submitStreakMutation = useSubmitStreak();
 
   const [step, setStep] = useState<SubmitStep>("rules");
   const [dontShowRules, setDontShowRules] = useState(false);
@@ -55,6 +76,7 @@ export default function StreakSubmit() {
   const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
   const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
   const [pulseAnimation, setPulseAnimation] = useState(false);
+  const [videoDuration, setVideoDuration] = useState<number>(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -86,6 +108,9 @@ export default function StreakSubmit() {
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.play().catch((err) => {
+          console.error("Error playing video:", err);
+        });
       }
     } catch (error) {
       toast({
@@ -156,7 +181,16 @@ export default function StreakSubmit() {
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
       setRecordedBlob(blob);
-      setRecordedUrl(URL.createObjectURL(blob));
+      const url = URL.createObjectURL(blob);
+      setRecordedUrl(url);
+
+      // Calculate video duration
+      const video = document.createElement("video");
+      video.src = url;
+      video.onloadedmetadata = () => {
+        setVideoDuration(video.duration);
+      };
+
       setStep("preview");
     };
 
@@ -237,20 +271,25 @@ export default function StreakSubmit() {
         description: "Please wait while we upload your video to IPFS",
       });
 
-      const ipfsHash = await uploadFileToIPFS(videoFile, fileName);
+      const ipfsUrl = await uploadFileToIPFS(videoFile, fileName);
 
-      if (!ipfsHash || ipfsHash.trim() === "") {
-        throw new Error("Failed to get IPFS hash after upload");
+      if (!ipfsUrl || ipfsUrl.trim() === "") {
+        throw new Error("Failed to get IPFS URL after upload");
       }
 
-      // Step 3: Submit streak with IPFS hash
-      await sendTransaction({
+      // Step 3: Submit streak with IPFS URL
+      const deviceType = getDeviceType();
+
+      await submitStreakMutation.sendTransaction({
         metadata: JSON.stringify({
           description: "Sustainable action submission",
           timestamp: new Date().toISOString(),
-          streakerCode: streakStats?.streakerCode || null,
+          streakerCode: streakStats?.streakerCode,
+          mediaLength: videoDuration,
+          size: recordedBlob.size,
+          deviceType: deviceType,
         }),
-        ipfsHashes: [ipfsHash],
+        ipfsHashes: [ipfsUrl],
         mimetypes: [mimeType],
       });
 
@@ -477,7 +516,14 @@ export default function StreakSubmit() {
       circumference - (recordingProgress / 100) * circumference;
 
     return (
-      <div className="fixed inset-0 bg-black flex flex-col">
+      <div
+        className="fixed inset-0 bg-black flex flex-col"
+        style={{
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          WebkitTouchCallout: "none",
+        }}
+      >
         {/* Top bar */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -519,7 +565,8 @@ export default function StreakSubmit() {
           autoPlay
           playsInline
           muted
-          className="flex-1 object-cover"
+          className="flex-1 object-cover w-full h-full"
+          style={{ transform: "scaleX(-1)" }} // Mirror the video for selfie view
         />
 
         {/* Recording overlay effect */}
@@ -595,7 +642,7 @@ export default function StreakSubmit() {
                   strokeWidth="6"
                 />
                 {/* Progress circle */}
-                <motion.circle
+                <circle
                   cx="60"
                   cy="60"
                   r="52"
@@ -610,27 +657,64 @@ export default function StreakSubmit() {
                   strokeDasharray={circumference}
                   strokeDashoffset={strokeDashoffset}
                   transform="rotate(-90 60 60)"
-                  style={{ transition: "stroke-dashoffset 0.1s linear" }}
+                  style={{
+                    transition: "stroke-dashoffset 0.05s linear",
+                    opacity: isRecording ? 1 : 0.3,
+                  }}
                 />
               </svg>
 
               {/* Button */}
               <motion.button
                 whileTap={{ scale: 0.95 }}
-                className={`relative w-[96px] h-[96px] rounded-full border-4 border-white flex items-center justify-center transition-all duration-200 ${
+                className={`relative w-[96px] h-[96px] rounded-full border-4 border-white flex items-center justify-center transition-all duration-200 select-none touch-none ${
                   isRecording ? "bg-status-rejected/20" : "bg-white/10"
                 }`}
+                style={{
+                  userSelect: "none",
+                  WebkitUserSelect: "none",
+                  WebkitTouchCallout: "none",
+                  touchAction: "manipulation",
+                }}
                 onTouchStart={(e) => {
                   e.preventDefault();
-                  startRecording();
+                  e.stopPropagation();
+                  if (!isRecording) {
+                    startRecording();
+                  }
                 }}
                 onTouchEnd={(e) => {
                   e.preventDefault();
-                  stopRecording();
+                  e.stopPropagation();
+                  if (isRecording) {
+                    stopRecording();
+                  }
                 }}
-                onMouseDown={startRecording}
-                onMouseUp={stopRecording}
-                onMouseLeave={isRecording ? stopRecording : undefined}
+                onTouchCancel={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (isRecording) {
+                    stopRecording();
+                  }
+                }}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  if (!isRecording) {
+                    startRecording();
+                  }
+                }}
+                onMouseUp={(e) => {
+                  e.preventDefault();
+                  if (isRecording) {
+                    stopRecording();
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.preventDefault();
+                  if (isRecording) {
+                    stopRecording();
+                  }
+                }}
               >
                 <AnimatePresence mode="wait">
                   {isRecording ? (
@@ -700,7 +784,12 @@ export default function StreakSubmit() {
             autoPlay
             loop
             playsInline
-            className="flex-1 object-cover"
+            muted
+            className="flex-1 object-cover w-full h-full"
+            onLoadedMetadata={(e) => {
+              const video = e.currentTarget;
+              setVideoDuration(video.duration);
+            }}
           />
         )}
 

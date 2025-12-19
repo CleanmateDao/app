@@ -531,6 +531,12 @@ export default function Rewards() {
                           <span className="text-sm font-medium">
                             Bank Account
                           </span>
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1 py-0"
+                          >
+                            Soon
+                          </Badge>
                         </button>
                       </div>
                     </div>
@@ -811,6 +817,12 @@ export default function Rewards() {
                           <span className="text-sm font-medium">
                             Bank Account
                           </span>
+                          <Badge
+                            variant="secondary"
+                            className="text-[10px] px-1 py-0"
+                          >
+                            Soon
+                          </Badge>
                         </button>
                       </div>
                     </div>

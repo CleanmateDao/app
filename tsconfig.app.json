@@ -26,5 +26,4 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "../website/src/pages/Landing.tsx"]
 }

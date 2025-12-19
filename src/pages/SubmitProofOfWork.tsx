@@ -168,7 +168,7 @@ export default function SubmitProofOfWork() {
       toast.info("Uploading participant ratings to IPFS...");
       setUploadProgress(75);
 
-      const ratingsIpfsHash = await uploadParticipantRatingsToIPFS(
+      const ratingsIpfsUrl = await uploadParticipantRatingsToIPFS(
         ratingsData,
         id
       );

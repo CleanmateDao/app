@@ -262,7 +262,7 @@ export default function Streaks() {
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
       {/* Header with African Pattern */}
-      <div className="relative overflow-hidden rounded-xl mx-4 lg:mx-6">
+      <div className="relative overflow-hidden rounded-xl mx-4 lg:mx-6 mt-4">
         <div className="absolute inset-0">
           <img
             src={africanPattern}
@@ -443,7 +443,7 @@ export default function Streaks() {
           animate={{ y: 0, opacity: 1 }}
           transition={{ delay: 0.35 }}
         >
-          <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 to-transparent mb-6">
+          <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 to-transparent mb-6 mt-4">
             <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-primary/10 to-transparent" />
             <CardContent className="relative p-4 sm:p-5">
               <div className="flex items-center justify-between">

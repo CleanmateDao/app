@@ -1,19 +1,28 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Send, Sparkles, User, Bot, Loader2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
-import { ClearChatAlertDialog } from '@/components/ClearChatAlertDialog';
-import { useCleanups, useTransactions, useUser } from '@/services/subgraph/queries';
-import { transformCleanup, transformTransaction, transformUserToProfile, calculateInsights } from '@/services/subgraph/transformers';
-import { useWalletAddress } from '@/hooks/use-wallet-address';
-import { useTemiChat } from '@/services/api/temi';
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useLocation } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import { Send, Sparkles, User, Bot, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { ClearChatAlertDialog } from "@/components/ClearChatAlertDialog";
+import {
+  useCleanups,
+  useTransactions,
+  useUser,
+} from "@/services/subgraph/queries";
+import {
+  transformCleanup,
+  transformTransaction,
+  transformUserToProfile,
+  calculateInsights,
+} from "@/services/subgraph/transformers";
+import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useTemiChat } from "@/services/api/temi";
 
 interface Message {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: Date;
 }
@@ -22,64 +31,35 @@ const quickPrompts = [
   "What's my total rewards?",
   "Show me active cleanups",
   "How many cleanups completed?",
-  "Summarize my cleanup categories"
+  "Summarize my cleanup categories",
 ];
 
 export default function AIChat() {
   const location = useLocation();
   const walletAddress = useWalletAddress();
-  const initialQuery = (location.state as { initialQuery?: string })?.initialQuery;
+  const initialQuery = (location.state as { initialQuery?: string })
+    ?.initialQuery;
   const hasProcessedInitialQuery = useRef(false);
-
-  // Fetch user data
-  const { data: userData } = useUser(walletAddress);
-  const userProfile = useMemo(() => 
-    userData ? transformUserToProfile(userData, walletAddress || undefined) : null,
-    [userData, walletAddress]
-  );
-
-  // Fetch cleanups
-  const { data: cleanupsData } = useCleanups({ where: { published: true }, first: 1000, userAddress: walletAddress || undefined });
-  const cleanups = useMemo(() => {
-    if (!cleanupsData) return [];
-    return cleanupsData.map(c => transformCleanup(c));
-  }, [cleanupsData]);
-
-  // Fetch earned rewards (transactions)
-  const { data: rewardsData } = useTransactions(
-    {
-      where: { user: walletAddress || undefined, transactionType: "RECEIVE" },
-      first: 1000,
-    }
-  );
-  const rewards = useMemo(() => {
-    if (!rewardsData) return [];
-    return rewardsData.map(r => transformTransaction(r));
-  }, [rewardsData]);
-
-  // Calculate insights
-  const insightsData = useMemo(() => {
-    return calculateInsights(cleanups, rewards, userProfile);
-  }, [cleanups, rewards, userProfile]);
 
   // Temi chat mutation
   const temiChatMutation = useTemiChat();
 
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: '1',
-      role: 'assistant',
-      content: "Hello! I'm Temi, your CleanMate AI assistant. I can help you understand your cleanup insights, check rewards, and analyze your participation. What would you like to know?",
+      id: "1",
+      role: "assistant",
+      content:
+        "Hello! I'm Temi, your CleanMate AI assistant. I can help you understand your cleanup insights, check rewards, and analyze your participation. What would you like to know?",
       timestamp: new Date(),
-    }
+    },
   ]);
   const messagesRef = useRef<Message[]>(messages);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const isLoading = temiChatMutation.isPending;
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
@@ -87,54 +67,60 @@ export default function AIChat() {
     scrollToBottom();
   }, [messages]);
 
-  const handleSend = useCallback(async (text?: string) => {
-    const messageText = text || input.trim();
-    if (!messageText || isLoading) return;
+  const handleSend = useCallback(
+    async (text?: string) => {
+      const messageText = text || input.trim();
+      if (!messageText || isLoading) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: messageText,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-
-    // Prepare chat history for the API (exclude initial greeting)
-    const chatHistory = messagesRef.current
-      .filter(msg => msg.id !== '1')
-      .map(msg => ({
-        role: msg.role,
-        content: msg.content,
-      }));
-
-    try {
-      const response = await temiChatMutation.mutateAsync({
-        message: messageText,
-        history: chatHistory.length > 0 ? chatHistory : undefined,
-      });
-
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.message,
-        timestamp: new Date(response.timestamp),
-      };
-
-      setMessages(prev => [...prev, aiResponse]);
-    } catch (error) {
-      // Error is already handled by the mutation's onError callback
-      // Add error message to chat for user visibility
-      const errorResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        role: "user",
+        content: messageText,
         timestamp: new Date(),
       };
-      setMessages(prev => [...prev, errorResponse]);
-    }
-  }, [input, isLoading, temiChatMutation]);
+
+      setMessages((prev) => [...prev, userMessage]);
+      setInput("");
+
+      const chatHistory = messagesRef.current
+        .filter((msg) => msg.id !== "1")
+        .map((msg) => ({
+          role: msg.role,
+          content: msg.content,
+        }));
+
+      try {
+        const response = await temiChatMutation.mutateAsync({
+          message: JSON.stringify({
+            message: messageText,
+            walletAddress: walletAddress,
+          }),
+          history: chatHistory.length > 0 ? chatHistory : undefined,
+        });
+
+        const aiResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content: response.message,
+          timestamp: new Date(response.timestamp),
+        };
+
+        setMessages((prev) => [...prev, aiResponse]);
+      } catch (error) {
+        // Error is already handled by the mutation's onError callback
+        // Add error message to chat for user visibility
+        const errorResponse: Message = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant",
+          content:
+            "Sorry, I encountered an error processing your request. Please try again.",
+          timestamp: new Date(),
+        };
+        setMessages((prev) => [...prev, errorResponse]);
+      }
+    },
+    [input, isLoading, temiChatMutation]
+  );
 
   // Handle initial query from Insights page
   useEffect(() => {
@@ -148,16 +134,17 @@ export default function AIChat() {
     setMessages([
       {
         id: Date.now().toString(),
-        role: 'assistant',
-        content: "Chat cleared! I'm Temi, your CleanMate assistant. How can I help you today?",
+        role: "assistant",
+        content:
+          "Chat cleared! I'm Temi, your CleanMate assistant. How can I help you today?",
         timestamp: new Date(),
-      }
+      },
     ]);
-    toast.success('Chat history cleared');
+    toast.success("Chat history cleared");
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -173,7 +160,9 @@ export default function AIChat() {
           </div>
           <div>
             <h1 className="text-lg lg:text-xl font-semibold">Temi</h1>
-            <p className="text-xs lg:text-sm text-muted-foreground">Your CleanMate AI Assistant</p>
+            <p className="text-xs lg:text-sm text-muted-foreground">
+              Your CleanMate AI Assistant
+            </p>
           </div>
         </div>
         <ClearChatAlertDialog onClear={handleClearChat} />
@@ -188,32 +177,43 @@ export default function AIChat() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className={`flex gap-3 ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex gap-3 ${
+                message.role === "user" ? "justify-end" : "justify-start"
+              }`}
             >
-              {message.role === 'assistant' && (
+              {message.role === "assistant" && (
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                   <Bot className="w-4 h-4 text-primary" />
                 </div>
               )}
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  message.role === 'user'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-muted"
                 }`}
               >
                 <div className="text-sm whitespace-pre-wrap leading-relaxed">
-                  {message.content.split('**').map((part, i) => 
-                    i % 2 === 1 ? <strong key={i}>{part}</strong> : part
-                  )}
+                  {message.content
+                    .split("**")
+                    .map((part, i) =>
+                      i % 2 === 1 ? <strong key={i}>{part}</strong> : part
+                    )}
                 </div>
-                <p className={`text-xs mt-1 ${
-                  message.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'
-                }`}>
-                  {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                <p
+                  className={`text-xs mt-1 ${
+                    message.role === "user"
+                      ? "text-primary-foreground/70"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {message.timestamp.toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
                 </p>
               </div>
-              {message.role === 'user' && (
+              {message.role === "user" && (
                 <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center shrink-0">
                   <User className="w-4 h-4 text-muted-foreground" />
                 </div>
@@ -268,8 +268,8 @@ export default function AIChat() {
             className="flex-1"
             disabled={isLoading}
           />
-          <Button 
-            onClick={() => handleSend()} 
+          <Button
+            onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             size="icon"
           >

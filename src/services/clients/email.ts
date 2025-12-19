@@ -6,5 +6,5 @@ export const emailClient = axios.create({
     "Content-Type": "application/json",
     "x-api-key": import.meta.env.VITE_EMAIL_SERCIVE_API_KEY,
   },
-  timeout: 10000,
+  timeout: 30000,
 });

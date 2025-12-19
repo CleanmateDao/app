@@ -76,7 +76,7 @@ import {
   useSetDefaultBankAccount,
   type BankAccount,
 } from "@/services/api/banks";
-import { uploadFileToIPFS, toIPFSGatewayUrl } from "@/services/ipfs";
+import { uploadFileToIPFS } from "@/services/ipfs";
 import {
   useMarkKYCPending,
   useUpdateProfile,
@@ -87,7 +87,6 @@ import {
   SUPPORTED_CURRENCIES,
   getStatesForCountry,
   type SupportedCountryCode,
-  type SupportedCurrencyCode,
 } from "@/constants/supported";
 import { INTEREST_OPTIONS } from "@/constants/interests";
 
@@ -113,8 +112,8 @@ export default function Settings() {
     bio: "",
     interests: [],
     email: "",
-    country: "NG" as SupportedCountryCode,
-    state: "",
+    country: undefined,
+    state: undefined,
     walletAddress: "",
   });
   const [profileImage, setProfileImage] = useState<string | null>(null);
@@ -325,22 +324,21 @@ export default function Settings() {
     }
 
     try {
-      let photoToStore = profileImage || undefined;
+      let photoUrl: string | undefined = undefined;
 
       // If a new file was selected, upload on action click and store an IPFS URI.
       if (profilePhotoFile) {
         toast.info("Uploading profile photo to IPFS...");
-        const cid = await uploadFileToIPFS(
+        photoUrl = await uploadFileToIPFS(
           profilePhotoFile,
           `profile-photo-${walletAddress}`
         );
-        photoToStore = `ipfs://${cid}`;
       }
 
       const profileMetadata: UserProfileMetadata<true> = {
         name: profile.name,
         bio: profile.bio || undefined,
-        photo: photoToStore,
+        photo: photoUrl,
         location: {
           country: profile.country,
           state: profile.state,
@@ -353,8 +351,8 @@ export default function Settings() {
         JSON.stringify(profileMetadata)
       );
 
-      if (profilePhotoFile && photoToStore) {
-        setProfileImage(photoToStore);
+      if (profilePhotoFile && photoUrl) {
+        setProfileImage(photoUrl);
         setProfilePhotoFile(null);
       }
 
@@ -426,8 +424,14 @@ export default function Settings() {
             <TabsTrigger value="referral" className="text-xs sm:text-sm">
               Referral
             </TabsTrigger>
-            <TabsTrigger value="banks" className="text-xs sm:text-sm">
+            <TabsTrigger value="banks" className="text-xs sm:text-sm" disabled>
               Banks
+              <Badge
+                variant="secondary"
+                className="ml-1.5 text-[10px] px-1 py-0"
+              >
+                Soon
+              </Badge>
             </TabsTrigger>
             <TabsTrigger value="preferences" className="text-xs sm:text-sm">
               Preferences
@@ -499,7 +503,7 @@ export default function Settings() {
                   <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
                     {profileImage ? (
                       <img
-                        src={toIPFSGatewayUrl(profileImage)}
+                        src={profileImage}
                         alt="Profile"
                         className="w-full h-full object-cover"
                       />
@@ -1464,138 +1468,21 @@ export default function Settings() {
 
         {/* Banks Tab */}
         <TabsContent value="banks" className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <CreditCard className="w-5 h-5" />
-                Bank Accounts
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Manage your bank accounts for receiving payments
-              </p>
-            </div>
-            <Button disabled={!walletAddress}>
-              <Plus className="w-4 h-4 mr-2" />
-              Add Bank Account
-            </Button>
-          </div>
-
-          {isLoadingBanks ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">
-                    Loading bank accounts...
+          <Card>
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center justify-center gap-3">
+                <CreditCard className="w-12 h-12 text-muted-foreground/50" />
+                <div className="text-center">
+                  <h3 className="font-medium text-muted-foreground">
+                    Coming Soon
+                  </h3>
+                  <p className="text-sm text-muted-foreground/70 mt-1">
+                    Bank account management will be available soon
                   </p>
                 </div>
-              </CardContent>
-            </Card>
-          ) : bankAccounts.length === 0 ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <CreditCard className="w-12 h-12 text-muted-foreground/50" />
-                  <div className="text-center">
-                    <h3 className="font-medium text-muted-foreground">
-                      No bank accounts
-                    </h3>
-                    <p className="text-sm text-muted-foreground/70 mt-1">
-                      Add a bank account to receive payments
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {bankAccounts.map((account) => (
-                <Card
-                  key={account.id}
-                  className={cn(
-                    "transition-all",
-                    account.isDefault && "border-primary/50 bg-primary/5"
-                  )}
-                >
-                  <CardContent className="pt-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold">{account.bankName}</h3>
-                          {account.isDefault && (
-                            <Badge
-                              variant="secondary"
-                              className="bg-primary/10 text-primary border-primary/20"
-                            >
-                              <Star className="w-3 h-3 mr-1 fill-primary" />
-                              Default
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="space-y-1 text-sm text-muted-foreground">
-                          <p>
-                            <span className="font-medium">Account Name:</span>{" "}
-                            {account.accountName}
-                          </p>
-                          <p>
-                            <span className="font-medium">Account Number:</span>{" "}
-                            {account.accountNumber}
-                          </p>
-                          <p>
-                            <span className="font-medium">Currency:</span>{" "}
-                            {SUPPORTED_CURRENCIES.find(
-                              (c) => c.code === account.currency
-                            )?.symbol || ""}{" "}
-                            {account.currency}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!account.isDefault && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                              if (walletAddress) {
-                                setDefaultBankMutation.mutate({
-                                  id: account.id,
-                                  userId: walletAddress,
-                                });
-                              }
-                            }}
-                            disabled={
-                              setDefaultBankMutation.isPending || !walletAddress
-                            }
-                          >
-                            {setDefaultBankMutation.isPending ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <>
-                                <Star className="w-4 h-4 mr-2" />
-                                Set Default
-                              </>
-                            )}
-                          </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedBankToDelete(account);
-                            setDeleteBankOpen(true);
-                          }}
-                          disabled={!walletAddress}
-                          className="text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Preferences Tab */}

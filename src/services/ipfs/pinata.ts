@@ -29,10 +29,9 @@ function getPinataClient(): PinataSDK {
  * Upload JSON data to IPFS via Pinata
  * @param data - The data object to upload as JSON
  * @param name - Optional name for the file
- * @returns IPFS hash (CID)
+ * @returns IPFS URL (e.g., "https://gateway.pinata.cloud/ipfs/QmHash...")
  */
 export async function uploadJSONToIPFS(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any,
   name?: string
 ): Promise<string> {
@@ -46,9 +45,7 @@ export async function uploadJSONToIPFS(
     };
 
     const result = await client.upload.public.json(data, options);
-
-    // Return the IPFS hash (CID)
-    return result.cid;
+    return `https://${PINATA_GATEWAY}/ipfs/${result.cid}`;
   } catch (error) {
     console.error("Error uploading JSON to IPFS:", error);
     throw new Error(
@@ -63,7 +60,7 @@ export async function uploadJSONToIPFS(
  * Upload a file to IPFS via Pinata
  * @param file - The file to upload
  * @param name - Optional name for the file
- * @returns IPFS hash (CID)
+ * @returns IPFS URL (e.g., "https://gateway.pinata.cloud/ipfs/QmHash...")
  */
 export async function uploadFileToIPFS(
   file: File,
@@ -79,9 +76,7 @@ export async function uploadFileToIPFS(
     };
 
     const result = await client.upload.public.file(file, options);
-
-    // Return the IPFS hash (CID)
-    return result.cid;
+    return `https://${PINATA_GATEWAY}/ipfs/${result.cid}`;
   } catch (error) {
     console.error("Error uploading file to IPFS:", error);
     throw new Error(
@@ -95,7 +90,7 @@ export async function uploadFileToIPFS(
 /**
  * Upload multiple files to IPFS via Pinata
  * @param files - Array of files to upload
- * @returns Array of IPFS hashes (CIDs) in the same order as input files
+ * @returns Array of IPFS URLs in the same order as input files
  */
 export async function uploadFilesToIPFS(files: File[]): Promise<string[]> {
   try {
@@ -116,23 +111,11 @@ export async function uploadFilesToIPFS(files: File[]): Promise<string[]> {
 }
 
 /**
- * Convert an IPFS CID or ipfs:// URI to a HTTP gateway URL using the configured Pinata gateway.
- */
-export function toIPFSGatewayUrl(ipfsHashOrUri: string): string {
-  const input = ipfsHashOrUri.trim();
-  if (!input) return "";
-  const hash = input.replace(/^ipfs:\/\//, "");
-  // If the user already stored an http(s) URL, just return it.
-  if (/^https?:\/\//i.test(hash)) return hash;
-  return `https://${PINATA_GATEWAY}/ipfs/${hash}`;
-}
-
-/**
  * Upload participant ratings as JSON to IPFS
  * This is specifically for proof of work submissions
  * @param ratings - Array of participant ratings
  * @param cleanupId - The cleanup ID this rating belongs to
- * @returns IPFS hash (CID) of the ratings JSON
+ * @returns IPFS URL of the ratings JSON
  */
 export interface ParticipantRating {
   participantId: string;
@@ -167,7 +150,6 @@ export async function getJSONFromIPFS<T = any>(ipfsHash: string): Promise<T> {
   try {
     // Remove ipfs:// prefix if present
     const hash = ipfsHash.replace(/^ipfs:\/\//, "");
-
     const url = `https://${PINATA_GATEWAY}/ipfs/${hash}`;
     const response = await fetch(url);
 

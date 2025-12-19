@@ -44,7 +44,7 @@ export default function Notifications() {
     );
 
   const notifications = useMemo<SubgraphNotification[]>(
-    () => (data ?? []).flat(),
+    () => (data?.pages ?? []).flat(),
     [data]
   );
 
