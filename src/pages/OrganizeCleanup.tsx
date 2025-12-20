@@ -44,6 +44,10 @@ import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { uploadFilesToIPFS } from "@/services/ipfs";
 import { useCreateCleanup } from "@/services/contracts/mutations";
+import {
+  stringifyCleanupMetadata,
+  type CleanupMetadata,
+} from "@cleanmate/cip-sdk";
 
 const steps = [
   {
@@ -157,7 +161,7 @@ export default function OrganizeCleanup() {
       }
 
       // Create metadata JSON as plain string (not IPFS)
-      const metadata = {
+      const metadata: CleanupMetadata = {
         title: formData.title,
         description: formData.description,
         category: formData.category,
@@ -169,7 +173,7 @@ export default function OrganizeCleanup() {
       };
 
       // Convert metadata to JSON string (not uploading to IPFS)
-      const metadataJsonString = JSON.stringify(metadata);
+      const metadataJsonString = stringifyCleanupMetadata(metadata);
 
       // Convert date/time to timestamps
       const dateTimestamp = Math.floor(

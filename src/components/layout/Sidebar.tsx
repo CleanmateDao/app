@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
+import appLogo from "@/assets/logo.png";
 
 const navItems = [
   { path: "/dashboard", label: "Insights", icon: LayoutDashboard },
@@ -43,9 +44,11 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-border/50">
         <div className="flex items-center gap-3">
-          <div className="w-9 h-9 gradient-primary rounded-xl flex items-center justify-center shadow-soft">
-            <Sparkles className="w-4 h-4 text-primary-foreground" />
-          </div>
+          <img 
+            src={appLogo} 
+            alt="CleanMate Logo" 
+            className="w-9 h-9 rounded-xl object-contain"
+          />
           {!collapsed && (
             <span className="font-semibold text-foreground">CleanMate</span>
           )}

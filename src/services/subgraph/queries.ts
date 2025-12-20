@@ -9,16 +9,19 @@ import { subgraphClient } from "./client";
 import type {
   SubgraphUser,
   SubgraphCleanup,
+  SubgraphCleanupWithMedia,
   SubgraphTransaction,
   SubgraphNotification,
   SubgraphTeamMembership,
   SubgraphStreakSubmission,
   SubgraphUserStreakStats,
+  SubgraphCleanupUpdate,
   GetCleanupsQueryParams,
   GetUserCleanupsQueryParams,
   GetTransactionsQueryParams,
   GetNotificationsQueryParams,
   GetStreakSubmissionsQueryParams,
+  GetCleanupUpdatesQueryParams,
   NotificationFilter,
   StreakSubmissionFilter,
 } from "./types";
@@ -36,6 +39,8 @@ export const subgraphKeys = {
     [...subgraphKeys.cleanups(), "user", address] as const,
   cleanupParticipants: (address: string) =>
     [...subgraphKeys.cleanups(), address, "participants"] as const,
+  cleanupUpdates: (cleanupId: string) =>
+    [...subgraphKeys.cleanups(), cleanupId, "updates"] as const,
   rewards: () => [...subgraphKeys.all, "rewards"] as const,
   notifications: () => [...subgraphKeys.all, "notifications"] as const,
   userNotifications: (address: string) =>
@@ -74,7 +79,7 @@ export function useUser(
 export function useCleanup(
   address: string | null | undefined,
   options?: Omit<
-    UseQueryOptions<SubgraphCleanup | null>,
+    UseQueryOptions<SubgraphCleanupWithMedia | null>,
     "queryKey" | "queryFn"
   >
 ) {
@@ -92,7 +97,10 @@ export function useCleanup(
 
 export function useCleanups(
   params?: GetCleanupsQueryParams & { userAddress?: string | null },
-  options?: Omit<UseQueryOptions<SubgraphCleanup[]>, "queryKey" | "queryFn">
+  options?: Omit<
+    UseQueryOptions<SubgraphCleanupWithMedia[]>,
+    "queryKey" | "queryFn"
+  >
 ) {
   return useQuery({
     queryKey: [
@@ -119,7 +127,10 @@ export function useCleanups(
 export function useUserCleanups(
   organizerAddress: string | null | undefined,
   params?: Omit<GetUserCleanupsQueryParams, "organizer">,
-  options?: Omit<UseQueryOptions<SubgraphCleanup[]>, "queryKey" | "queryFn">
+  options?: Omit<
+    UseQueryOptions<SubgraphCleanupWithMedia[]>,
+    "queryKey" | "queryFn"
+  >
 ) {
   return useQuery({
     queryKey: subgraphKeys.userCleanups(organizerAddress || ""),
@@ -143,17 +154,17 @@ export function useInfiniteCleanups(
   pageSize = 20,
   options?: Omit<
     UseInfiniteQueryOptions<
-      SubgraphCleanup[],
+      SubgraphCleanupWithMedia[],
       Error,
-      InfiniteData<SubgraphCleanup[]>
+      InfiniteData<SubgraphCleanupWithMedia[]>
     >,
     "queryKey" | "queryFn" | "getNextPageParam" | "initialPageParam"
   >
 ) {
   return useInfiniteQuery<
-    SubgraphCleanup[],
+    SubgraphCleanupWithMedia[],
     Error,
-    InfiniteData<SubgraphCleanup[]>
+    InfiniteData<SubgraphCleanupWithMedia[]>
   >({
     queryKey: [
       ...subgraphKeys.cleanupList(params?.where as Record<string, unknown>),
@@ -491,6 +502,42 @@ export function useUserStreakStats(
       return response.userStreakStats;
     },
     enabled: !!userAddress,
+    ...options,
+  });
+}
+
+// Cleanup Updates Queries
+export function useCleanupUpdates(
+  cleanupId: string | null | undefined,
+  params?: Omit<GetCleanupUpdatesQueryParams, "where"> & {
+    where?: Omit<import("./types").CleanupUpdateFilter, "cleanup">;
+  },
+  options?: Omit<
+    UseQueryOptions<SubgraphCleanupUpdate[]>,
+    "queryKey" | "queryFn"
+  >
+) {
+  return useQuery({
+    queryKey: [
+      ...subgraphKeys.cleanupUpdates(cleanupId || ""),
+      params?.where,
+      params?.orderBy,
+      params?.orderDirection,
+    ],
+    queryFn: async () => {
+      if (!cleanupId) return [];
+      const response = await subgraphClient.getCleanupUpdates({
+        ...params,
+        where: params?.where
+          ? ({
+              cleanup: cleanupId,
+              ...params.where,
+            } as import("./types").CleanupUpdateFilter)
+          : ({ cleanup: cleanupId } as import("./types").CleanupUpdateFilter),
+      });
+      return response.cleanupUpdates;
+    },
+    enabled: !!cleanupId,
     ...options,
   });
 }

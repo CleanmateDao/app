@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@cleanmate/cip-sdk": path.resolve(__dirname, "../sdk"),
       buffer: "buffer",
       process: "process/browser",
       stream: "stream-browserify",
@@ -44,6 +45,7 @@ export default defineConfig(({ mode }) => ({
       "util",
       "os-browserify",
       "mersenne-twister",
+      "@cleanmate/cip-sdk",
     ],
   },
 }));

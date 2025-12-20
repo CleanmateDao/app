@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { Mail, Calendar, Star, ShieldCheck, User, MapPin } from "lucide-react";
 import type { CleanupParticipant } from "@/types/cleanup";
 
@@ -33,14 +34,22 @@ export function ParticipantInfoDialog({
         <div className="space-y-6 py-4">
           {/* Avatar and Name */}
           <div className="flex items-center gap-4">
-            <Avatar className="w-16 h-16">
-              {participant.avatar && (
-                <AvatarImage src={participant.avatar} alt={participant.name} />
-              )}
-              <AvatarFallback className="text-xl">
-                {participant.name.charAt(0)}
-              </AvatarFallback>
-            </Avatar>
+            {participant.avatar ? (
+              <AvatarViewerTrigger src={participant.avatar} alt={participant.name} size="xl">
+                <Avatar className="w-16 h-16">
+                  <AvatarImage src={participant.avatar} alt={participant.name} />
+                  <AvatarFallback className="text-xl">
+                    {participant.name.charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              </AvatarViewerTrigger>
+            ) : (
+              <Avatar className="w-16 h-16">
+                <AvatarFallback className="text-xl">
+                  {participant.name.charAt(0)}
+                </AvatarFallback>
+              </Avatar>
+            )}
             <div>
               <h3 className="text-lg font-semibold">{participant.name}</h3>
               <div className="flex items-center gap-2 mt-1">

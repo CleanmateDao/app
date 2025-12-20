@@ -22,24 +22,46 @@ import {
   Search,
   ShieldCheck,
   AlertCircle,
+  MessageSquare,
+  Plus,
+  Play,
+  CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { RatingDialog } from "@/components/RatingDialog";
 import { SubmitProofDialog } from "@/components/SubmitProofDialog";
 import { AcceptParticipantAlertDialog } from "@/components/AcceptParticipantAlertDialog";
 import { RejectParticipantAlertDialog } from "@/components/RejectParticipantAlertDialog";
 import { ParticipantInfoDialog } from "@/components/ParticipantInfoDialog";
 import { JoinRequestDialog } from "@/components/JoinRequestDialog";
+import { UpdateCleanupStatusAlertDialog } from "@/components/UpdateCleanupStatusAlertDialog";
+import {
+  MediaViewerDialog,
+  type MediaItem,
+} from "@/components/MediaViewerDialog";
 import { Input } from "@/components/ui/input";
-import { CleanupStatus, CleanupParticipant, CleanupStatusUI } from "@/types/cleanup";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  CleanupStatus,
+  CleanupParticipant,
+  CleanupStatusUI,
+  CleanupUpdate,
+  CleanupMedia,
+} from "@/types/cleanup";
 import { toast } from "sonner";
-import { useCleanup, useUser } from "@/services/subgraph/queries";
+import {
+  useCleanup,
+  useUser,
+  useCleanupUpdates,
+} from "@/services/subgraph/queries";
 import {
   transformCleanup,
   transformUserToProfile,
+  transformCleanupUpdate,
 } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import {
@@ -48,9 +70,11 @@ import {
   useApplyToCleanup,
   useUpdateCleanupStatus,
   useSubmitProofOfWork,
+  useAddCleanupUpdate,
 } from "@/services/contracts/mutations";
 import { useTeamMember } from "@/services/subgraph/queries";
-
+import { stringifyCleanupUpdateMetadata } from "@cleanmate/cip-sdk";
+import { uploadFilesToIPFS } from "@/services/ipfs";
 const statusConfig: Record<
   CleanupStatusUI,
   { label: string; className: string }
@@ -117,6 +141,41 @@ export default function CleanupDetail() {
   const [joinMessage, setJoinMessage] = useState("");
   const [isSubmittingJoin, setIsSubmittingJoin] = useState(false);
 
+  // Status update dialog state
+  const [statusUpdateDialogOpen, setStatusUpdateDialogOpen] = useState(false);
+  const [pendingNewStatus, setPendingNewStatus] =
+    useState<CleanupStatusUI | null>(null);
+
+  // Media viewer state
+  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
+  const [viewerMedia, setViewerMedia] = useState<MediaItem[]>([]);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
+
+  // Cleanup updates state
+  const [updateDescription, setUpdateDescription] = useState("");
+  const [isAddingUpdate, setIsAddingUpdate] = useState(false);
+  const [updateMedia, setUpdateMedia] = useState<File[]>([]);
+
+  // Store preview URLs to clean them up
+  const previewUrlsRef = useRef<string[]>([]);
+
+  // Cleanup preview URLs when media changes or component unmounts
+  useEffect(() => {
+    // Revoke old URLs
+    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    previewUrlsRef.current = [];
+
+    // Create new URLs for current media
+    const newUrls = updateMedia.map((file) => URL.createObjectURL(file));
+    previewUrlsRef.current = newUrls;
+
+    // Cleanup on unmount or when media changes
+    return () => {
+      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+      previewUrlsRef.current = [];
+    };
+  }, [updateMedia]);
+
   // Search and infinite scroll for accepted participants
   const [participantSearch, setParticipantSearch] = useState("");
   const [displayedParticipantsCount, setDisplayedParticipantsCount] =
@@ -130,9 +189,12 @@ export default function CleanupDetail() {
   const applyToCleanupMutation = useApplyToCleanup();
   const updateStatusMutation = useUpdateCleanupStatus();
   const submitProofMutation = useSubmitProofOfWork();
+  const addUpdateMutation = useAddCleanupUpdate();
 
   // Fetch organizer data
   const { data: organizerData } = useUser(cleanup?.organizer.id);
+
+  // Fetch cleanup updates
 
   // Check team membership and permissions
   const { data: teamMembership } = useTeamMember(
@@ -378,6 +440,133 @@ export default function CleanupDetail() {
   const canRequestJoin =
     cleanup?.status === "open" && !isOrganizer && !hasApplied && !isFull;
 
+  // Handle adding cleanup update
+  const handleAddUpdate = async () => {
+    if (!id || !updateDescription.trim()) {
+      toast.error("Please enter an update description");
+      return;
+    }
+
+    if (!canEditCleanups) {
+      toast.error("You don't have permission to add updates");
+      return;
+    }
+
+    setIsAddingUpdate(true);
+    try {
+      // Upload media files to IPFS if any
+      let mediaMetadata: Array<{
+        ipfsHash: string;
+        type: string;
+        name: string;
+      }> = [];
+
+      if (updateMedia.length > 0) {
+        toast.info("Uploading media to IPFS...");
+        const ipfsUrls = await uploadFilesToIPFS(updateMedia);
+
+        mediaMetadata = updateMedia.map((file, index) => {
+          const isVideo = file.type.startsWith("video/");
+          const isImage = file.type.startsWith("image/");
+          const mediaType = isVideo ? "video" : isImage ? "image" : "file";
+
+          return {
+            ipfsHash: ipfsUrls[index],
+            type: mediaType,
+            name: file.name,
+          };
+        });
+      }
+
+      const metadata = stringifyCleanupUpdateMetadata({
+        description: updateDescription.trim(),
+        media: mediaMetadata,
+      });
+
+      await addUpdateMutation.sendTransaction({
+        cleanupId: id,
+        metadata,
+      });
+
+      setUpdateDescription("");
+      setUpdateMedia([]);
+      setIsAddingUpdate(false);
+    } catch (error) {
+      setIsAddingUpdate(false);
+      // Error is handled by mutation
+    }
+  };
+
+  const handleUpdateMediaUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files);
+      // Filter to only allow images and videos
+      const validFiles = newFiles.filter(
+        (file) =>
+          file.type.startsWith("image/") || file.type.startsWith("video/")
+      );
+      if (validFiles.length < newFiles.length) {
+        toast.error("Only images and videos are allowed");
+      }
+      setUpdateMedia([...updateMedia, ...validFiles]);
+    }
+  };
+
+  const handleRemoveUpdateMedia = (index: number) => {
+    setUpdateMedia(updateMedia.filter((_, i) => i !== index));
+  };
+
+  // Handle status update
+  const handleStatusUpdateClick = (newStatus: CleanupStatusUI) => {
+    setPendingNewStatus(newStatus);
+    setStatusUpdateDialogOpen(true);
+  };
+
+  const handleStatusUpdateConfirm = async () => {
+    if (!id || !pendingNewStatus || !cleanup) return;
+
+    try {
+      // Convert UI status to enum value
+      const statusMap: Record<CleanupStatusUI, number> = {
+        unpublished: CleanupStatus.UNPUBLISHED,
+        open: CleanupStatus.OPEN,
+        in_progress: CleanupStatus.IN_PROGRESS,
+        completed: CleanupStatus.COMPLETED,
+        rewarded: CleanupStatus.REWARDED,
+      };
+
+      await updateStatusMutation.sendTransaction({
+        cleanupId: id,
+        newStatus: statusMap[pendingNewStatus],
+      });
+
+      setStatusUpdateDialogOpen(false);
+      setPendingNewStatus(null);
+    } catch (error) {
+      // Error is handled by mutation
+    }
+  };
+
+  // Helper function to convert CleanupMedia to MediaItem
+  const convertToMediaItems = (media: CleanupMedia[]): MediaItem[] => {
+    return media.map((item) => ({
+      url: item.url,
+      type: item.type,
+      caption: item.name,
+    }));
+  };
+
+  // Handle opening media viewer
+  const handleOpenMediaViewer = (
+    media: CleanupMedia[],
+    initialIndex: number = 0
+  ) => {
+    const mediaItems = convertToMediaItems(media);
+    setViewerMedia(mediaItems);
+    setViewerInitialIndex(initialIndex);
+    setMediaViewerOpen(true);
+  };
+
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-4xl mx-auto pb-24 lg:pb-6">
       {/* Header */}
@@ -402,6 +591,34 @@ export default function CleanupDetail() {
               {statusConfig[cleanup.status].label}
             </Badge>
           </div>
+
+          {/* Status Update Buttons - Only for organizers/team members with edit permission */}
+          {canEditCleanups && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              {cleanup.status === "open" && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleStatusUpdateClick("in_progress")}
+                  disabled={updateStatusMutation.isTransactionPending}
+                  className="gap-2"
+                >
+                  <Play className="w-4 h-4" />
+                  Start Cleanup (In Progress)
+                </Button>
+              )}
+              {cleanup.status === "in_progress" && (
+                <Button
+                  variant="outline"
+                  onClick={() => handleStatusUpdateClick("completed")}
+                  disabled={updateStatusMutation.isTransactionPending}
+                  className="gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  Mark as Completed
+                </Button>
+              )}
+            </div>
+          )}
           <div
             className="text-muted-foreground text-sm prose prose-sm dark:prose-invert max-w-none"
             dangerouslySetInnerHTML={{ __html: cleanup.description }}
@@ -547,9 +764,12 @@ export default function CleanupDetail() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {cleanup.metadataMedia.map((media) => (
+                {cleanup.metadataMedia.map((media, index) => (
                   <div
                     key={media.id}
+                    onClick={() =>
+                      handleOpenMediaViewer(cleanup.metadataMedia || [], index)
+                    }
                     className="relative group rounded-lg overflow-hidden border border-border aspect-video cursor-pointer hover:border-primary/50 transition-colors"
                   >
                     {media.type === "video" ? (
@@ -593,9 +813,12 @@ export default function CleanupDetail() {
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {cleanup.proofMedia.map((media) => (
+                {cleanup.proofMedia.map((media, index) => (
                   <div
                     key={media.id}
+                    onClick={() =>
+                      handleOpenMediaViewer(cleanup.proofMedia, index)
+                    }
                     className="relative group rounded-lg overflow-hidden border border-border aspect-video cursor-pointer hover:border-primary/50 transition-colors"
                   >
                     {media.type === "video" ? (
@@ -614,7 +837,6 @@ export default function CleanupDetail() {
                       <p className="text-xs text-white truncate font-medium">
                         {media.name}
                       </p>
-                      <p className="text-[10px] text-white/70">{media.size}</p>
                     </div>
                   </div>
                 ))}
@@ -648,14 +870,29 @@ export default function CleanupDetail() {
                     onClick={() => openParticipantInfo(participant)}
                     className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
                   >
-                    <Avatar className="w-10 h-10">
-                      {participant.avatar ? (
-                        <AvatarImage src={participant.avatar} alt={participant.name} />
-                      ) : null}
-                      <AvatarFallback>
-                        {participant.name.charAt(0).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
+                    {participant.avatar ? (
+                      <AvatarViewerTrigger
+                        src={participant.avatar}
+                        alt={participant.name}
+                        size="md"
+                      >
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage
+                            src={participant.avatar}
+                            alt={participant.name}
+                          />
+                          <AvatarFallback>
+                            {participant.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      </AvatarViewerTrigger>
+                    ) : (
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback>
+                          {participant.name.charAt(0).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm">
@@ -771,14 +1008,29 @@ export default function CleanupDetail() {
                       onClick={() => openParticipantInfo(participant)}
                       className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
                     >
-                      <Avatar className="w-10 h-10">
-                        {participant.avatar ? (
-                          <AvatarImage src={participant.avatar} alt={participant.name} />
-                        ) : null}
-                        <AvatarFallback>
-                          {participant.name.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
+                      {participant.avatar ? (
+                        <AvatarViewerTrigger
+                          src={participant.avatar}
+                          alt={participant.name}
+                          size="md"
+                        >
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage
+                              src={participant.avatar}
+                              alt={participant.name}
+                            />
+                            <AvatarFallback>
+                              {participant.name.charAt(0).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                        </AvatarViewerTrigger>
+                      ) : (
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback>
+                            {participant.name.charAt(0).toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm">
@@ -876,6 +1128,255 @@ export default function CleanupDetail() {
         </Card>
       </motion.div>
 
+      {/* Updates Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.35 }}
+      >
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare className="w-4 h-4" />
+              Updates ({cleanup.updates.length})
+            </CardTitle>
+            {canEditCleanups && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  // Scroll to update form or open dialog
+                  document
+                    .getElementById("add-update-form")
+                    ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                }}
+              >
+                <Plus className="w-4 h-4 mr-1" />
+                Add Update
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Add Update Form */}
+            {canEditCleanups && (
+              <div id="add-update-form" className="space-y-3 pb-4 border-b">
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Share an update about this cleanup..."
+                    value={updateDescription}
+                    onChange={(e) => setUpdateDescription(e.target.value)}
+                    rows={3}
+                    className="resize-none"
+                  />
+                </div>
+
+                {/* Media Upload Section */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="file"
+                      accept="image/*,video/*"
+                      multiple
+                      onChange={handleUpdateMediaUpload}
+                      className="hidden"
+                      id="update-media-upload"
+                      disabled={isAddingUpdate}
+                    />
+                    <label htmlFor="update-media-upload">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="cursor-pointer"
+                        disabled={isAddingUpdate}
+                        asChild
+                      >
+                        <span>
+                          <Upload className="w-4 h-4 mr-2" />
+                          Attach Image/Video
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+
+                  {/* Preview Uploaded Media */}
+                  {updateMedia.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">
+                        {updateMedia.length} file(s) attached
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                        {updateMedia.map((file, index) => {
+                          const isVideo = file.type.startsWith("video/");
+                          const previewUrl = previewUrlsRef.current[index];
+
+                          return (
+                            <div
+                              key={index}
+                              className="relative group rounded-lg overflow-hidden border border-border aspect-video"
+                            >
+                              {isVideo ? (
+                                <div className="absolute inset-0 flex items-center justify-center bg-secondary">
+                                  <Video className="w-6 h-6 text-muted-foreground" />
+                                </div>
+                              ) : previewUrl ? (
+                                <img
+                                  src={previewUrl}
+                                  alt={file.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="absolute inset-0 flex items-center justify-center bg-secondary">
+                                  <Image className="w-6 h-6 text-muted-foreground" />
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveUpdateMedia(index)}
+                                className="absolute top-1 right-1 p-1 bg-destructive text-destructive-foreground rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                                disabled={isAddingUpdate}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 via-transparent to-transparent p-2">
+                                <p className="text-xs text-white truncate font-medium">
+                                  {file.name}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setUpdateDescription("");
+                      setUpdateMedia([]);
+                    }}
+                    disabled={
+                      isAddingUpdate ||
+                      (!updateDescription.trim() && updateMedia.length === 0)
+                    }
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleAddUpdate}
+                    disabled={
+                      isAddingUpdate ||
+                      !updateDescription.trim() ||
+                      addUpdateMutation.isTransactionPending
+                    }
+                  >
+                    {isAddingUpdate ||
+                    addUpdateMutation.isTransactionPending ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Posting...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-4 h-4 mr-2" />
+                        Post Update
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Updates List */}
+            {cleanup.updates.length === 0 ? (
+              <div className="text-center py-8">
+                <MessageSquare className="w-12 h-12 text-muted-foreground/50 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">
+                  No updates yet.{" "}
+                  {canEditCleanups && "Be the first to share an update!"}
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {cleanup.updates.map((update, index) => (
+                  <div
+                    key={update.id}
+                    className="flex gap-3 pb-4 border-b last:border-0 last:pb-0"
+                  >
+                    {/* Update Content */}
+                    <div className="flex-1 min-w-0 space-y-2">
+                      {/* Header */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-medium text-sm">
+                          {update.organizer}
+                        </p>
+                        {update.organizer.toLowerCase() ===
+                          cleanup.organizer.id.toLowerCase() && (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 px-1.5 gap-0.5 text-xs bg-primary/10 text-primary border-primary/20"
+                          >
+                            Organizer
+                          </Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {update.addedAt}
+                        </span>
+                      </div>
+
+                      {/* Description */}
+                      {update.description && (
+                        <p className="text-sm text-foreground whitespace-pre-wrap break-words">
+                          {update.description}
+                        </p>
+                      )}
+
+                      {/* Media */}
+                      {update.media && update.media.length > 0 && (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+                          {update.media.map((media, index) => (
+                            <div
+                              key={media.id}
+                              onClick={() =>
+                                handleOpenMediaViewer(update.media || [], index)
+                              }
+                              className="relative group rounded-lg overflow-hidden border border-border aspect-video cursor-pointer hover:border-primary/50 transition-colors"
+                            >
+                              {media.type === "video" ? (
+                                <div className="absolute inset-0 flex items-center justify-center bg-secondary">
+                                  <Video className="w-6 h-6 text-muted-foreground" />
+                                </div>
+                              ) : (
+                                <img
+                                  src={media.url}
+                                  alt={media.name}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                />
+                              )}
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                              <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <p className="text-xs text-white truncate font-medium">
+                                  {media.name}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </motion.div>
+
       {/* Proof of Work */}
       {(cleanup.status === "in_progress" ||
         cleanup.status === "completed" ||
@@ -895,16 +1396,25 @@ export default function CleanupDetail() {
             <CardContent>
               {cleanup.proofMedia.length > 0 ? (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  {cleanup.proofMedia.map((media) => (
+                  {cleanup.proofMedia.map((media, index) => (
                     <div
                       key={media.id}
-                      className="relative rounded-lg overflow-hidden border border-border"
+                      onClick={() =>
+                        handleOpenMediaViewer(cleanup.proofMedia, index)
+                      }
+                      className="relative rounded-lg overflow-hidden border border-border cursor-pointer hover:border-primary/50 transition-colors"
                     >
-                      <img
-                        src={media.url}
-                        alt={media.name}
-                        className="w-full h-24 object-cover"
-                      />
+                      {media.type === "video" ? (
+                        <div className="w-full h-24 flex items-center justify-center bg-secondary">
+                          <Video className="w-6 h-6 text-muted-foreground" />
+                        </div>
+                      ) : (
+                        <img
+                          src={media.url}
+                          alt={media.name}
+                          className="w-full h-24 object-cover"
+                        />
+                      )}
                       <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1">
                         <p className="text-xs text-white truncate">
                           {media.name}
@@ -993,6 +1503,31 @@ export default function CleanupDetail() {
         currentUserProfile={currentUserProfile}
         onSubmit={handleJoinRequest}
         isSubmitting={isSubmittingJoin}
+      />
+
+      {/* Status Update Confirmation Dialog */}
+      {cleanup && pendingNewStatus && (
+        <UpdateCleanupStatusAlertDialog
+          open={statusUpdateDialogOpen}
+          onOpenChange={(open) => {
+            setStatusUpdateDialogOpen(open);
+            if (!open) {
+              setPendingNewStatus(null);
+            }
+          }}
+          currentStatus={cleanup.status}
+          newStatus={pendingNewStatus}
+          onConfirm={handleStatusUpdateConfirm}
+          isUpdating={updateStatusMutation.isTransactionPending}
+        />
+      )}
+
+      {/* Media Viewer Dialog */}
+      <MediaViewerDialog
+        open={mediaViewerOpen}
+        onOpenChange={setMediaViewerOpen}
+        media={viewerMedia}
+        initialIndex={viewerInitialIndex}
       />
     </div>
   );

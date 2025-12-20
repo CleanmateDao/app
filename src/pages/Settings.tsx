@@ -51,6 +51,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -96,6 +97,7 @@ import {
   useUpdateTeamMemberPermissions,
 } from "@/services/contracts/mutations";
 import type { UserProfile, UserProfileMetadata } from "@/types/user";
+import { stringifyUserProfileMetadata } from "@cleanmate/cip-sdk";
 import {
   SUPPORTED_COUNTRIES,
   SUPPORTED_CURRENCIES,
@@ -377,7 +379,7 @@ export default function Settings() {
 
       toast.info("Updating profile on blockchain...");
       await updateProfileMutation.sendTransaction(
-        JSON.stringify(profileMetadata)
+        stringifyUserProfileMetadata(profileMetadata)
       );
 
       if (profilePhotoFile && photoUrl) {
@@ -532,17 +534,25 @@ export default function Settings() {
             <CardContent>
               <div className="flex items-center gap-6">
                 <div className="relative">
-                  <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
-                    {profileImage ? (
-                      <img
-                        src={profileImage}
-                        alt="Profile"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
+                  {profileImage ? (
+                    <AvatarViewerTrigger
+                      src={profileImage}
+                      alt="Profile"
+                      size="xl"
+                    >
+                      <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border cursor-pointer hover:opacity-90 transition-opacity">
+                        <img
+                          src={profileImage}
+                          alt="Profile"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </AvatarViewerTrigger>
+                  ) : (
+                    <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden border-2 border-border">
                       <User className="w-10 h-10 text-primary" />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <input

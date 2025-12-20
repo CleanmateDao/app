@@ -20,7 +20,7 @@ import AIChat from "./pages/AIChat";
 import Onboarding from "./pages/Onboarding";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
-import appLogo from "./assets/african-mask.jpg";
+import appLogo from "./assets/logo.png";
 import Streaks from "./pages/Streaks";
 import StreakSubmit from "./pages/StreakSubmit";
 import { useWalletAddress } from "./hooks/use-wallet-address";

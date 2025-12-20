@@ -38,6 +38,7 @@ import {
   useUpdateProfile,
 } from "@/services/contracts/mutations";
 import type { UserProfileMetadata } from "@/types/user";
+import { stringifyUserProfileMetadata } from "@cleanmate/cip-sdk";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSearchParams } from "react-router-dom";
 import { useUser } from "@/services/subgraph/queries";
@@ -224,20 +225,20 @@ export default function Onboarding() {
         // User already exists, just update profile metadata
         toast.info("Updating profile...");
         await updateProfileMutation.sendTransaction(
-          JSON.stringify(userMetadata)
+          stringifyUserProfileMetadata(userMetadata)
         );
       } else {
         // New user registration
         toast.info("Registering on blockchain...");
         if (data.referralCode) {
           await registerWithReferralMutation.sendTransaction({
-            metadata: JSON.stringify(userMetadata),
+            metadata: stringifyUserProfileMetadata(userMetadata),
             email: data.email,
             referralCode: data.referralCode,
           });
         } else {
           await registerUserMutation.sendTransaction({
-            metadata: JSON.stringify(userMetadata),
+            metadata: stringifyUserProfileMetadata(userMetadata),
             email: data.email,
           });
         }

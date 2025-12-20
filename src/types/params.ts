@@ -111,6 +111,14 @@ export interface CreateCleanupParams {
   maxParticipants: string; // uint256
 }
 
+/**
+ * AddCleanupUpdatesParams from Params
+ */
+export interface AddCleanupUpdatesParams {
+  cleanupId: string; // uint256 - cleanup ID
+  metadata: string; // JSON stringified CleanupUpdateMetadata
+}
+
 // RewardsManager parameter structs
 
 /**

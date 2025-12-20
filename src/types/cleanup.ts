@@ -1,5 +1,7 @@
 // ICleanup contract types
 
+import { SupportedCountryCode } from "@/constants/supported";
+
 export enum CleanupStatus {
   UNPUBLISHED = 0,
   OPEN = 1,
@@ -15,7 +17,12 @@ export enum ParticipantStatus {
 }
 
 // UI-friendly status unions (used by the frontend views & transformers)
-export type CleanupStatusUI = "unpublished" | "open" | "in_progress" | "completed" | "rewarded";
+export type CleanupStatusUI =
+  | "unpublished"
+  | "open"
+  | "in_progress"
+  | "completed"
+  | "rewarded";
 export type ParticipantStatusUI = "pending" | "accepted" | "rejected";
 
 /**
@@ -93,7 +100,6 @@ export interface CleanupMedia {
   name: string;
   type: "image" | "video";
   url: string;
-  size: string;
   uploadedAt: string;
 }
 
@@ -104,15 +110,12 @@ export interface CleanupParticipant {
   avatar?: string;
   status: ParticipantStatusUI;
   appliedAt: string;
-  rating?: number; // 1-5 stars given by organizer
   isKyced?: boolean; // KYC verification status
   emailVerified?: boolean; // Email verification status
   isOrganizer?: boolean; // Whether user is an organizer
-  location?: {
-    city?: string;
-    state?: string;
-    country?: string;
-  };
+  country: SupportedCountryCode;
+  state?: string;
+  rating?: number; // Rating from 1-5
 }
 
 export interface Cleanup {
@@ -137,6 +140,7 @@ export interface Cleanup {
   proofMedia: CleanupMedia[];
   metadataMedia?: CleanupMedia[]; // Media from metadata (initial images/videos)
   rewardAmount?: number; // B3TR tokens
+  updates: CleanupUpdate[];
 }
 
 export interface RewardTransaction {
@@ -150,4 +154,15 @@ export interface RewardTransaction {
   date: string;
   txHash?: string;
   status: "pending" | "completed";
+}
+
+export interface CleanupUpdate {
+  id: string;
+  cleanupId: string;
+  organizer: string;
+  description: string;
+  media?: CleanupMedia[];
+  addedAt: string;
+  blockNumber: number;
+  transactionHash: string;
 }

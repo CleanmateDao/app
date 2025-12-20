@@ -4,8 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, User, Bot, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { toast } from "sonner";
 import { ClearChatAlertDialog } from "@/components/ClearChatAlertDialog";
+import temiAvatar from "@/assets/temi.png";
 import {
   useCleanups,
   useTransactions,
@@ -155,9 +158,14 @@ export default function AIChat() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 border-b border-border">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-xl bg-primary/10">
-            <Sparkles className="h-4 w-4 lg:h-5 lg:w-5 text-primary" />
-          </div>
+          <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent">
+            <Avatar className="h-10 w-10">
+              <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
+              <AvatarFallback>
+                <Sparkles className="h-5 w-5 text-primary" />
+              </AvatarFallback>
+            </Avatar>
+          </AvatarViewerTrigger>
           <div>
             <h1 className="text-lg lg:text-xl font-semibold">Temi</h1>
             <p className="text-xs lg:text-sm text-muted-foreground">
@@ -182,9 +190,14 @@ export default function AIChat() {
               }`}
             >
               {message.role === "assistant" && (
-                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Bot className="w-4 h-4 text-primary" />
-                </div>
+                <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent" size="md">
+                  <Avatar className="w-8 h-8 shrink-0">
+                    <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
+                    <AvatarFallback className="bg-primary/10">
+                      <Bot className="w-4 h-4 text-primary" />
+                    </AvatarFallback>
+                  </Avatar>
+                </AvatarViewerTrigger>
               )}
               <div
                 className={`max-w-[80%] rounded-2xl px-4 py-3 ${
@@ -228,9 +241,14 @@ export default function AIChat() {
             animate={{ opacity: 1 }}
             className="flex gap-3"
           >
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-              <Bot className="w-4 h-4 text-primary" />
-            </div>
+            <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent" size="md">
+              <Avatar className="w-8 h-8 shrink-0">
+                <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
+                <AvatarFallback className="bg-primary/10">
+                  <Bot className="w-4 h-4 text-primary" />
+                </AvatarFallback>
+              </Avatar>
+            </AvatarViewerTrigger>
             <div className="bg-muted rounded-2xl px-4 py-3">
               <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
             </div>

@@ -28,6 +28,10 @@ import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSubmitStreak } from "@/services/contracts/mutations";
 import { uploadFileToIPFS } from "@/services/ipfs";
 import { useRecording } from "@/contexts/RecordingContext";
+import {
+  stringifyStreakSubmissionMetadata,
+  type StreakSubmissionMetadata,
+} from "@cleanmate/cip-sdk";
 
 type SubmitStep = "rules" | "record" | "preview" | "submitting" | "success";
 
@@ -577,16 +581,18 @@ export default function StreakSubmit() {
       // Step 2: Submit streak with IPFS URLs
       const deviceType = getDeviceType();
 
+      const streakSubmissionMetadata: StreakSubmissionMetadata = {
+        description: "Sustainable action submission",
+        timestamp: new Date().toISOString(),
+        streakerCode: streakStats?.streakerCode,
+        mediaCount: mediaItems.length,
+        totalMediaLength: totalDuration,
+        totalSize: totalSize,
+        deviceType: deviceType,
+      };
+
       await submitStreakMutation.sendTransaction({
-        metadata: JSON.stringify({
-          description: "Sustainable action submission",
-          timestamp: new Date().toISOString(),
-          streakerCode: streakStats?.streakerCode,
-          mediaCount: mediaItems.length,
-          totalMediaLength: totalDuration,
-          totalSize: totalSize,
-          deviceType: deviceType,
-        }),
+        metadata: stringifyStreakSubmissionMetadata(streakSubmissionMetadata),
         ipfsHashes,
         mimetypes,
       });

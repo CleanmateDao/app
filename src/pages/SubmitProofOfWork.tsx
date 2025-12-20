@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CleanupParticipant } from "@/types/cleanup";
@@ -508,12 +509,18 @@ function ParticipantRatingRow({
   return (
     <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary rounded-lg gap-4">
       <div className="flex items-center gap-3">
-        <Avatar className="w-10 h-10">
-          {participant.avatar && (
-            <AvatarImage src={participant.avatar} alt={participant.name} />
-          )}
-          <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
-        </Avatar>
+        {participant.avatar ? (
+          <AvatarViewerTrigger src={participant.avatar} alt={participant.name} size="md">
+            <Avatar className="w-10 h-10">
+              <AvatarImage src={participant.avatar} alt={participant.name} />
+              <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
+            </Avatar>
+          </AvatarViewerTrigger>
+        ) : (
+          <Avatar className="w-10 h-10">
+            <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
+          </Avatar>
+        )}
         <div>
           <p className="font-medium text-sm">{participant.name}</p>
           <p className="text-xs text-muted-foreground">{participant.email}</p>

@@ -3,26 +3,30 @@ import type {
   SubgraphCleanup,
   SubgraphCleanupParticipant,
   SubgraphTransaction,
-  SubgraphProofOfWorkMedia,
-  SubgraphCleanupMedia,
+  SubgraphProofOfWork,
+  SubgraphCleanupUpdate,
 } from "./types";
 import type {
   Cleanup,
   CleanupParticipant,
   RewardTransaction,
+  CleanupUpdate,
+  CleanupMedia,
 } from "@/types/cleanup";
 import type { UserProfile } from "@/types/user";
 import type { SupportedCountryCode } from "@/constants/supported";
 import {
-  parseCleanupMetadata,
-  parseUserMetadata,
   bigIntToNumber,
-  bigIntToDate,
   mapCleanupStatus,
   mapParticipantStatus,
   mapKycStatus,
-  normalizeIPFSUrl,
+  numberToDate,
 } from "./utils";
+import {
+  parseCleanupMetadata,
+  parseCleanupUpdateMetadata,
+  parseUserProfileMetadata,
+} from "@cleanmate/cip-sdk";
 
 /**
  * Transform subgraph user to app user profile
@@ -33,33 +37,19 @@ export function transformUserToProfile(
 ): UserProfile | null {
   if (!user) return null;
 
-  const metadata = parseUserMetadata(user.metadata);
-  
-  // Safely extract location from metadata
-  // Handle both new format (object) and legacy format (string)
-  let country: SupportedCountryCode = "OTHER";
-  let state: string | undefined = undefined;
-  
-  if (metadata?.location) {
-    if (typeof metadata.location === "object") {
-      // New format: location is an object with country and state
-      country = metadata.location.country || "OTHER";
-      state = metadata.location.state;
-    } else if (typeof metadata.location === "string") {
-      // Legacy format: location is a string like "City, Country" or "Country"
-      const locationParts = metadata.location
-        .split(",")
-        .map((p) => p.trim())
-        .filter(Boolean);
-      if (locationParts.length > 0) {
-        // Try to match country code from the last part
-        const countryName = locationParts[locationParts.length - 1];
-        // For now, default to "OTHER" for legacy format
-        // Could be enhanced to map country names to codes
-        country = "OTHER";
-      }
-    }
-  }
+  const metadata = parseUserProfileMetadata<SupportedCountryCode>(
+    user.metadata
+  );
+
+  const location =
+    metadata?.location &&
+    typeof metadata.location === "object" &&
+    metadata.location !== null
+      ? (metadata.location as {
+          country?: SupportedCountryCode;
+          state?: string;
+        })
+      : null;
 
   return {
     id: user.id.toLowerCase(),
@@ -67,15 +57,13 @@ export function transformUserToProfile(
     email: user.email,
     walletAddress: userAddress || user.id.toLowerCase(),
     bio: metadata?.bio,
-    country,
-    state,
+    country: location?.country,
+    state: location?.state,
     interests: metadata?.interests,
     profileImage: metadata?.photo,
     totalRewards: bigIntToNumber(user.totalRewardsEarned),
     claimedRewards: bigIntToNumber(user.totalRewardsClaimed),
     pendingRewards: bigIntToNumber(user.pendingRewards),
-    cleanupsOrganized: 0, // This needs to be fetched separately
-    cleanupsParticipated: 0, // This needs to be fetched separately
     isEmailVerified: user.emailVerified,
     kycStatus: mapKycStatus(user.kycStatus),
     referralCode: user.referralCode || undefined,
@@ -87,130 +75,41 @@ export function transformUserToProfile(
  * Transform subgraph cleanup participant to app participant
  */
 export function transformParticipant(
-  participant: SubgraphCleanupParticipant,
-  userMetadata?: Record<string, { name?: string; email?: string }>
+  participant: SubgraphCleanupParticipant
 ): CleanupParticipant {
-  const userInfo = userMetadata?.[participant.participant.toLowerCase()];
-  
-  // Extract user metadata from participant.user (required field in schema)
-  const userMetadataParsed = participant.user.metadata
-    ? parseUserMetadata(participant.user.metadata)
-    : null;
-  
+  const userMetadataParsed = parseUserProfileMetadata<SupportedCountryCode>(
+    participant.user.metadata
+  );
+
+  const location =
+    userMetadataParsed?.location &&
+    typeof userMetadataParsed.location === "object" &&
+    userMetadataParsed.location !== null
+      ? (userMetadataParsed.location as {
+          country?: SupportedCountryCode;
+          state?: string;
+        })
+      : null;
+
   // Use user metadata for name, fallback to userInfo, then to address
   const name =
     userMetadataParsed?.name ||
-    userInfo?.name ||
     participant.participant.slice(0, 6) +
       "..." +
       participant.participant.slice(-4);
-  
-  // Use user email, fallback to userInfo email, then to empty string
-  const email =
-    participant.user.email ||
-    userInfo?.email ||
-    "";
-  
-  // Extract photo from user metadata and normalize IPFS URL
-  const avatar = userMetadataParsed?.photo
-    ? normalizeIPFSUrl(userMetadataParsed.photo)
-    : undefined;
-
-  // Extract location from user metadata
-  let location: { city?: string; state?: string; country?: string } | undefined = undefined;
-  if (userMetadataParsed?.location) {
-    if (typeof userMetadataParsed.location === "object") {
-      // New format: location is an object with country and state
-      location = {
-        state: userMetadataParsed.location.state,
-        country: userMetadataParsed.location.country,
-      };
-    } else if (typeof userMetadataParsed.location === "string") {
-      // Legacy format: location is a string like "City, State, Country" or "State, Country" or "Country"
-      const locationParts = userMetadataParsed.location
-        .split(",")
-        .map((p) => p.trim())
-        .filter(Boolean);
-      
-      if (locationParts.length === 1) {
-        // Just country
-        location = { country: locationParts[0] };
-      } else if (locationParts.length === 2) {
-        // State, Country
-        location = { state: locationParts[0], country: locationParts[1] };
-      } else if (locationParts.length >= 3) {
-        // City, State, Country
-        location = {
-          city: locationParts[0],
-          state: locationParts[1],
-          country: locationParts[2],
-        };
-      }
-    }
-  }
 
   return {
     id: participant.id,
     name,
-    email,
-    avatar,
+    email: participant.user.email,
+    avatar: userMetadataParsed?.photo,
     status: mapParticipantStatus(participant.status),
-    appliedAt: bigIntToDate(participant.appliedAt) || "",
+    appliedAt: numberToDate(participant.appliedAt * 1000),
     isKyced: participant.user.kycStatus === 2, // KYC status 2 = VERIFIED
     emailVerified: participant.user.emailVerified || false,
     isOrganizer: participant.user.isOrganizer || false,
-    location,
-  };
-}
-
-/**
- * Transform subgraph cleanup media to app media
- */
-export function transformCleanupMedia(media: SubgraphCleanupMedia): {
-  id: string;
-  name: string;
-  type: "image" | "video";
-  url: string;
-  size: string;
-  uploadedAt: string;
-} {
-  const isVideo = media.mimeType.startsWith("video/");
-  const normalizedUrl = normalizeIPFSUrl(media.url);
-  const fileName = normalizedUrl.split("/").pop() || "file";
-
-  return {
-    id: media.id,
-    name: fileName,
-    type: isVideo ? "video" : "image",
-    url: normalizedUrl,
-    size: "0", // Size is not available in subgraph
-    uploadedAt: bigIntToDate(media.createdAt) || "",
-  };
-}
-
-/**
- * Transform subgraph proof of work media to app media
- */
-export function transformProofMedia(media: SubgraphProofOfWorkMedia): {
-  id: string;
-  name: string;
-  type: "image" | "video";
-  url: string;
-  size: string;
-  uploadedAt: string;
-} {
-  const isVideo = media.mimeType.startsWith("video/");
-  const normalizedUrl = normalizeIPFSUrl(media.url);
-  const fileName = normalizedUrl.split("/").pop() || "file";
-
-  return {
-    id: media.id,
-    name: fileName,
-    type: isVideo ? "video" : "image",
-    url: normalizedUrl,
-    size: "0", // Size is not available in subgraph
-    uploadedAt:
-      bigIntToDate(media.submittedAt) || bigIntToDate(media.uploadedAt) || "",
+    country: location?.country,
+    state: location?.state,
   };
 }
 
@@ -222,16 +121,22 @@ export function transformCleanup(
   organizerMetadata?: { name?: string; email?: string }
 ): Cleanup {
   const metadata = parseCleanupMetadata(cleanup.metadata);
-  const acceptedParticipants = cleanup.participants.filter(
-    (p) => p.status.toLowerCase() === "accepted"
-  );
 
   // Build participant list with metadata if available
-  const participants: CleanupParticipant[] = cleanup.participants.map((p) =>
-    transformParticipant(p, {
-      [p.participant.toLowerCase()]: organizerMetadata,
-    })
+  const participants: CleanupParticipant[] = (cleanup.participants || []).map(
+    (p) => transformParticipant(p)
   );
+
+  const proofMedia: CleanupMedia[] = [];
+  cleanup.proofOfWork?.ipfsHashes.forEach((hash, index) => {
+    proofMedia.push({
+      id: `proof-${index}`,
+      name: `Proof of work ${index + 1}`,
+      type: "image",
+      url: hash,
+      uploadedAt: numberToDate(cleanup.proofOfWork.submittedAt * 1000),
+    });
+  });
 
   return {
     id: cleanup.id.toLowerCase(),
@@ -246,16 +151,12 @@ export function transformCleanup(
       latitude: cleanup.latitude ? parseFloat(cleanup.latitude) : 0,
       longitude: cleanup.longitude ? parseFloat(cleanup.longitude) : 0,
     },
-    date: bigIntToDate(cleanup.date) || "",
-    startTime: cleanup.startTime
-      ? new Date(Number(cleanup.startTime) * 1000).toTimeString().slice(0, 5)
-      : "",
-    endTime: cleanup.endTime
-      ? new Date(Number(cleanup.endTime) * 1000).toTimeString().slice(0, 5)
-      : "",
-    maxParticipants: bigIntToNumber(cleanup.maxParticipants),
-    createdAt: bigIntToDate(cleanup.createdAt) || "",
-    updatedAt: bigIntToDate(cleanup.updatedAt) || "",
+    date: numberToDate(cleanup.date * 1000) || "",
+    startTime: cleanup.startTime ? numberToDate(cleanup.startTime * 1000) : "",
+    endTime: cleanup.endTime ? numberToDate(cleanup.endTime * 1000) : "",
+    maxParticipants: cleanup.maxParticipants,
+    createdAt: numberToDate(cleanup.createdAt) || "",
+    updatedAt: numberToDate(cleanup.updatedAt) || "",
     organizer: {
       id: cleanup.organizer.toLowerCase(),
       name:
@@ -264,25 +165,20 @@ export function transformCleanup(
       avatar: undefined,
     },
     participants,
-    // Combine both regular medias and proof of work media
-    proofMedia: [
-      ...cleanup.medias.map(transformCleanupMedia),
-      ...cleanup.proofOfWorkMedia.map(transformProofMedia),
-    ],
+    proofMedia,
     // Media from metadata (initial images/videos from cleanup creation)
-    metadataMedia: metadata?.media
-      ? metadata.media.map((item, index) => ({
-          id: `metadata-${cleanup.id}-${index}`,
-          name: item.name || "Media",
-          type: item.type === "video" ? "video" : "image",
-          url: normalizeIPFSUrl(item.ipfsHash),
-          size: "0",
-          uploadedAt: "",
-        }))
-      : undefined,
+    metadataMedia: metadata.media.map((item, index) => ({
+      id: `metadata-${cleanup.id}-${index}`,
+      name: item.name || "Media",
+      type: item.type === "video" ? "video" : "image",
+      url: item.ipfsHash,
+      uploadedAt: numberToDate(cleanup.createdAt * 1000),
+    })),
     rewardAmount: cleanup.rewardAmount
       ? bigIntToNumber(cleanup.rewardAmount)
       : undefined,
+    updates:
+      cleanup.updates?.map((update) => transformCleanupUpdate(update)) || [],
   };
 }
 
@@ -335,7 +231,7 @@ export function transformTransaction(
     streakSubmissionId: transaction.streakSubmissionId ?? null,
     rewardType: transaction.rewardType ?? null,
     title: fallbackTitle,
-    date: bigIntToDate(transaction.timestamp) || "",
+    date: numberToDate(transaction.timestamp) || "",
     status,
     txHash: transaction.transactionHash || undefined,
   };
@@ -432,5 +328,35 @@ export function calculateInsights(
     participantsHelped,
     monthlyData,
     categoryData,
+  };
+}
+
+/**
+ * Transform subgraph cleanup update to app cleanup update
+ */
+export function transformCleanupUpdate(
+  update: SubgraphCleanupUpdate
+): CleanupUpdate {
+  // Parse cleanup update metadata (same format as cleanup metadata)
+  const metadata = parseCleanupUpdateMetadata(update.metadata);
+
+  // Transform media if present
+  const media = metadata.media?.map((item, index) => ({
+    id: `update-${update.id}-${index}`,
+    name: item.name || "Media",
+    type: (item.type === "video" ? "video" : "image") as "image" | "video",
+    url: item.ipfsHash,
+    uploadedAt: numberToDate(update.addedAt * 1000),
+  }));
+
+  return {
+    id: update.id,
+    cleanupId: update.cleanup.id,
+    organizer: update.organizer,
+    description: metadata?.description,
+    media,
+    addedAt: numberToDate(update.addedAt * 1000),
+    blockNumber: update.blockNumber,
+    transactionHash: update.transactionHash,
   };
 }

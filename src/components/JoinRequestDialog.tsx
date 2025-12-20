@@ -9,7 +9,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { Calendar, MapPin, Users, Send, Loader2 } from "lucide-react";
 import type { Cleanup } from "@/types/cleanup";
 import type { UserProfile } from "@/types/user";
@@ -103,11 +104,29 @@ export function JoinRequestDialog({
               Your application will include:
             </p>
             <div className="flex items-center gap-3">
-              <Avatar className="w-10 h-10">
-                <AvatarFallback>
-                  {(currentUserProfile?.name || "U").charAt(0)}
-                </AvatarFallback>
-              </Avatar>
+              {currentUserProfile?.profileImage ? (
+                <AvatarViewerTrigger
+                  src={currentUserProfile.profileImage}
+                  alt={currentUserProfile?.name || "User"}
+                  size="md"
+                >
+                  <Avatar className="w-10 h-10">
+                    <AvatarImage
+                      src={currentUserProfile.profileImage}
+                      alt={currentUserProfile?.name || "User"}
+                    />
+                    <AvatarFallback>
+                      {(currentUserProfile?.name || "U").charAt(0)}
+                    </AvatarFallback>
+                  </Avatar>
+                </AvatarViewerTrigger>
+              ) : (
+                <Avatar className="w-10 h-10">
+                  <AvatarFallback>
+                    {(currentUserProfile?.name || "U").charAt(0)}
+                  </AvatarFallback>
+                </Avatar>
+              )}
               <div>
                 <p className="font-medium text-sm">
                   {currentUserProfile?.name || "User"}
@@ -148,4 +167,3 @@ export function JoinRequestDialog({
     </Dialog>
   );
 }
-

@@ -17,25 +17,8 @@ export interface UserProfile {
   totalRewards: number;
   claimedRewards: number;
   pendingRewards: number;
-  cleanupsOrganized: number;
-  cleanupsParticipated: number;
   isEmailVerified: boolean;
   kycStatus: "not_started" | "pending" | "verified" | "rejected";
   referralCode?: string;
   referredBy?: string;
-}
-
-// Legacy UI metadata shapes still used in a few places in the app.
-// (Do not confuse with the subgraph `UserMetadata` type.)
-export interface UserProfileMetadata<T extends boolean = false> {
-  name: string;
-  bio?: string;
-  photo?: string;
-  location?: T extends true ? UserProfileMetadataLocation : string;
-  interests?: string[];
-}
-
-export interface UserProfileMetadataLocation {
-  state?: string;
-  country?: SupportedCountryCode;
 }

@@ -1,6 +1,8 @@
 import { Bell, Sparkles, Menu, Moon, Sun } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { WalletButton } from "@vechain/vechain-kit";
 import {
   Popover,
@@ -13,6 +15,8 @@ import { useTheme } from "@/components/ThemeProvider";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useNotifications as useSubgraphNotifications } from "@/services/subgraph/queries";
 import { formatRelativeTimeFromBigInt } from "@/lib/time";
+import temiAvatar from "@/assets/temi.png";
+import appLogo from "@/assets/logo.png";
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -50,6 +54,14 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           <Menu className="w-5 h-5" />
         </Button>
 
+        {/* Logo - Mobile Only */}
+        <button
+          onClick={() => navigate("/dashboard")}
+          className="flex items-center gap-2 hover:opacity-80 transition-opacity lg:hidden"
+        >
+          <img src={appLogo} alt="CleanMate Logo" className="h-8 w-8" />
+        </button>
+
         <div className="flex items-center gap-2 text-sm">
           <span className="text-muted-foreground hidden md:inline">
             Dashboard
@@ -69,7 +81,14 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           onClick={() => navigate("/ai-chat")}
         >
           <div className="relative">
-            <Sparkles className="w-4 h-4" />
+            <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent">
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
+                <AvatarFallback>
+                  <Sparkles className="w-4 h-4" />
+                </AvatarFallback>
+              </Avatar>
+            </AvatarViewerTrigger>
             <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
           </div>
           <span className="hidden sm:inline text-sm font-medium">Temi</span>

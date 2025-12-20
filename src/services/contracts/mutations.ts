@@ -7,10 +7,12 @@ import { ABIContract, Address, Clause } from "@vechain/sdk-core";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CONTRACT_ADDRESSES } from "@/contracts/config";
-import { UserRegistryABI } from "@/contracts/abis/UserRegistry";
-import { CleanupABI } from "@/contracts/abis/Cleanup";
-import { RewardsManagerABI } from "@/contracts/abis/RewardsManager";
-import { StreakABI } from "@/contracts/abis/Streak";
+import {
+  UserRegistryABI,
+  CleanupABI,
+  RewardsManagerABI,
+  StreakABI,
+} from "@cleanmate/cip-sdk";
 import { subgraphKeys } from "../subgraph/queries";
 import type {
   RegisterUserParams,
@@ -19,6 +21,7 @@ import type {
   UpdateTeamMemberPermissionsParams,
   CreateCleanupParams,
   SubmitProofOfWorkParams,
+  AddCleanupUpdatesParams,
   ClaimRewardsParams,
   SubmitStreakParams,
 } from "@/types/params";
@@ -918,6 +921,71 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
     });
     toast.success("Proof of work submitted successfully");
     // Note: onTxConfirmedCallback is called in onTxConfirmed above
+  };
+
+  return {
+    sendTransaction: execute,
+    isTransactionPending,
+    isWaitingForWalletConfirmation,
+    txReceipt,
+    status,
+    resetStatus,
+    error,
+  };
+}
+
+export function useAddCleanupUpdate() {
+  const { account } = useWallet();
+  const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
+
+  const {
+    sendTransaction,
+    isTransactionPending,
+    isWaitingForWalletConfirmation,
+    txReceipt,
+    status,
+    resetStatus,
+    error,
+  } = useSendTransaction({
+    signerAccountAddress: account?.address ?? null,
+    onTxConfirmed: () => {
+      // Handled in execute function
+    },
+    onTxFailedOrCancelled: (error?: Error | string) => {
+      const errorMessage =
+        error instanceof Error ? error.message : error ?? "Unknown error";
+      toast.error(`Failed to add update: ${errorMessage}`);
+    },
+  });
+
+  const execute = async (params: AddCleanupUpdatesParams) => {
+    if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
+    }
+    if (!params.metadata || params.metadata.trim().length === 0) {
+      throw new Error("Update description is required");
+    }
+
+    const clause = createClause(
+      CleanupABI,
+      CONTRACT_ADDRESSES.CLEANUP,
+      "addCleanupUpdates",
+      [params] // AddCleanupUpdatesParams params
+    );
+
+    open();
+
+    await sendTransaction([clause]);
+
+    queryClient.invalidateQueries({
+      queryKey: subgraphKeys.cleanup(params.cleanupId),
+    });
+    queryClient.invalidateQueries({
+      queryKey: [...subgraphKeys.cleanups(), params.cleanupId, "updates"],
+    });
+    toast.success("Update added successfully");
   };
 
   return {
