@@ -1,7 +1,7 @@
 /// <reference types="google.maps" />
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Loader2, Navigation, X } from "lucide-react";
-import { Cleanup, CleanupStatus } from "@/types/cleanup";
+import { Cleanup, CleanupStatusUI } from "@/types/cleanup";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
 import cleanupMarkerIcon from "@/assets/cleanup-marker.png";
@@ -11,7 +11,8 @@ interface CleanupMapProps {
   className?: string;
 }
 
-const statusConfig: Record<CleanupStatus, { label: string; color: string }> = {
+const statusConfig: Record<CleanupStatusUI, { label: string; color: string }> = {
+  unpublished: { label: "Unpublished", color: "#6b7280" },
   open: { label: "Open", color: "#22c55e" },
   in_progress: { label: "In Progress", color: "#f97316" },
   completed: { label: "Completed", color: "#8b5cf6" },
@@ -389,8 +390,9 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
             <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">${
               cleanup.title
             }</h3>
+            ${cleanup.location.address ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #333; font-weight: 500;">📍 ${cleanup.location.address}</p>` : ""}
             <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">
-              📍 ${cleanup.location.address}
+              ${[cleanup.location.city, cleanup.location.country].filter(Boolean).join(", ") || "Location not specified"}
             </p>
             ${
               distanceText

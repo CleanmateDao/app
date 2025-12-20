@@ -2,33 +2,91 @@ import { CleanupDataMetadata } from "@/types/cleanup";
 import { UserProfileMetadata } from "@/types/user";
 
 /**
- * Parse cleanup metadata from JSON string
+ * Normalize IPFS URL to gateway URL
+ * Handles various formats: ipfs://hash, hash-only, or full gateway URL
+ */
+export function normalizeIPFSUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  
+  // If already a full HTTP/HTTPS URL, return as is
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url;
+  }
+  
+  // Remove ipfs:// prefix if present
+  const hash = url.replace(/^ipfs:\/\//, "").trim();
+  
+  // If it's just a hash, convert to gateway URL
+  // Use Pinata gateway by default (can be overridden via env var)
+  const gateway = import.meta.env.VITE_PINATA_GATEWAY || "gateway.pinata.cloud";
+  return `https://${gateway}/ipfs/${hash}`;
+}
+
+/**
+ * Parse cleanup metadata from JSON string or plain string
+ * If not JSON, treats the string as the description
+ * Also normalizes IPFS URLs in media array if present
  */
 export function parseCleanupMetadata(
   metadata: string | null
 ): CleanupDataMetadata | null {
   if (!metadata) return null;
+  
+  // Try to parse as JSON first
   try {
-    return JSON.parse(metadata) as CleanupDataMetadata;
+    const parsed = JSON.parse(metadata);
+    // If it's already an object with title/description, return it
+    if (typeof parsed === "object" && parsed !== null) {
+      // Normalize IPFS URLs in media array if present
+      if (parsed.media && Array.isArray(parsed.media)) {
+        parsed.media = parsed.media.map((item: any) => ({
+          ...item,
+          ipfsHash: normalizeIPFSUrl(item.ipfsHash || item.url || ""),
+        }));
+      }
+      return parsed as CleanupDataMetadata;
+    }
   } catch (error) {
-    console.error("Failed to parse cleanup metadata:", error);
-    return null;
+    // Not JSON, treat as plain string
+    // Use the string as the description (more flexible for free-form text)
+    return {
+      title: "Untitled Cleanup",
+      description: metadata.trim(),
+    };
   }
+  
+  return null;
 }
 
 /**
- * Parse user metadata from JSON string
+ * Parse user metadata from JSON string or plain string
+ * If not JSON, treats the string as the name
  */
 export function parseUserMetadata(
   metadata: string | null
 ): UserProfileMetadata<true> | null {
   if (!metadata) return null;
+  
+  // Try to parse as JSON first
   try {
-    return JSON.parse(metadata) as UserProfileMetadata<true>;
+    const parsed = JSON.parse(metadata);
+    // If it's already an object, return it
+    if (typeof parsed === "object" && parsed !== null) {
+      return parsed as UserProfileMetadata<true>;
+    }
   } catch (error) {
-    console.error("Failed to parse user metadata:", error);
-    return null;
+    // Not JSON, treat as plain string
+    // Use the string as the name
+    return {
+      name: metadata.trim(),
+      bio: undefined,
+      photo: undefined,
+      location: undefined,
+      interests: undefined,
+    };
   }
+  
+  return null;
 }
 
 /**
@@ -62,19 +120,21 @@ export function bigIntToDate(value: string | null | undefined): string | null {
  */
 export function mapCleanupStatus(
   status: number
-): "open" | "in_progress" | "completed" | "rewarded" {
-  // Based on contract: 0=CREATED, 1=IN_PROGRESS, 2=COMPLETED, 3=REWARDED
+): "unpublished" | "open" | "in_progress" | "completed" | "rewarded" {
+  // Based on contract: 0=UNPUBLISHED, 1=OPEN, 2=IN_PROGRESS, 3=COMPLETED, 4=REWARDED
   switch (status) {
     case 0:
-      return "open";
+      return "unpublished";
     case 1:
-      return "in_progress";
+      return "open";
     case 2:
-      return "completed";
+      return "in_progress";
     case 3:
+      return "completed";
+    case 4:
       return "rewarded";
     default:
-      return "open";
+      return "unpublished";
   }
 }
 
@@ -82,17 +142,19 @@ export function mapCleanupStatus(
  * Map app status to subgraph cleanup status
  */
 export function mapAppStatusToSubgraph(
-  status: "open" | "in_progress" | "completed" | "rewarded"
+  status: "unpublished" | "open" | "in_progress" | "completed" | "rewarded"
 ): number {
   switch (status) {
-    case "open":
+    case "unpublished":
       return 0;
-    case "in_progress":
+    case "open":
       return 1;
-    case "completed":
+    case "in_progress":
       return 2;
-    case "rewarded":
+    case "completed":
       return 3;
+    case "rewarded":
+      return 4;
   }
 }
 

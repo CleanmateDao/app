@@ -75,6 +75,12 @@ const GET_CLEANUP_QUERY = `
       participants {
         id
         participant
+        user {
+          id
+          metadata
+          email
+          emailVerified
+        }
         appliedAt
         status
         acceptedAt
@@ -132,6 +138,12 @@ const GET_CLEANUPS_QUERY = `
       participants {
         id
         participant
+        user {
+          id
+          metadata
+          email
+          emailVerified
+        }
         appliedAt
         status
         acceptedAt
@@ -195,6 +207,12 @@ const GET_USER_CLEANUPS_QUERY = `
       participants {
         id
         participant
+        user {
+          id
+          metadata
+          email
+          emailVerified
+        }
         appliedAt
         status
         acceptedAt
@@ -233,6 +251,14 @@ const GET_CLEANUP_PARTICIPANTS_QUERY = `
         id
       }
       participant
+      user {
+        id
+        metadata
+        email
+        emailVerified
+        kycStatus
+        isOrganizer
+      }
       appliedAt
       status
       acceptedAt

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +40,7 @@ export function EmailVerificationDialog({
     isVerified ? "completed" : initialEmail ? "code" : "email"
   );
   const [resendCooldown, setResendCooldown] = useState(0);
+  const hasRequestedCodeRef = useRef(false);
 
   const requestCodeMutation = useRequestVerificationCode();
   const verifyCodeMutation = useVerifyEmailCode();
@@ -48,6 +49,7 @@ export function EmailVerificationDialog({
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (open) {
+      hasRequestedCodeRef.current = false; // Reset flag when dialog opens
       if (isVerified) {
         setStep("completed");
       } else if (initialEmail) {
@@ -59,8 +61,43 @@ export function EmailVerificationDialog({
       }
       setCode("");
       setResendCooldown(0);
+    } else {
+      // Reset flag when dialog closes
+      hasRequestedCodeRef.current = false;
     }
   }, [open, isVerified, initialEmail]);
+
+  // Automatically request code when dialog opens with email
+  useEffect(() => {
+    if (
+      open &&
+      !isVerified &&
+      initialEmail &&
+      walletAddress &&
+      !hasRequestedCodeRef.current &&
+      step === "code"
+    ) {
+      hasRequestedCodeRef.current = true;
+      requestCodeMutation.mutate(
+        {
+          email: initialEmail,
+          walletAddress,
+        },
+        {
+          onSuccess: () => {
+            setResendCooldown(60); // Start 1 minute countdown
+          },
+        }
+      );
+    }
+  }, [
+    open,
+    isVerified,
+    initialEmail,
+    walletAddress,
+    step,
+    requestCodeMutation,
+  ]);
 
   // Countdown timer for resend cooldown
   useEffect(() => {
@@ -211,7 +248,9 @@ export function EmailVerificationDialog({
                     placeholder="Enter 6-digit code"
                     value={code}
                     onChange={(e) => {
-                      const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                      const value = e.target.value
+                        .replace(/\D/g, "")
+                        .slice(0, 6);
                       setCode(value);
                     }}
                     maxLength={6}
@@ -283,4 +322,3 @@ export function EmailVerificationDialog({
     </Dialog>
   );
 }
-

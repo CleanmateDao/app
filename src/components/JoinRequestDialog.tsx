@@ -58,11 +58,20 @@ export function JoinRequestDialog({
                 {cleanup.date} • {cleanup.startTime} - {cleanup.endTime}
               </span>
             </div>
-            <div className="flex items-center gap-2 text-sm">
-              <MapPin className="w-4 h-4 text-muted-foreground" />
-              <span>
-                {cleanup.location.address}, {cleanup.location.city}
-              </span>
+            <div className="flex items-start gap-2 text-sm">
+              <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="flex flex-col">
+                {cleanup.location.address && (
+                  <span className="font-medium mb-0.5">
+                    {cleanup.location.address}
+                  </span>
+                )}
+                <span className="text-muted-foreground">
+                  {[cleanup.location.city, cleanup.location.country]
+                    .filter(Boolean)
+                    .join(", ") || "Location not specified"}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-2 text-sm">
               <Users className="w-4 h-4 text-muted-foreground" />

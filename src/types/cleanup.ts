@@ -15,7 +15,7 @@ export enum ParticipantStatus {
 }
 
 // UI-friendly status unions (used by the frontend views & transformers)
-export type CleanupStatusUI = "open" | "in_progress" | "completed" | "rewarded";
+export type CleanupStatusUI = "unpublished" | "open" | "in_progress" | "completed" | "rewarded";
 export type ParticipantStatusUI = "pending" | "accepted" | "rejected";
 
 /**
@@ -72,6 +72,12 @@ export interface CleanupData {
 export interface CleanupDataMetadata {
   title: string;
   description: string;
+  category?: string;
+  media?: Array<{
+    ipfsHash: string;
+    type: "image" | "video";
+    name: string;
+  }>;
 }
 // Extended types for UI (not in contract but useful for frontend)
 export interface CleanupLocation {
@@ -100,6 +106,13 @@ export interface CleanupParticipant {
   appliedAt: string;
   rating?: number; // 1-5 stars given by organizer
   isKyced?: boolean; // KYC verification status
+  emailVerified?: boolean; // Email verification status
+  isOrganizer?: boolean; // Whether user is an organizer
+  location?: {
+    city?: string;
+    state?: string;
+    country?: string;
+  };
 }
 
 export interface Cleanup {
@@ -122,6 +135,7 @@ export interface Cleanup {
   };
   participants: CleanupParticipant[];
   proofMedia: CleanupMedia[];
+  metadataMedia?: CleanupMedia[]; // Media from metadata (initial images/videos)
   rewardAmount?: number; // B3TR tokens
 }
 

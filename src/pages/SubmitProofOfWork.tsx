@@ -23,7 +23,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { CleanupParticipant } from "@/types/cleanup";
@@ -242,11 +242,20 @@ export default function SubmitProofOfWork() {
         <Card>
           <CardContent className="p-4">
             <div className="flex flex-wrap gap-4 text-sm">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <MapPin className="w-4 h-4" />
-                <span>
-                  {cleanup.location.city}, {cleanup.location.country}
-                </span>
+              <div className="flex items-start gap-2 text-muted-foreground">
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
+                <div className="flex flex-col">
+                  {cleanup.location.address && (
+                    <span className="font-medium text-foreground mb-0.5">
+                      {cleanup.location.address}
+                    </span>
+                  )}
+                  <span>
+                    {[cleanup.location.city, cleanup.location.country]
+                      .filter(Boolean)
+                      .join(", ") || "Location not specified"}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="w-4 h-4" />
@@ -500,6 +509,9 @@ function ParticipantRatingRow({
     <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary rounded-lg gap-4">
       <div className="flex items-center gap-3">
         <Avatar className="w-10 h-10">
+          {participant.avatar && (
+            <AvatarImage src={participant.avatar} alt={participant.name} />
+          )}
           <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>
         </Avatar>
         <div>

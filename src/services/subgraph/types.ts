@@ -63,6 +63,7 @@ export interface SubgraphCleanupParticipant {
   id: string; // ID - cleanup address + participant address
   cleanup: SubgraphCleanup;
   participant: string; // Bytes - address
+  user: SubgraphUser; // User entity reference
   appliedAt: string; // BigInt
   status: string; // String - "applied", "accepted", "rejected"
   acceptedAt: string | null; // BigInt

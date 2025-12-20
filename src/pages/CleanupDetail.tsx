@@ -26,7 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { RatingDialog } from "@/components/RatingDialog";
 import { SubmitProofDialog } from "@/components/SubmitProofDialog";
 import { AcceptParticipantAlertDialog } from "@/components/AcceptParticipantAlertDialog";
@@ -34,7 +34,7 @@ import { RejectParticipantAlertDialog } from "@/components/RejectParticipantAler
 import { ParticipantInfoDialog } from "@/components/ParticipantInfoDialog";
 import { JoinRequestDialog } from "@/components/JoinRequestDialog";
 import { Input } from "@/components/ui/input";
-import { CleanupStatus, CleanupParticipant } from "@/types/cleanup";
+import { CleanupStatus, CleanupParticipant, CleanupStatusUI } from "@/types/cleanup";
 import { toast } from "sonner";
 import { useCleanup, useUser } from "@/services/subgraph/queries";
 import {
@@ -51,12 +51,14 @@ import {
 } from "@/services/contracts/mutations";
 import { useTeamMember } from "@/services/subgraph/queries";
 
-export type CleanupStatusUI = "open" | "in_progress" | "completed" | "rewarded";
-
 const statusConfig: Record<
   CleanupStatusUI,
   { label: string; className: string }
 > = {
+  unpublished: {
+    label: "Unpublished",
+    className: "bg-muted/10 text-muted-foreground border-muted/20",
+  },
   open: {
     label: "Open for Registration",
     className:
@@ -400,7 +402,10 @@ export default function CleanupDetail() {
               {statusConfig[cleanup.status].label}
             </Badge>
           </div>
-          <p className="text-muted-foreground text-sm">{cleanup.description}</p>
+          <div
+            className="text-muted-foreground text-sm prose prose-sm dark:prose-invert max-w-none"
+            dangerouslySetInnerHTML={{ __html: cleanup.description }}
+          />
 
           {/* Join Request Section */}
           {canRequestJoin && isEmailVerified && (
@@ -526,7 +531,53 @@ export default function CleanupDetail() {
         </Card>
       </motion.div>
 
-      {/* Media Gallery */}
+      {/* Media Gallery - Show metadata media (initial images) if available */}
+      {cleanup.metadataMedia && cleanup.metadataMedia.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Image className="w-4 h-4" />
+                Event Images ({cleanup.metadataMedia.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {cleanup.metadataMedia.map((media) => (
+                  <div
+                    key={media.id}
+                    className="relative group rounded-lg overflow-hidden border border-border aspect-video cursor-pointer hover:border-primary/50 transition-colors"
+                  >
+                    {media.type === "video" ? (
+                      <div className="absolute inset-0 flex items-center justify-center bg-secondary">
+                        <Video className="w-8 h-8 text-muted-foreground" />
+                      </div>
+                    ) : (
+                      <img
+                        src={media.url}
+                        alt={media.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute bottom-0 left-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <p className="text-xs text-white truncate font-medium">
+                        {media.name}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Proof Media Gallery */}
       {cleanup.proofMedia.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -537,7 +588,7 @@ export default function CleanupDetail() {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Image className="w-4 h-4" />
-                Media ({cleanup.proofMedia.length})
+                Proof of Work Media ({cleanup.proofMedia.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -598,8 +649,11 @@ export default function CleanupDetail() {
                     className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
                   >
                     <Avatar className="w-10 h-10">
+                      {participant.avatar ? (
+                        <AvatarImage src={participant.avatar} alt={participant.name} />
+                      ) : null}
                       <AvatarFallback>
-                        {participant.name.charAt(0)}
+                        {participant.name.charAt(0).toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
                     <div>
@@ -607,6 +661,31 @@ export default function CleanupDetail() {
                         <p className="font-medium text-sm">
                           {participant.name}
                         </p>
+                        {participant.isOrganizer && (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 px-1.5 gap-0.5 text-xs bg-primary/10 text-primary border-primary/20"
+                          >
+                            Organizer
+                          </Badge>
+                        )}
+                        {participant.isKyced && (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 px-1.5 gap-0.5 text-xs bg-status-approved/10 text-status-approved border-status-approved/20"
+                          >
+                            <ShieldCheck className="w-3 h-3" />
+                            KYC
+                          </Badge>
+                        )}
+                        {participant.emailVerified && (
+                          <Badge
+                            variant="secondary"
+                            className="h-5 px-1.5 gap-0.5 text-xs bg-status-approved/10 text-status-approved border-status-approved/20"
+                          >
+                            <Mail className="w-3 h-3" />
+                          </Badge>
+                        )}
                         <Info className="w-3 h-3 text-muted-foreground" />
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -693,8 +772,11 @@ export default function CleanupDetail() {
                       className="flex items-center gap-3 text-left hover:opacity-80 transition-opacity"
                     >
                       <Avatar className="w-10 h-10">
+                        {participant.avatar ? (
+                          <AvatarImage src={participant.avatar} alt={participant.name} />
+                        ) : null}
                         <AvatarFallback>
-                          {participant.name.charAt(0)}
+                          {participant.name.charAt(0).toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                       <div>
@@ -702,6 +784,14 @@ export default function CleanupDetail() {
                           <p className="font-medium text-sm">
                             {participant.name}
                           </p>
+                          {participant.isOrganizer && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 px-1.5 gap-0.5 text-xs bg-primary/10 text-primary border-primary/20"
+                            >
+                              Organizer
+                            </Badge>
+                          )}
                           {participant.isKyced && (
                             <Badge
                               variant="secondary"
@@ -709,6 +799,14 @@ export default function CleanupDetail() {
                             >
                               <ShieldCheck className="w-3 h-3" />
                               KYC
+                            </Badge>
+                          )}
+                          {participant.emailVerified && (
+                            <Badge
+                              variant="secondary"
+                              className="h-5 px-1.5 gap-0.5 text-xs bg-status-approved/10 text-status-approved border-status-approved/20"
+                            >
+                              <Mail className="w-3 h-3" />
                             </Badge>
                           )}
                           <Info className="w-3 h-3 text-muted-foreground" />

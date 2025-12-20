@@ -4,6 +4,7 @@ import type {
   SubgraphCleanupParticipant,
   SubgraphTransaction,
   SubgraphProofOfWorkMedia,
+  SubgraphCleanupMedia,
 } from "./types";
 import type {
   Cleanup,
@@ -11,6 +12,7 @@ import type {
   RewardTransaction,
 } from "@/types/cleanup";
 import type { UserProfile } from "@/types/user";
+import type { SupportedCountryCode } from "@/constants/supported";
 import {
   parseCleanupMetadata,
   parseUserMetadata,
@@ -19,6 +21,7 @@ import {
   mapCleanupStatus,
   mapParticipantStatus,
   mapKycStatus,
+  normalizeIPFSUrl,
 } from "./utils";
 
 /**
@@ -31,6 +34,32 @@ export function transformUserToProfile(
   if (!user) return null;
 
   const metadata = parseUserMetadata(user.metadata);
+  
+  // Safely extract location from metadata
+  // Handle both new format (object) and legacy format (string)
+  let country: SupportedCountryCode = "OTHER";
+  let state: string | undefined = undefined;
+  
+  if (metadata?.location) {
+    if (typeof metadata.location === "object") {
+      // New format: location is an object with country and state
+      country = metadata.location.country || "OTHER";
+      state = metadata.location.state;
+    } else if (typeof metadata.location === "string") {
+      // Legacy format: location is a string like "City, Country" or "Country"
+      const locationParts = metadata.location
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      if (locationParts.length > 0) {
+        // Try to match country code from the last part
+        const countryName = locationParts[locationParts.length - 1];
+        // For now, default to "OTHER" for legacy format
+        // Could be enhanced to map country names to codes
+        country = "OTHER";
+      }
+    }
+  }
 
   return {
     id: user.id.toLowerCase(),
@@ -38,8 +67,8 @@ export function transformUserToProfile(
     email: user.email,
     walletAddress: userAddress || user.id.toLowerCase(),
     bio: metadata?.bio,
-    country: metadata.location.country,
-    state: metadata.location.state,
+    country,
+    state,
     interests: metadata?.interests,
     profileImage: metadata?.photo,
     totalRewards: bigIntToNumber(user.totalRewardsEarned),
@@ -62,18 +91,100 @@ export function transformParticipant(
   userMetadata?: Record<string, { name?: string; email?: string }>
 ): CleanupParticipant {
   const userInfo = userMetadata?.[participant.participant.toLowerCase()];
+  
+  // Extract user metadata from participant.user (required field in schema)
+  const userMetadataParsed = participant.user.metadata
+    ? parseUserMetadata(participant.user.metadata)
+    : null;
+  
+  // Use user metadata for name, fallback to userInfo, then to address
+  const name =
+    userMetadataParsed?.name ||
+    userInfo?.name ||
+    participant.participant.slice(0, 6) +
+      "..." +
+      participant.participant.slice(-4);
+  
+  // Use user email, fallback to userInfo email, then to empty string
+  const email =
+    participant.user.email ||
+    userInfo?.email ||
+    "";
+  
+  // Extract photo from user metadata and normalize IPFS URL
+  const avatar = userMetadataParsed?.photo
+    ? normalizeIPFSUrl(userMetadataParsed.photo)
+    : undefined;
+
+  // Extract location from user metadata
+  let location: { city?: string; state?: string; country?: string } | undefined = undefined;
+  if (userMetadataParsed?.location) {
+    if (typeof userMetadataParsed.location === "object") {
+      // New format: location is an object with country and state
+      location = {
+        state: userMetadataParsed.location.state,
+        country: userMetadataParsed.location.country,
+      };
+    } else if (typeof userMetadataParsed.location === "string") {
+      // Legacy format: location is a string like "City, State, Country" or "State, Country" or "Country"
+      const locationParts = userMetadataParsed.location
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean);
+      
+      if (locationParts.length === 1) {
+        // Just country
+        location = { country: locationParts[0] };
+      } else if (locationParts.length === 2) {
+        // State, Country
+        location = { state: locationParts[0], country: locationParts[1] };
+      } else if (locationParts.length >= 3) {
+        // City, State, Country
+        location = {
+          city: locationParts[0],
+          state: locationParts[1],
+          country: locationParts[2],
+        };
+      }
+    }
+  }
 
   return {
     id: participant.id,
-    name:
-      userInfo?.name ||
-      participant.participant.slice(0, 6) +
-        "..." +
-        participant.participant.slice(-4),
-    email: userInfo?.email || "",
+    name,
+    email,
+    avatar,
     status: mapParticipantStatus(participant.status),
     appliedAt: bigIntToDate(participant.appliedAt) || "",
-    isKyced: false, // This needs to be fetched from user data
+    isKyced: participant.user.kycStatus === 2, // KYC status 2 = VERIFIED
+    emailVerified: participant.user.emailVerified || false,
+    isOrganizer: participant.user.isOrganizer || false,
+    location,
+  };
+}
+
+/**
+ * Transform subgraph cleanup media to app media
+ */
+export function transformCleanupMedia(media: SubgraphCleanupMedia): {
+  id: string;
+  name: string;
+  type: "image" | "video";
+  url: string;
+  size: string;
+  uploadedAt: string;
+} {
+  const isVideo = media.mimeType.startsWith("video/");
+  const normalizedUrl = normalizeIPFSUrl(media.url);
+  const fileName = normalizedUrl.split("/").pop() || "file";
+
+  return {
+    id: media.id,
+    name: fileName,
+    type: isVideo ? "video" : "image",
+    url: normalizedUrl,
+    size: "0", // Size is not available in subgraph
+    uploadedAt: bigIntToDate(media.createdAt) || "",
   };
 }
 
@@ -89,13 +200,14 @@ export function transformProofMedia(media: SubgraphProofOfWorkMedia): {
   uploadedAt: string;
 } {
   const isVideo = media.mimeType.startsWith("video/");
-  const fileName = media.url.split("/").pop() || "file";
+  const normalizedUrl = normalizeIPFSUrl(media.url);
+  const fileName = normalizedUrl.split("/").pop() || "file";
 
   return {
     id: media.id,
     name: fileName,
     type: isVideo ? "video" : "image",
-    url: media.url,
+    url: normalizedUrl,
     size: "0", // Size is not available in subgraph
     uploadedAt:
       bigIntToDate(media.submittedAt) || bigIntToDate(media.uploadedAt) || "",
@@ -125,7 +237,7 @@ export function transformCleanup(
     id: cleanup.id.toLowerCase(),
     title: metadata?.title || "Untitled Cleanup",
     description: metadata?.description || "",
-    category: cleanup.category || "Other",
+    category: metadata?.category || cleanup.category || "Other",
     status: mapCleanupStatus(cleanup.status),
     location: {
       address: cleanup.location || "",
@@ -152,7 +264,22 @@ export function transformCleanup(
       avatar: undefined,
     },
     participants,
-    proofMedia: cleanup.proofOfWorkMedia.map(transformProofMedia),
+    // Combine both regular medias and proof of work media
+    proofMedia: [
+      ...cleanup.medias.map(transformCleanupMedia),
+      ...cleanup.proofOfWorkMedia.map(transformProofMedia),
+    ],
+    // Media from metadata (initial images/videos from cleanup creation)
+    metadataMedia: metadata?.media
+      ? metadata.media.map((item, index) => ({
+          id: `metadata-${cleanup.id}-${index}`,
+          name: item.name || "Media",
+          type: item.type === "video" ? "video" : "image",
+          url: normalizeIPFSUrl(item.ipfsHash),
+          size: "0",
+          uploadedAt: "",
+        }))
+      : undefined,
     rewardAmount: cleanup.rewardAmount
       ? bigIntToNumber(cleanup.rewardAmount)
       : undefined,

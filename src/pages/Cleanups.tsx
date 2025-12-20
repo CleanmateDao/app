@@ -79,6 +79,10 @@ const statusConfig: Record<
   CleanupStatusUI,
   { label: string; className: string }
 > = {
+  unpublished: {
+    label: "Unpublished",
+    className: "bg-muted/10 text-muted-foreground border-muted/20",
+  },
   open: {
     label: "Open",
     className:
@@ -368,9 +372,20 @@ export default function Cleanups() {
                         </div>
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                          <MapPin className="w-3 h-3" />
-                          <span>{cleanup.location.city}</span>
+                        <div className="flex items-center gap-1 text-sm">
+                          <MapPin className="w-3 h-3 text-muted-foreground" />
+                          <div className="flex flex-col">
+                            {cleanup.location.address && (
+                              <span className="font-medium text-xs truncate max-w-[200px]">
+                                {cleanup.location.address}
+                              </span>
+                            )}
+                            <span className="text-muted-foreground text-xs">
+                              {[cleanup.location.city, cleanup.location.country]
+                                .filter(Boolean)
+                                .join(", ") || "Location not specified"}
+                            </span>
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell>
