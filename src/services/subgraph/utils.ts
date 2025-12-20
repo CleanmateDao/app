@@ -191,7 +191,7 @@ export function calculateLocationMatchScore(
   let score = 0;
   const cleanupCity = cleanup.city?.toLowerCase().trim() || "";
   const cleanupCountry = cleanup.country?.toLowerCase().trim() || "";
-  const cleanupAddress = cleanup.location?.toLowerCase().trim() || "";
+  const cleanupId = cleanup.location?.toLowerCase().trim() || "";
 
   const userCity = userLocation.city?.toLowerCase().trim() || "";
   const userCountry = userLocation.country?.toLowerCase().trim() || "";
@@ -216,11 +216,11 @@ export function calculateLocationMatchScore(
   }
 
   // Address match: high priority if address exists (score 80)
-  if (userAddress && cleanupAddress) {
+  if (userAddress && cleanupId) {
     // Check if addresses are similar (contains or partial match)
     if (
-      cleanupAddress.includes(userAddress) ||
-      userAddress.includes(cleanupAddress)
+      cleanupId.includes(userAddress) ||
+      userAddress.includes(cleanupId)
     ) {
       score += 80;
     }
