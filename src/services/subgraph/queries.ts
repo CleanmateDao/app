@@ -16,15 +16,12 @@ import type {
   SubgraphUserStreakStats,
   GetCleanupsQueryParams,
   GetUserCleanupsQueryParams,
-  GetCleanupParticipantsQueryParams,
   GetTransactionsQueryParams,
   GetNotificationsQueryParams,
-  GetTeamMembershipsQueryParams,
   GetStreakSubmissionsQueryParams,
   NotificationFilter,
   StreakSubmissionFilter,
 } from "./types";
-import { parseUserMetadata, extractUserState } from "./utils";
 
 // Query Keys
 export const subgraphKeys = {

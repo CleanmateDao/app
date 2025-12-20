@@ -328,12 +328,6 @@ const GET_STREAK_SUBMISSION_QUERY = `
       mimetypes
       blockNumber
       transactionHash
-      media {
-        id
-        ipfsHash
-        mimeType
-        index
-      }
     }
   }
 `;
@@ -361,12 +355,6 @@ const GET_STREAK_SUBMISSIONS_QUERY = `
       mimetypes
       blockNumber
       transactionHash
-      media {
-        id
-        ipfsHash
-        mimeType
-        index
-      }
     }
   }
 `;
