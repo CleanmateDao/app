@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   Flame,
   Play,
+  Pause,
   CheckCircle,
   X,
   RefreshCw,
@@ -26,10 +27,24 @@ import { transformUserStreakStats } from "@/types/streak";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSubmitStreak } from "@/services/contracts/mutations";
 import { uploadFileToIPFS } from "@/services/ipfs";
+import { useRecording } from "@/contexts/RecordingContext";
 
 type SubmitStep = "rules" | "record" | "preview" | "submitting" | "success";
 
 const MAX_DURATION = 5000; // 5 seconds in ms
+
+/**
+ * Formats seconds into a human-readable string
+ */
+function formatTimeRemaining(seconds: number): string {
+  if (seconds <= 0) return "now";
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (minutes > 0) {
+    return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+  }
+  return `${secs}s`;
+}
 
 /**
  * Detects the device type from the user agent
@@ -57,6 +72,7 @@ export default function StreakSubmit() {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const walletAddress = useWalletAddress();
+  const { setIsRecording: setContextRecording } = useRecording();
 
   // Fetch streak stats for streaker code
   const { data: streakStatsData } = useUserStreakStats(
@@ -69,21 +85,73 @@ export default function StreakSubmit() {
   // Submit streak mutation
   const submitStreakMutation = useSubmitStreak();
 
+  // Rate limit: 30 minutes from last submission
+  const RATE_LIMIT_MINUTES = 30;
+  const RATE_LIMIT_MS = useMemo(() => RATE_LIMIT_MINUTES * 60 * 1000, []);
+
+  // Calculate if user can submit based on last submission time
+  const canSubmit = useMemo(() => {
+    if (!Number(streakStats?.lastSubmissionAt)) return true;
+    const lastSubmissionTime = new Date(
+      Number(streakStats.lastSubmissionAt) * 1000
+    ).getTime();
+    const now = Date.now();
+    return now - lastSubmissionTime >= RATE_LIMIT_MS;
+  }, [streakStats?.lastSubmissionAt, RATE_LIMIT_MS]);
+
+  // Calculate time remaining until can submit
+  const [timeUntilCanSubmit, setTimeUntilCanSubmit] = useState(0);
+
+  useEffect(() => {
+    if (!streakStats?.lastSubmissionAt) {
+      setTimeUntilCanSubmit(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const lastSubmissionTime = new Date(
+        Number(streakStats.lastSubmissionAt) * 1000
+      ).getTime();
+      const now = Date.now();
+      const elapsed = now - lastSubmissionTime;
+      const remaining = Math.max(0, RATE_LIMIT_MS - elapsed);
+      setTimeUntilCanSubmit(Math.floor(remaining / 1000)); // Convert to seconds
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [streakStats?.lastSubmissionAt, RATE_LIMIT_MS]);
+
   const [step, setStep] = useState<SubmitStep>("rules");
   const [dontShowRules, setDontShowRules] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
-  const [recordedBlob, setRecordedBlob] = useState<Blob | null>(null);
-  const [recordedUrl, setRecordedUrl] = useState<string | null>(null);
+  // Support multiple media items
+  const [mediaItems, setMediaItems] = useState<
+    Array<{
+      id: string;
+      blob: Blob;
+      url: string;
+      mimeType: string;
+      duration?: number;
+    }>
+  >([]);
   const [pulseAnimation, setPulseAnimation] = useState(false);
   const [videoDuration, setVideoDuration] = useState<number>(0);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(true);
+  const [videoProgress, setVideoProgress] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const recordingStartRef = useRef<number>(0);
   const animationFrameRef = useRef<number>(0);
   const chunksRef = useRef<Blob[]>([]);
+  const isVideoPlayingRef = useRef<boolean>(false);
+  const currentPreviewIndexRef = useRef<number>(0);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -130,16 +198,16 @@ export default function StreakSubmit() {
   }, []);
 
   // Redirect non-mobile users (wait for proper detection)
-  useEffect(() => {
-    if (isMobile === false) {
-      toast({
-        title: "Mobile Only",
-        description: "Streak submission is only available on mobile devices.",
-        variant: "destructive",
-      });
-      navigate("/streaks");
-    }
-  }, [isMobile, navigate, toast]);
+  // useEffect(() => {
+  //   if (isMobile === false) {
+  //     toast({
+  //       title: "Mobile Only",
+  //       description: "Streak submission is only available on mobile devices.",
+  //       variant: "destructive",
+  //     });
+  //     navigate("/streaks");
+  //   }
+  // }, [isMobile, navigate, toast]);
 
   // Initialize camera when entering record step
   useEffect(() => {
@@ -152,6 +220,94 @@ export default function StreakSubmit() {
       }
     };
   }, [initCamera, step, stopCamera]);
+
+  // Reset recording state when leaving record step
+  useEffect(() => {
+    if (step !== "record") {
+      setContextRecording(false);
+    }
+  }, [step, setContextRecording]);
+
+  // Play preview video when entering preview step
+  useEffect(() => {
+    const currentMedia = mediaItems[currentPreviewIndexRef.current];
+    if (step === "preview" && previewVideoRef.current && currentMedia) {
+      const video = previewVideoRef.current;
+      let isInitialized = false;
+
+      // Ensure source is set (it should already be from the video element)
+      if (!video.src || video.src !== currentMedia.url) {
+        video.src = currentMedia.url;
+      }
+
+      // Function to initialize and play video (only once)
+      const initializeVideo = async () => {
+        if (isInitialized) return;
+        isInitialized = true;
+
+        // Reset to start
+        video.currentTime = 0;
+        setVideoProgress(0);
+
+        // Wait a bit for video to be ready
+        if (video.readyState >= 2) {
+          try {
+            await video.play();
+            isVideoPlayingRef.current = true;
+            setIsVideoPlaying(true);
+          } catch (err) {
+            console.error("Error playing preview video:", err);
+            isVideoPlayingRef.current = false;
+            setIsVideoPlaying(false);
+          }
+        }
+      };
+
+      // Try to initialize when video can play
+      const handleCanPlay = () => {
+        if (!isInitialized) {
+          initializeVideo();
+        }
+      };
+
+      // Handle video end (loop)
+      const handleEnded = () => {
+        video.currentTime = 0;
+        setVideoProgress(0);
+        video.play().catch(console.error);
+      };
+
+      // Add event listeners
+      video.addEventListener("canplay", handleCanPlay, { once: true });
+      video.addEventListener("ended", handleEnded);
+
+      // Try immediately if already ready
+      if (video.readyState >= 2) {
+        initializeVideo();
+      }
+
+      // Fallback timeout
+      const timeoutId = setTimeout(() => {
+        if (!isInitialized && video.readyState >= 2) {
+          initializeVideo();
+        }
+      }, 100);
+
+      return () => {
+        clearTimeout(timeoutId);
+        video.removeEventListener("canplay", handleCanPlay);
+        video.removeEventListener("ended", handleEnded);
+      };
+    } else if (step !== "preview" && previewVideoRef.current) {
+      // Pause video when leaving preview step
+      const video = previewVideoRef.current;
+      video.pause();
+      video.currentTime = 0;
+      setVideoProgress(0);
+      isVideoPlayingRef.current = false;
+      setIsVideoPlaying(false);
+    }
+  }, [step, mediaItems]);
 
   // Pulse animation for record button
   useEffect(() => {
@@ -180,15 +336,66 @@ export default function StreakSubmit() {
 
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      setRecordedBlob(blob);
+      console.log("Recording stopped, blob created:", {
+        size: blob.size,
+        type: blob.type,
+        chunks: chunksRef.current.length,
+      });
+
+      if (blob.size === 0) {
+        console.error("Empty blob created!");
+        toast({
+          title: "Recording Error",
+          description: "The recorded video is empty. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
-      setRecordedUrl(url);
+      const mimeType = blob.type || "video/webm";
+      const mediaId = `media-${Date.now()}-${Math.random()}`;
 
       // Calculate video duration
       const video = document.createElement("video");
+      video.preload = "metadata";
       video.src = url;
       video.onloadedmetadata = () => {
-        setVideoDuration(video.duration);
+        console.log("Video metadata loaded in onstop:", {
+          duration: video.duration,
+          videoWidth: video.videoWidth,
+          videoHeight: video.videoHeight,
+        });
+
+        // Add new media item to array
+        setMediaItems((prev) => [
+          ...prev,
+          {
+            id: mediaId,
+            blob,
+            url,
+            mimeType,
+            duration: video.duration,
+          },
+        ]);
+
+        // Set first item as preview if it's the first one
+        if (mediaItems.length === 0) {
+          setVideoDuration(video.duration);
+        }
+      };
+      video.onerror = (e) => {
+        console.error("Error loading video metadata:", video.error);
+        // Still add the media item even if duration can't be calculated
+        setMediaItems((prev) => [
+          ...prev,
+          {
+            id: mediaId,
+            blob,
+            url,
+            mimeType,
+          },
+        ]);
       };
 
       setStep("preview");
@@ -198,6 +405,7 @@ export default function StreakSubmit() {
     mediaRecorder.start(100);
     recordingStartRef.current = Date.now();
     setIsRecording(true);
+    setContextRecording(true);
 
     // Animate progress
     const updateProgress = () => {
@@ -223,13 +431,26 @@ export default function StreakSubmit() {
       mediaRecorderRef.current.stop();
     }
     setIsRecording(false);
+    setContextRecording(false);
     setRecordingProgress(0);
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
     }
-  }, []);
+  }, [setContextRecording]);
 
   const handleContinue = () => {
+    // Check rate limit before allowing recording
+    if (!canSubmit && timeUntilCanSubmit > 0) {
+      toast({
+        title: "Rate Limit Exceeded",
+        description: `You can submit again in ${formatTimeRemaining(
+          timeUntilCanSubmit
+        )}. Please wait before recording a new streak.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (dontShowRules) {
       localStorage.setItem("skipStreakRules", "true");
     }
@@ -237,47 +458,123 @@ export default function StreakSubmit() {
   };
 
   const handleRetake = () => {
-    if (recordedUrl) {
-      URL.revokeObjectURL(recordedUrl);
-    }
-    setRecordedBlob(null);
-    setRecordedUrl(null);
+    // Clear all media items
+    mediaItems.forEach((item) => {
+      URL.revokeObjectURL(item.url);
+    });
+    setMediaItems([]);
     setStep("record");
   };
 
+  const handleRemoveMedia = (mediaId: string) => {
+    setMediaItems((prev) => {
+      const itemToRemove = prev.find((item) => item.id === mediaId);
+      if (itemToRemove) {
+        URL.revokeObjectURL(itemToRemove.url);
+      }
+      const filtered = prev.filter((item) => item.id !== mediaId);
+
+      // If we removed the currently previewed item, update preview
+      if (
+        filtered.length > 0 &&
+        currentPreviewIndexRef.current >= filtered.length
+      ) {
+        currentPreviewIndexRef.current = filtered.length - 1;
+      } else if (filtered.length === 0) {
+        currentPreviewIndexRef.current = 0;
+        setStep("record");
+      }
+
+      return filtered;
+    });
+
+    toast({
+      title: "Media Removed",
+      description: "Media item has been removed from your submission.",
+    });
+  };
+
+  const toggleVideoPlayback = useCallback(async () => {
+    if (!previewVideoRef.current) return;
+
+    try {
+      if (previewVideoRef.current.paused) {
+        await previewVideoRef.current.play();
+        isVideoPlayingRef.current = true;
+        setIsVideoPlaying(true);
+      } else {
+        previewVideoRef.current.pause();
+        isVideoPlayingRef.current = false;
+        setIsVideoPlaying(false);
+      }
+    } catch (error) {
+      console.error("Error toggling video playback:", error);
+    }
+  }, []);
+
   const handleSubmit = async () => {
-    if (!recordedBlob) {
+    if (mediaItems.length === 0) {
       toast({
         title: "Error",
-        description: "No video recorded",
+        description: "No media recorded",
         variant: "destructive",
       });
+      return;
+    }
+
+    // Check rate limit before submitting
+    if (!canSubmit) {
+      toast({
+        title: "Rate Limit Exceeded",
+        description: `Please wait ${formatTimeRemaining(
+          timeUntilCanSubmit
+        )} before submitting again.`,
+        variant: "destructive",
+      });
+      setStep("preview");
       return;
     }
 
     setStep("submitting");
 
     try {
-      // Step 1: Convert Blob to File for IPFS upload
-      const mimeType = recordedBlob.type || "video/webm";
-      const fileName = `streak-${Date.now()}.${
-        mimeType.split("/")[1] || "webm"
-      }`;
-      const videoFile = new File([recordedBlob], fileName, { type: mimeType });
-
-      // Step 2: Upload video to IPFS
+      // Step 1: Upload all media files to IPFS
       toast({
-        title: "Uploading video...",
-        description: "Please wait while we upload your video to IPFS",
+        title: "Uploading media...",
+        description: `Please wait while we upload ${mediaItems.length} media file(s) to IPFS`,
       });
 
-      const ipfsUrl = await uploadFileToIPFS(videoFile, fileName);
+      const ipfsHashes: string[] = [];
+      const mimetypes: string[] = [];
+      const totalSize = mediaItems.reduce(
+        (sum, item) => sum + item.blob.size,
+        0
+      );
+      const totalDuration = mediaItems.reduce(
+        (sum, item) => sum + (item.duration || 0),
+        0
+      );
 
-      if (!ipfsUrl || ipfsUrl.trim() === "") {
-        throw new Error("Failed to get IPFS URL after upload");
+      // Upload each media item
+      for (let i = 0; i < mediaItems.length; i++) {
+        const item = mediaItems[i];
+        const fileName = `streak-${Date.now()}-${i}.${
+          item.mimeType.split("/")[1] ||
+          (item.mimeType.startsWith("video/") ? "webm" : "jpg")
+        }`;
+        const file = new File([item.blob], fileName, { type: item.mimeType });
+
+        const ipfsUrl = await uploadFileToIPFS(file, fileName);
+
+        if (!ipfsUrl || ipfsUrl.trim() === "") {
+          throw new Error(`Failed to upload media item ${i + 1} to IPFS`);
+        }
+
+        ipfsHashes.push(ipfsUrl);
+        mimetypes.push(item.mimeType);
       }
 
-      // Step 3: Submit streak with IPFS URL
+      // Step 2: Submit streak with IPFS URLs
       const deviceType = getDeviceType();
 
       await submitStreakMutation.sendTransaction({
@@ -285,15 +582,22 @@ export default function StreakSubmit() {
           description: "Sustainable action submission",
           timestamp: new Date().toISOString(),
           streakerCode: streakStats?.streakerCode,
-          mediaLength: videoDuration,
-          size: recordedBlob.size,
+          mediaCount: mediaItems.length,
+          totalMediaLength: totalDuration,
+          totalSize: totalSize,
           deviceType: deviceType,
         }),
-        ipfsHashes: [ipfsUrl],
-        mimetypes: [mimeType],
+        ipfsHashes,
+        mimetypes,
       });
 
       setStep("success");
+
+      // Clean up media URLs
+      mediaItems.forEach((item) => {
+        URL.revokeObjectURL(item.url);
+      });
+      setMediaItems([]);
 
       // Navigate after showing success
       setTimeout(() => {
@@ -408,6 +712,33 @@ export default function StreakSubmit() {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {/* Rate Limit Warning */}
+            {!canSubmit && timeUntilCanSubmit > 0 && (
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ delay: 0.3 }}
+                className="mt-4"
+              >
+                <Card className="border-status-rejected/50 bg-status-rejected/10">
+                  <CardContent className="p-4 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <X className="h-4 w-4 text-status-rejected" />
+                      <span className="text-sm font-medium text-status-rejected">
+                        Rate Limit Active
+                      </span>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      You can submit again in{" "}
+                      <span className="font-semibold text-foreground">
+                        {formatTimeRemaining(timeUntilCanSubmit)}
+                      </span>
+                    </p>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </div>
         </div>
 
@@ -499,8 +830,11 @@ export default function StreakSubmit() {
             <Button
               className="w-full gap-2 h-12 text-base font-semibold shadow-lg shadow-primary/20"
               onClick={handleContinue}
+              disabled={!canSubmit && timeUntilCanSubmit > 0}
             >
-              Continue to Record
+              {!canSubmit && timeUntilCanSubmit > 0
+                ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
+                : "Continue to Record"}
               <Video className="h-5 w-5" />
             </Button>
           </motion.div>
@@ -778,19 +1112,218 @@ export default function StreakSubmit() {
         </motion.div>
 
         {/* Video Preview */}
-        {recordedUrl && (
-          <video
-            src={recordedUrl}
-            autoPlay
-            loop
-            playsInline
-            muted
-            className="flex-1 object-cover w-full h-full"
-            onLoadedMetadata={(e) => {
-              const video = e.currentTarget;
-              setVideoDuration(video.duration);
-            }}
-          />
+        {mediaItems.length > 0 ? (
+          <div className="relative flex-1 w-full h-full">
+            <video
+              ref={previewVideoRef}
+              src={mediaItems[currentPreviewIndexRef.current]?.url}
+              autoPlay
+              loop
+              playsInline
+              muted
+              preload="auto"
+              className="w-full h-full object-cover bg-black"
+              style={{
+                minHeight: 0,
+                display: "block",
+              }}
+              onClick={toggleVideoPlayback}
+              onLoadedMetadata={(e) => {
+                const video = e.currentTarget;
+                const currentMedia = mediaItems[currentPreviewIndexRef.current];
+                if (currentMedia) {
+                  setVideoDuration(video.duration);
+                }
+              }}
+              onPlay={() => {
+                if (!isVideoPlayingRef.current) {
+                  isVideoPlayingRef.current = true;
+                  setIsVideoPlaying(true);
+                }
+              }}
+              onPlaying={() => {
+                if (!isVideoPlayingRef.current) {
+                  isVideoPlayingRef.current = true;
+                  setIsVideoPlaying(true);
+                }
+              }}
+              onPause={() => {
+                if (isVideoPlayingRef.current) {
+                  isVideoPlayingRef.current = false;
+                  setIsVideoPlaying(false);
+                }
+              }}
+              onTimeUpdate={(e) => {
+                const video = e.currentTarget;
+                if (video.duration > 0) {
+                  const progress = (video.currentTime / video.duration) * 100;
+                  setVideoProgress(progress);
+                }
+              }}
+              onEnded={() => {
+                setVideoProgress(0);
+              }}
+              onError={(e) => {
+                const video = e.currentTarget;
+                console.error("Video preview error:", {
+                  error: video.error,
+                  code: video.error?.code,
+                  message: video.error?.message,
+                });
+                toast({
+                  title: "Video Preview Error",
+                  description:
+                    "Unable to load video preview. Please try recording again.",
+                  variant: "destructive",
+                });
+              }}
+            />
+            {/* Play/Pause Overlay Button */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="relative">
+                {/* Circular Progress Ring */}
+                <svg
+                  className="absolute -inset-3 w-[120px] h-[120px] transform -rotate-90"
+                  viewBox="0 0 120 120"
+                >
+                  {/* Background circle */}
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    fill="none"
+                    stroke="rgba(255,255,255,0.15)"
+                    strokeWidth="6"
+                  />
+                  {/* Progress circle */}
+                  <circle
+                    cx="60"
+                    cy="60"
+                    r="52"
+                    fill="none"
+                    stroke="white"
+                    strokeWidth="6"
+                    strokeLinecap="round"
+                    strokeDasharray={2 * Math.PI * 52}
+                    strokeDashoffset={
+                      2 * Math.PI * 52 * (1 - videoProgress / 100)
+                    }
+                    style={{
+                      transition: "stroke-dashoffset 0.1s linear",
+                    }}
+                  />
+                </svg>
+                <motion.button
+                  initial={{ opacity: 0.7, scale: 1 }}
+                  animate={{
+                    opacity: isVideoPlaying ? 0.3 : 1,
+                    scale: 1,
+                  }}
+                  whileHover={{
+                    opacity: 1,
+                    scale: 1.1,
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    toggleVideoPlayback();
+                  }}
+                  className="pointer-events-auto relative w-24 h-24 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center border-4 border-white/30 hover:bg-black/80 transition-colors z-10"
+                >
+                  <AnimatePresence mode="wait">
+                    {isVideoPlaying ? (
+                      <motion.div
+                        key="pause"
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.5 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <Pause
+                          className="w-12 h-12 text-white ml-1"
+                          fill="white"
+                        />
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="play"
+                        initial={{ opacity: 0, scale: 0.5 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.5 }}
+                        transition={{ duration: 0.15 }}
+                      >
+                        <Play
+                          className="w-12 h-12 text-white ml-1"
+                          fill="white"
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </motion.button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <Video className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No media recorded</p>
+            </div>
+          </div>
+        )}
+
+        {/* Media Items List */}
+        {mediaItems.length > 0 && (
+          <div className="absolute top-20 left-0 right-0 z-10 px-4">
+            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+              {mediaItems.map((item, index) => (
+                <div
+                  key={item.id}
+                  className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 ${
+                    index === currentPreviewIndexRef.current
+                      ? "border-primary"
+                      : "border-white/30"
+                  }`}
+                >
+                  {item.mimeType.startsWith("video/") ? (
+                    <video
+                      src={item.url}
+                      className="w-full h-full object-cover"
+                      muted
+                    />
+                  ) : (
+                    <img
+                      src={item.url}
+                      alt={`Media ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleRemoveMedia(item.id);
+                    }}
+                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-status-rejected/90 hover:bg-status-rejected flex items-center justify-center transition-colors"
+                  >
+                    <X className="h-3 w-3 text-white" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      currentPreviewIndexRef.current = index;
+                      if (previewVideoRef.current) {
+                        previewVideoRef.current.src = item.url;
+                        previewVideoRef.current.load();
+                      }
+                    }}
+                    className="absolute inset-0"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Bottom Controls */}

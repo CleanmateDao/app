@@ -277,7 +277,7 @@ export default function CleanupDetail() {
 
     try {
       await acceptParticipantMutation.sendTransaction({
-        cleanupAddress: id,
+        cleanupId: id,
         participant: participantAddress,
       });
       setAcceptDialogOpen(false);
@@ -295,7 +295,7 @@ export default function CleanupDetail() {
 
     try {
       await rejectParticipantMutation.sendTransaction({
-        cleanupAddress: id,
+        cleanupId: id,
         participant: participantAddress,
       });
       setRejectDialogOpen(false);

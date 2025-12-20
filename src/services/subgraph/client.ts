@@ -43,7 +43,7 @@ const GET_USER_QUERY = `
 `;
 
 const GET_CLEANUP_QUERY = `
-  query GetCleanup($id: Bytes!) {
+  query GetCleanup($id: String!) {
     cleanup(id: $id) {
       id
       organizer
@@ -81,6 +81,12 @@ const GET_CLEANUP_QUERY = `
         rejectedAt
         rewardEarned
         rewardEarnedAt
+      }
+      medias {
+        id
+        url
+        mimeType
+        createdAt
       }
       proofOfWorkMedia {
         id
@@ -132,6 +138,12 @@ const GET_CLEANUPS_QUERY = `
         rejectedAt
         rewardEarned
         rewardEarnedAt
+      }
+      medias {
+        id
+        url
+        mimeType
+        createdAt
       }
       proofOfWorkMedia {
         id
@@ -190,6 +202,12 @@ const GET_USER_CLEANUPS_QUERY = `
         rewardEarned
         rewardEarnedAt
       }
+      medias {
+        id
+        url
+        mimeType
+        createdAt
+      }
       proofOfWorkMedia {
         id
         url
@@ -202,7 +220,7 @@ const GET_USER_CLEANUPS_QUERY = `
 `;
 
 const GET_CLEANUP_PARTICIPANTS_QUERY = `
-  query GetCleanupParticipants($cleanupId: Bytes!, $first: Int, $skip: Int) {
+  query GetCleanupParticipants($cleanupId: String!, $first: Int, $skip: Int) {
     cleanupParticipants(
       first: $first
       skip: $skip
@@ -385,9 +403,9 @@ export const subgraphClient = {
     });
   },
 
-  async getCleanup(cleanupAddress: string): Promise<GetCleanupResponse> {
+  async getCleanup(cleanupId: string): Promise<GetCleanupResponse> {
     return client.request<GetCleanupResponse>(GET_CLEANUP_QUERY, {
-      id: normalizeAddress(cleanupAddress),
+      id: cleanupId, // cleanup ID is a string (uint256 as string), not an address
     });
   },
 
@@ -442,13 +460,13 @@ export const subgraphClient = {
   },
 
   async getCleanupParticipants(
-    cleanupAddress: string,
+    cleanupId: string,
     params?: { first?: number; skip?: number }
   ): Promise<GetCleanupParticipantsResponse> {
     return client.request<GetCleanupParticipantsResponse>(
       GET_CLEANUP_PARTICIPANTS_QUERY,
       {
-        cleanupId: normalizeAddress(cleanupAddress),
+        cleanupId: cleanupId, // cleanup ID is a string (uint256 as string), not an address
         first: params?.first ?? 100,
         skip: params?.skip ?? 0,
       }
@@ -471,7 +489,7 @@ export const subgraphClient = {
         where.user = normalizeAddress(params.where.user);
       }
       if (params.where.cleanupId) {
-        where.cleanupId = normalizeAddress(params.where.cleanupId);
+        where.cleanupId = params.where.cleanupId; // cleanup ID is a string (uint256 as string), not an address
       }
       if (params.where.streakSubmissionId !== undefined) {
         // Graph expects BigInt for this filter; graphql-request will serialize strings fine.

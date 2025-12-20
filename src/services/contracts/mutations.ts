@@ -7,16 +7,16 @@ import { ABIContract, Address, Clause } from "@vechain/sdk-core";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { CONTRACT_ADDRESSES } from "@/contracts/config";
-import { UserRegistryABI } from "@/contracts/abis/UserRegistry.abi";
-import { CleanupFactoryABI } from "@/contracts/abis/CleanupFactory.abi";
-import { CleanupABI } from "@/contracts/abis/Cleanup.abi";
-import { RewardsManagerABI } from "@/contracts/abis/RewardsManager.abi";
-import { StreakABI } from "@/contracts/abis/Streak.abi";
+import { UserRegistryABI } from "@/contracts/abis/UserRegistry";
+import { CleanupABI } from "@/contracts/abis/Cleanup";
+import { RewardsManagerABI } from "@/contracts/abis/RewardsManager";
+import { StreakABI } from "@/contracts/abis/Streak";
 import { subgraphKeys } from "../subgraph/queries";
 import type {
   RegisterUserParams,
   RegisterWithReferralParams,
   AddTeamMemberParams,
+  UpdateTeamMemberPermissionsParams,
   CreateCleanupParams,
   SubmitProofOfWorkParams,
   ClaimRewardsParams,
@@ -310,6 +310,9 @@ export function useAddTeamMember() {
       queryClient.invalidateQueries({
         queryKey: subgraphKeys.user(account?.address),
       });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.teamMemberships(),
+      });
       toast.success("Team member added successfully");
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
@@ -368,6 +371,9 @@ export function useRemoveTeamMember() {
       queryClient.invalidateQueries({
         queryKey: subgraphKeys.user(account?.address),
       });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.teamMemberships(),
+      });
       toast.success("Team member removed successfully");
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
@@ -388,6 +394,67 @@ export function useRemoveTeamMember() {
       CONTRACT_ADDRESSES.USER_REGISTRY,
       "removeTeamMember",
       [member]
+    );
+
+    open();
+
+    await sendTransaction([clause]);
+  };
+
+  return {
+    sendTransaction: execute,
+    isTransactionPending,
+    isWaitingForWalletConfirmation,
+    txReceipt,
+    status,
+    resetStatus,
+    error,
+  };
+}
+
+export function useUpdateTeamMemberPermissions() {
+  const { account } = useWallet();
+  const queryClient = useQueryClient();
+  const { open } = useTransactionModal();
+
+  const {
+    sendTransaction,
+    isTransactionPending,
+    isWaitingForWalletConfirmation,
+    txReceipt,
+    status,
+    resetStatus,
+    error,
+  } = useSendTransaction({
+    signerAccountAddress: account?.address ?? null,
+    onTxConfirmed: () => {
+      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.user(account?.address),
+      });
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.teamMemberships(),
+      });
+      toast.success("Team member permissions updated successfully");
+    },
+    onTxFailedOrCancelled: (error?: Error | string) => {
+      const errorMessage =
+        error instanceof Error ? error.message : error ?? "Unknown error";
+      toast.error(`Failed to update team member permissions: ${errorMessage}`);
+    },
+  });
+
+  const execute = async (params: UpdateTeamMemberPermissionsParams) => {
+    if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
+      throw new Error("UserRegistry address not configured");
+    }
+
+    const clause = createClause(
+      UserRegistryABI,
+      CONTRACT_ADDRESSES.USER_REGISTRY,
+      "updateTeamMemberPermissions",
+      [params]
     );
 
     open();
@@ -465,7 +532,7 @@ export function useMarkKYCPending(onTxConfirmedCallback?: () => void) {
   };
 }
 
-// CleanupFactory Mutations
+// Cleanup Mutations (unified Cleanup contract)
 export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
@@ -495,8 +562,8 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
 
   const execute = async (params: CreateCleanupParams) => {
     if (!account) throw new Error("Wallet not connected");
-    if (!CONTRACT_ADDRESSES.CLEANUP_FACTORY) {
-      throw new Error("CleanupFactory address not configured");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
     }
 
     // Convert string timestamps and maxParticipants to the format expected by the contract
@@ -511,8 +578,8 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
     };
 
     const clause = createClause(
-      CleanupFactoryABI,
-      CONTRACT_ADDRESSES.CLEANUP_FACTORY,
+      CleanupABI,
+      CONTRACT_ADDRESSES.CLEANUP,
       "createCleanup",
       [contractParams]
     );
@@ -533,7 +600,6 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
   };
 }
 
-// Cleanup Mutations (individual cleanup contract)
 export function useApplyToCleanup() {
   const { account } = useWallet();
   const queryClient = useQueryClient();
@@ -550,7 +616,7 @@ export function useApplyToCleanup() {
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
-      // Note: cleanupAddress needs to be passed via closure or ref
+      // Note: cleanupId needs to be passed via closure or ref
       // This will be handled by the execute function
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
@@ -560,14 +626,17 @@ export function useApplyToCleanup() {
     },
   });
 
-  const execute = async (cleanupAddress: string) => {
+  const execute = async (cleanupId: string) => {
     if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
+    }
 
     const clause = createClause(
       CleanupABI,
-      cleanupAddress,
+      CONTRACT_ADDRESSES.CLEANUP,
       "applyToCleanup",
-      []
+      [cleanupId] // uint256 cleanupId
     );
 
     open();
@@ -576,7 +645,7 @@ export function useApplyToCleanup() {
 
     // Invalidate queries after successful transaction
     queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupAddress),
+      queryKey: subgraphKeys.cleanup(cleanupId),
     });
     queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
     toast.success("Application submitted successfully");
@@ -619,19 +688,22 @@ export function useAcceptParticipant() {
   });
 
   const execute = async ({
-    cleanupAddress,
+    cleanupId,
     participant,
   }: {
-    cleanupAddress: string;
-    participant: string;
+    cleanupId: string; // uint256 cleanup ID
+    participant: string; // address
   }) => {
     if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
+    }
 
     const clause = createClause(
       CleanupABI,
-      cleanupAddress,
+      CONTRACT_ADDRESSES.CLEANUP,
       "acceptParticipant",
-      [participant]
+      [cleanupId, participant] // uint256 cleanupId, address participant
     );
 
     open();
@@ -639,7 +711,7 @@ export function useAcceptParticipant() {
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupAddress),
+      queryKey: subgraphKeys.cleanup(cleanupId),
     });
     toast.success("Participant accepted successfully");
   };
@@ -681,19 +753,22 @@ export function useRejectParticipant() {
   });
 
   const execute = async ({
-    cleanupAddress,
+    cleanupId,
     participant,
   }: {
-    cleanupAddress: string;
-    participant: string;
+    cleanupId: string; // uint256 cleanup ID
+    participant: string; // address
   }) => {
     if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
+    }
 
     const clause = createClause(
       CleanupABI,
-      cleanupAddress,
+      CONTRACT_ADDRESSES.CLEANUP,
       "rejectParticipant",
-      [participant]
+      [cleanupId, participant] // uint256 cleanupId, address participant
     );
 
     open();
@@ -701,7 +776,7 @@ export function useRejectParticipant() {
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupAddress),
+      queryKey: subgraphKeys.cleanup(cleanupId),
     });
     toast.success("Participant rejected");
   };
@@ -743,19 +818,22 @@ export function useUpdateCleanupStatus() {
   });
 
   const execute = async ({
-    cleanupAddress,
+    cleanupId,
     newStatus,
   }: {
-    cleanupAddress: string;
+    cleanupId: string; // uint256 cleanup ID
     newStatus: number; // 0=UNPUBLISHED, 1=OPEN, 2=IN_PROGRESS, 3=COMPLETED, 4=REWARDED
   }) => {
     if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
+    }
 
     const clause = createClause(
       CleanupABI,
-      cleanupAddress,
+      CONTRACT_ADDRESSES.CLEANUP,
       "updateCleanupStatus",
-      [newStatus]
+      [cleanupId, newStatus] // uint256 cleanupId, CleanupStatus newStatus
     );
 
     open();
@@ -763,7 +841,7 @@ export function useUpdateCleanupStatus() {
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupAddress),
+      queryKey: subgraphKeys.cleanup(cleanupId),
     });
     queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
     toast.success("Cleanup status updated successfully");
@@ -806,12 +884,15 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
   });
 
   const execute = async ({
-    cleanupAddress,
+    cleanupId,
     ...params
   }: {
-    cleanupAddress: string;
+    cleanupId: string; // uint256 cleanup ID
   } & SubmitProofOfWorkParams) => {
     if (!account) throw new Error("Wallet not connected");
+    if (!CONTRACT_ADDRESSES.CLEANUP) {
+      throw new Error("Cleanup contract address not configured");
+    }
     if (params.ipfsHashes.length !== params.mimetypes.length) {
       throw new Error(
         "IPFS hashes and mimetypes arrays must have the same length"
@@ -823,9 +904,9 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
 
     const clause = createClause(
       CleanupABI,
-      cleanupAddress,
+      CONTRACT_ADDRESSES.CLEANUP,
       "submitProofOfWork",
-      [params]
+      [cleanupId, params] // uint256 cleanupId, SubmitProofOfWorkParams params
     );
 
     open();
@@ -833,7 +914,7 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
     await sendTransaction([clause]);
 
     queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupAddress),
+      queryKey: subgraphKeys.cleanup(cleanupId),
     });
     toast.success("Proof of work submitted successfully");
     // Note: onTxConfirmedCallback is called in onTxConfirmed above

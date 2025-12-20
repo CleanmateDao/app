@@ -5,12 +5,14 @@ import { KYCStatus, Permission } from './user-registry';
 
 /**
  * RewardType enum from Params
+ * Matches subgraph schema: 0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=STREAK, 4=OTHERS
  */
 export enum RewardType {
   REFERRAL = 0,
   BONUS = 1,
   CLEANUP = 2,
-  OTHERS = 3,
+  STREAK = 3,
+  OTHERS = 4,
 }
 
 // UserRegistry parameter structs
@@ -115,7 +117,7 @@ export interface CreateCleanupParams {
  * DistributeRewardsParams from Params
  */
 export interface DistributeRewardsParams {
-  cleanup: string; // address
+  cleanupId: string; // uint256 - cleanup ID
   participants: string[]; // address[]
   amounts: string[]; // uint256[]
 }

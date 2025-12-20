@@ -24,7 +24,7 @@ export interface SubgraphUser {
  * Cleanup entity from subgraph schema
  */
 export interface SubgraphCleanup {
-  id: string; // Bytes - cleanup address
+  id: string; // String - cleanup ID (uint256 as string)
   organizer: string; // Bytes - address
   metadata: string;
   category: string | null;
@@ -52,7 +52,7 @@ export interface SubgraphCleanup {
   proofOfWorkMediaCount: string | null; // BigInt
   proofOfWorkSubmittedAt: string | null; // BigInt
   participants: SubgraphCleanupParticipant[];
-  medias?: SubgraphCleanupMedia[]; // CleanupMedia entities
+  medias: SubgraphCleanupMedia[]; // CleanupMedia entities (required field)
   proofOfWorkMedia: SubgraphProofOfWorkMedia[];
 }
 
@@ -75,7 +75,7 @@ export interface SubgraphCleanupParticipant {
  * CleanupMedia entity from subgraph schema
  */
 export interface SubgraphCleanupMedia {
-  id: string; // ID - cleanup address + media index
+  id: string; // ID - cleanup ID + media index or unique identifier
   cleanup: SubgraphCleanup;
   url: string;
   mimeType: string;
@@ -86,7 +86,7 @@ export interface SubgraphCleanupMedia {
  * ProofOfWorkMedia entity from subgraph schema
  */
 export interface SubgraphProofOfWorkMedia {
-  id: string; // ID - cleanup address + media index
+  id: string; // ID - cleanup ID + media index or unique identifier
   cleanup: SubgraphCleanup;
   url: string; // IPFS hash or URL
   mimeType: string;
@@ -100,8 +100,8 @@ export interface SubgraphProofOfWorkMedia {
 export interface SubgraphTransaction {
   id: string; // ID - transaction hash + log index
   user: string; // Bytes - address
-  cleanupId: string | null; // Bytes - address (null for non-cleanup rewards)
-  streakSubmissionId: string | null; // BigInt (null for non-streak rewards)
+  cleanupId: string | null; // BigInt - cleanup ID (uint256 as string, null for non-cleanup rewards)
+  streakSubmissionId: string; // BigInt - streak submission id (0 for non-streak rewards)
   amount: string; // BigInt - uint256
   transactionType: string; // String - "CLAIM" or "RECEIVE"
   rewardType: number | null; // Int - rewardType from event (0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=STREAK, 4=OTHERS) (null for CLAIM transactions)
@@ -119,7 +119,7 @@ export interface SubgraphNotification {
   type: string; // String - notification type (e.g., "cleanup_created", "participant_accepted", "reward_earned")
   title: string;
   message: string;
-  relatedEntity: string | null; // Bytes - address of related entity (cleanup, user, etc.)
+  relatedEntity: string | null; // String - ID of related entity (cleanup ID as string, user address, etc.)
   relatedEntityType: string | null; // String - type of related entity
   read: boolean;
   createdAt: string; // BigInt
@@ -249,7 +249,7 @@ export interface GetUserQueryParams {
  * Parameters for getCleanup query
  */
 export interface GetCleanupQueryParams {
-  id: string; // Bytes - cleanup address
+  id: string; // String - cleanup ID (uint256 as string)
 }
 
 /**
@@ -286,7 +286,7 @@ export interface GetUserCleanupsQueryParams {
  * Parameters for getCleanupParticipants query
  */
 export interface GetCleanupParticipantsQueryParams {
-  cleanupId: string; // Bytes - cleanup address
+  cleanupId: string; // String - cleanup ID (uint256 as string)
   first?: number;
   skip?: number;
 }
@@ -296,8 +296,8 @@ export interface GetCleanupParticipantsQueryParams {
  */
 export interface TransactionFilter {
   user?: string; // Bytes - address
-  cleanupId?: string; // Bytes - address
-  streakSubmissionId?: string; // BigInt (string)
+  cleanupId?: string; // BigInt - cleanup ID (uint256 as string)
+  streakSubmissionId?: string; // BigInt - streak submission id (string)
   transactionType?: "CLAIM" | "RECEIVE";
   rewardType?: number; // Int - 0=REFERRAL, 1=BONUS, 2=CLEANUP, 3=STREAK, 4=OTHERS
 }
@@ -320,7 +320,7 @@ export interface NotificationFilter {
   user: string; // Bytes - address
   type?: string;
   read?: boolean;
-  relatedEntity?: string; // Bytes - address
+  relatedEntity?: string; // String - ID of related entity
   relatedEntityType?: string;
 }
 
@@ -355,17 +355,6 @@ export interface GetTeamMembershipsQueryParams {
 }
 
 /**
- * StreakSubmissionMedia entity from subgraph schema
- */
-export interface SubgraphStreakSubmissionMedia {
-  id: string; // ID - submissionId + index
-  submission: SubgraphStreakSubmission;
-  ipfsHash: string;
-  mimeType: string;
-  index: string; // BigInt
-}
-
-/**
  * StreakSubmission entity from subgraph schema
  */
 export interface SubgraphStreakSubmission {
@@ -381,7 +370,6 @@ export interface SubgraphStreakSubmission {
   rejectionReason: string | null; // reason for rejection (null if not rejected)
   ipfsHashes: string[]; // IPFS hashes
   mimetypes: string[]; // MIME types
-  media: SubgraphStreakSubmissionMedia[]; // Media entities
   blockNumber: string; // BigInt
   transactionHash: string; // Bytes
 }

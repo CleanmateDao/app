@@ -1,0 +1,777 @@
+export const StreakABI = [
+  {
+    inputs: [],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    inputs: [],
+    name: "AccessControlBadConfirmation",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        internalType: "bytes32",
+        name: "neededRole",
+        type: "bytes32",
+      },
+    ],
+    name: "AccessControlUnauthorizedAccount",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "EmptyString",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidInput",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "LengthMismatch",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "StreakerAlreadyJoined",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "StreakerNotJoined",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "SubmissionDoesNotExist",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "SubmissionNotPending",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "SubmissionRateLimit",
+    type: "error",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "previousAdminRole",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "newAdminRole",
+        type: "bytes32",
+      },
+    ],
+    name: "RoleAdminChanged",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleGranted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleRevoked",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "submissionId",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "StreakApproved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "submissionId",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "reason",
+        type: "string",
+      },
+    ],
+    name: "StreakRejected",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "submissionId",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "metadata",
+        type: "string",
+      },
+      {
+        indexed: false,
+        internalType: "string[]",
+        name: "ipfsHashes",
+        type: "string[]",
+      },
+      {
+        indexed: false,
+        internalType: "string[]",
+        name: "mimetypes",
+        type: "string[]",
+      },
+    ],
+    name: "StreakSubmitted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "streakerCode",
+        type: "string",
+      },
+    ],
+    name: "StreakerJoined",
+    type: "event",
+  },
+  {
+    inputs: [],
+    name: "ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "DEFAULT_ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "STREAKER_CODE_PREFIX",
+    outputs: [
+      {
+        internalType: "string",
+        name: "",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "uint256[]",
+            name: "submissionIds",
+            type: "uint256[]",
+          },
+          {
+            internalType: "uint256[]",
+            name: "amounts",
+            type: "uint256[]",
+          },
+        ],
+        internalType: "struct Params.ApproveStreaksParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "approveStreaks",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "codeSeeder",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+    ],
+    name: "getRoleAdmin",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "getStreakerCode",
+    outputs: [
+      {
+        internalType: "string",
+        name: "code",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "submissionId",
+        type: "uint256",
+      },
+    ],
+    name: "getSubmission",
+    outputs: [
+      {
+        components: [
+          {
+            internalType: "address",
+            name: "user",
+            type: "address",
+          },
+          {
+            internalType: "uint256",
+            name: "submissionId",
+            type: "uint256",
+          },
+          {
+            internalType: "uint256",
+            name: "rewardAmount",
+            type: "uint256",
+          },
+          {
+            internalType: "string",
+            name: "metadata",
+            type: "string",
+          },
+          {
+            internalType: "string[]",
+            name: "ipfsHashes",
+            type: "string[]",
+          },
+          {
+            internalType: "string[]",
+            name: "mimetypes",
+            type: "string[]",
+          },
+          {
+            internalType: "enum IStreak.SubmissionStatus",
+            name: "status",
+            type: "uint8",
+          },
+          {
+            internalType: "uint256",
+            name: "submittedAt",
+            type: "uint256",
+          },
+          {
+            internalType: "uint256",
+            name: "reviewedAt",
+            type: "uint256",
+          },
+        ],
+        internalType: "struct IStreak.Submission",
+        name: "submission",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "getUserSubmissions",
+    outputs: [
+      {
+        internalType: "uint256[]",
+        name: "submissionIds",
+        type: "uint256[]",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "grantRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "hasRole",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "joinStreak",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "rateLimit",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "uint256[]",
+            name: "submissionIds",
+            type: "uint256[]",
+          },
+          {
+            internalType: "string[]",
+            name: "reasons",
+            type: "string[]",
+          },
+        ],
+        internalType: "struct Params.RejectStreaksParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "rejectStreaks",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "callerConfirmation",
+        type: "address",
+      },
+    ],
+    name: "renounceRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "revokeRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "newRateLimit",
+        type: "uint256",
+      },
+    ],
+    name: "setRateLimit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "streakerCodes",
+    outputs: [
+      {
+        internalType: "string",
+        name: "",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "submissionRateLimit",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "submissions",
+    outputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "submissionId",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "rewardAmount",
+        type: "uint256",
+      },
+      {
+        internalType: "string",
+        name: "metadata",
+        type: "string",
+      },
+      {
+        internalType: "enum IStreak.SubmissionStatus",
+        name: "status",
+        type: "uint8",
+      },
+      {
+        internalType: "uint256",
+        name: "submittedAt",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "reviewedAt",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "string",
+            name: "metadata",
+            type: "string",
+          },
+          {
+            internalType: "string[]",
+            name: "ipfsHashes",
+            type: "string[]",
+          },
+          {
+            internalType: "string[]",
+            name: "mimetypes",
+            type: "string[]",
+          },
+        ],
+        internalType: "struct Params.SubmitStreakParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "submit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes4",
+        name: "interfaceId",
+        type: "bytes4",
+      },
+    ],
+    name: "supportsInterface",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalSubmissions",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "userAmount",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "userSubmissionIds",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;

@@ -294,7 +294,6 @@ export default function Onboarding() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1.5 h-6 bg-primary rounded-full" />
                   <h1 className="text-lg font-semibold tracking-tight">
                     Become a Cleanup Champion
                   </h1>

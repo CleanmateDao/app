@@ -1,22 +1,100 @@
 export const UserRegistryABI = [
   {
-    anonymous: false,
     inputs: [
       {
-        indexed: true,
         internalType: "address",
-        name: "user",
+        name: "addressesProviderAddr",
+        type: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    inputs: [],
+    name: "AccessControlBadConfirmation",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "account",
         type: "address",
       },
       {
-        indexed: false,
-        internalType: "string",
-        name: "metadata",
-        type: "string",
+        internalType: "bytes32",
+        name: "neededRole",
+        type: "bytes32",
       },
     ],
-    name: "UserRegistered",
-    type: "event",
+    name: "AccessControlUnauthorizedAccount",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "EmailAlreadySet",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "EmailAlreadyVerified",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "EmptyString",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidInput",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidKYCStatus",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidReferralCode",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "NotOrganizer",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "NotVerifiedOrganizer",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ReferralCodeAlreadySet",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ReferralCodeAlreadyTaken",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "UserAlreadyExists",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "UserDoesNotExist",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ZeroAddress",
+    type: "error",
   },
   {
     anonymous: false,
@@ -65,8 +143,14 @@ export const UserRegistryABI = [
         name: "user",
         type: "address",
       },
+      {
+        indexed: false,
+        internalType: "bool",
+        name: "isOrganizer",
+        type: "bool",
+      },
     ],
-    name: "UserProfileUpdated",
+    name: "OrganizerStatusUpdated",
     type: "event",
   },
   {
@@ -93,24 +177,24 @@ export const UserRegistryABI = [
     inputs: [
       {
         indexed: true,
-        internalType: "address",
-        name: "user",
-        type: "address",
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
       },
       {
         indexed: true,
-        internalType: "address",
-        name: "referrer",
-        type: "address",
+        internalType: "bytes32",
+        name: "previousAdminRole",
+        type: "bytes32",
       },
       {
-        indexed: false,
-        internalType: "string",
-        name: "referralCode",
-        type: "string",
+        indexed: true,
+        internalType: "bytes32",
+        name: "newAdminRole",
+        type: "bytes32",
       },
     ],
-    name: "UserReferred",
+    name: "RoleAdminChanged",
     type: "event",
   },
   {
@@ -118,18 +202,49 @@ export const UserRegistryABI = [
     inputs: [
       {
         indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
         internalType: "address",
-        name: "user",
+        name: "account",
         type: "address",
       },
       {
-        indexed: false,
-        internalType: "bool",
-        name: "isOrganizer",
-        type: "bool",
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
       },
     ],
-    name: "OrganizerStatusUpdated",
+    name: "RoleGranted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleRevoked",
     type: "event",
   },
   {
@@ -184,25 +299,6 @@ export const UserRegistryABI = [
         name: "member",
         type: "address",
       },
-    ],
-    name: "TeamMemberRemoved",
-    type: "event",
-  },
-  {
-    anonymous: false,
-    inputs: [
-      {
-        indexed: true,
-        internalType: "address",
-        name: "organizer",
-        type: "address",
-      },
-      {
-        indexed: true,
-        internalType: "address",
-        name: "member",
-        type: "address",
-      },
       {
         indexed: false,
         internalType: "bool",
@@ -224,6 +320,407 @@ export const UserRegistryABI = [
     ],
     name: "TeamMemberPermissionsUpdated",
     type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "organizer",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "member",
+        type: "address",
+      },
+    ],
+    name: "TeamMemberRemoved",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "metadata",
+        type: "string",
+      },
+    ],
+    name: "UserProfileUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "referrer",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "referralCode",
+        type: "string",
+      },
+    ],
+    name: "UserReferred",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "metadata",
+        type: "string",
+      },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "email",
+        type: "string",
+      },
+    ],
+    name: "UserRegistered",
+    type: "event",
+  },
+  {
+    inputs: [],
+    name: "ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "DEFAULT_ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "address",
+            name: "member",
+            type: "address",
+          },
+          {
+            internalType: "bool",
+            name: "canEditCleanups",
+            type: "bool",
+          },
+          {
+            internalType: "bool",
+            name: "canManageParticipants",
+            type: "bool",
+          },
+          {
+            internalType: "bool",
+            name: "canSubmitProof",
+            type: "bool",
+          },
+        ],
+        internalType: "struct Params.AddTeamMemberParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "addTeamMember",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "addressesProvider",
+    outputs: [
+      {
+        internalType: "contract IAddressesProvider",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "canOrganize",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "can",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "cleanup",
+    outputs: [
+      {
+        internalType: "address",
+        name: "cleanupContract",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+    ],
+    name: "getRoleAdmin",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "getUserEmail",
+    outputs: [
+      {
+        internalType: "string",
+        name: "",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "getUserProfile",
+    outputs: [
+      {
+        components: [
+          {
+            internalType: "string",
+            name: "metadata",
+            type: "string",
+          },
+          {
+            internalType: "bool",
+            name: "isEmailVerified",
+            type: "bool",
+          },
+          {
+            internalType: "enum IUserRegistry.KYCStatus",
+            name: "kycStatus",
+            type: "uint8",
+          },
+          {
+            internalType: "string",
+            name: "referralCode",
+            type: "string",
+          },
+          {
+            internalType: "address",
+            name: "referredBy",
+            type: "address",
+          },
+        ],
+        internalType: "struct IUserRegistry.UserProfile",
+        name: "profile",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "grantRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "address",
+            name: "organizer",
+            type: "address",
+          },
+          {
+            internalType: "address",
+            name: "member",
+            type: "address",
+          },
+          {
+            internalType: "enum IUserRegistry.Permission",
+            name: "permission",
+            type: "uint8",
+          },
+        ],
+        internalType: "struct Params.HasPermissionParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "hasPermission",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "result",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "hasRole",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "markKYCPending",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "organizers",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "string",
+        name: "",
+        type: "string",
+      },
+    ],
+    name: "referralCodeToAddress",
+    outputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
   },
   {
     inputs: [
@@ -283,12 +780,99 @@ export const UserRegistryABI = [
   {
     inputs: [
       {
-        internalType: "string",
-        name: "metadata",
-        type: "string",
+        internalType: "address",
+        name: "member",
+        type: "address",
       },
     ],
-    name: "updateProfile",
+    name: "removeTeamMember",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "callerConfirmation",
+        type: "address",
+      },
+    ],
+    name: "renounceRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "revokeRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "rewardsManager",
+    outputs: [
+      {
+        internalType: "address",
+        name: "manager",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "newAddressesProvider",
+        type: "address",
+      },
+    ],
+    name: "setAddressesProvider",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "address",
+            name: "user",
+            type: "address",
+          },
+          {
+            internalType: "bool",
+            name: "isOrganizer",
+            type: "bool",
+          },
+        ],
+        internalType: "struct Params.SetOrganizerStatusParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "setOrganizerStatus",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -309,10 +893,42 @@ export const UserRegistryABI = [
   {
     inputs: [
       {
+        internalType: "bytes4",
+        name: "interfaceId",
+        type: "bytes4",
+      },
+    ],
+    name: "supportsInterface",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "organizer",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "member",
+        type: "address",
+      },
+    ],
+    name: "teamMembers",
+    outputs: [
+      {
         components: [
           {
             internalType: "address",
-            name: "member",
+            name: "memberAddress",
             type: "address",
           },
           {
@@ -330,13 +946,41 @@ export const UserRegistryABI = [
             name: "canSubmitProof",
             type: "bool",
           },
+          {
+            internalType: "uint256",
+            name: "addedAt",
+            type: "uint256",
+          },
         ],
-        internalType: "struct Params.AddTeamMemberParams",
+        internalType: "struct IUserRegistry.TeamMember",
+        name: "memberData",
+        type: "tuple",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "address",
+            name: "user",
+            type: "address",
+          },
+          {
+            internalType: "enum IUserRegistry.KYCStatus",
+            name: "status",
+            type: "uint8",
+          },
+        ],
+        internalType: "struct Params.UpdateKYCStatusParams",
         name: "params",
         type: "tuple",
       },
     ],
-    name: "addTeamMember",
+    name: "updateKYCStatus",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -344,12 +988,12 @@ export const UserRegistryABI = [
   {
     inputs: [
       {
-        internalType: "address",
-        name: "member",
-        type: "address",
+        internalType: "string",
+        name: "metadata",
+        type: "string",
       },
     ],
-    name: "removeTeamMember",
+    name: "updateProfile",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -393,22 +1037,55 @@ export const UserRegistryABI = [
     inputs: [
       {
         internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "userEmail",
+    outputs: [
+      {
+        internalType: "string",
+        name: "",
+        type: "string",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
         name: "user",
         type: "address",
       },
     ],
-    name: "getUserProfile",
+    name: "userExists",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "exists",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
+    ],
+    name: "users",
     outputs: [
       {
         components: [
           {
             internalType: "string",
             name: "metadata",
-            type: "string",
-          },
-          {
-            internalType: "string",
-            name: "email",
             type: "string",
           },
           {
@@ -433,7 +1110,7 @@ export const UserRegistryABI = [
           },
         ],
         internalType: "struct IUserRegistry.UserProfile",
-        name: "",
+        name: "profile",
         type: "tuple",
       },
     ],
@@ -448,35 +1125,9 @@ export const UserRegistryABI = [
         type: "address",
       },
     ],
-    name: "userExists",
-    outputs: [
-      {
-        internalType: "bool",
-        name: "",
-        type: "bool",
-      },
-    ],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [
-      {
-        internalType: "address",
-        name: "user",
-        type: "address",
-      },
-    ],
-    name: "canOrganize",
-    outputs: [
-      {
-        internalType: "bool",
-        name: "",
-        type: "bool",
-      },
-    ],
-    stateMutability: "view",
+    name: "verifyEmail",
+    outputs: [],
+    stateMutability: "nonpayable",
     type: "function",
   },
 ] as const;
-

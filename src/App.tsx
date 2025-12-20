@@ -24,6 +24,7 @@ import appLogo from "./assets/african-mask.jpg";
 import Streaks from "./pages/Streaks";
 import StreakSubmit from "./pages/StreakSubmit";
 import { useWalletAddress } from "./hooks/use-wallet-address";
+import { RecordingProvider } from "./contexts/RecordingContext";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -221,7 +222,9 @@ const AppInner = () => {
 
 const App = () => (
   <ThemeProvider>
-    <AppInner />
+    <RecordingProvider>
+      <AppInner />
+    </RecordingProvider>
   </ThemeProvider>
 );
 

@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useCallback } from "react";
+import { useMemo, useEffect, useRef, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -12,6 +12,7 @@ import {
   Calendar,
   Trophy,
   Loader2,
+  ArrowLeft,
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,6 +50,19 @@ const fadeIn = {
   exit: { opacity: 0, y: -20 },
   transition: { duration: 0.3 },
 };
+
+/**
+ * Formats seconds into a human-readable string
+ */
+function formatTimeRemaining(seconds: number): string {
+  if (seconds <= 0) return "now";
+  const minutes = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  if (minutes > 0) {
+    return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
+  }
+  return `${secs}s`;
+}
 
 // Group streaks by week
 function groupStreaksByWeek(streaks: StreakSubmission[]) {
@@ -197,6 +211,41 @@ export default function Streaks() {
     );
   }, [streakStatsData]);
 
+  // Rate limit: 30 minutes from last submission
+  const RATE_LIMIT_MINUTES = 30;
+  const RATE_LIMIT_MS = useMemo(() => RATE_LIMIT_MINUTES * 60 * 1000, []);
+
+  // Calculate if user can submit based on last submission time
+  const canSubmit = useMemo(() => {
+    if (!stats.lastSubmissionAt) return true;
+    const lastSubmissionTime = new Date(stats.lastSubmissionAt).getTime();
+    const now = Date.now();
+    return now - lastSubmissionTime >= RATE_LIMIT_MS;
+  }, [stats.lastSubmissionAt, RATE_LIMIT_MS]);
+
+  // Calculate time remaining until can submit
+  const [timeUntilCanSubmit, setTimeUntilCanSubmit] = useState(0);
+
+  useEffect(() => {
+    if (!stats.lastSubmissionAt) {
+      setTimeUntilCanSubmit(0);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const lastSubmissionTime = new Date(stats.lastSubmissionAt!).getTime();
+      const now = Date.now();
+      const elapsed = now - lastSubmissionTime;
+      const remaining = Math.max(0, RATE_LIMIT_MS - elapsed);
+      setTimeUntilCanSubmit(Math.floor(remaining / 1000)); // Convert to seconds
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [stats.lastSubmissionAt, RATE_LIMIT_MS]);
+
   // Fetch user streak submissions with infinite scroll
   const {
     data: submissionsData,
@@ -272,6 +321,19 @@ export default function Streaks() {
           <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/80 to-background/60" />
         </div>
         <div className="relative p-5 sm:p-6">
+          {/* Back button - mobile only */}
+          {isMobile === true && (
+            <div className="mb-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate(-1)}
+                className="bg-background/50 hover:bg-background/80"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+            </div>
+          )}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -289,9 +351,12 @@ export default function Streaks() {
               <Button
                 onClick={() => navigate("/streaks/submit")}
                 className="w-full sm:w-auto gap-2"
+                disabled={!canSubmit}
               >
                 <Plus className="h-4 w-4" />
-                New Streak
+                {!canSubmit && timeUntilCanSubmit > 0
+                  ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
+                  : "New Streak"}
               </Button>
             )}
           </div>

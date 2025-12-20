@@ -27,6 +27,9 @@ import {
   CreditCard,
   Star,
   Loader2,
+  Users,
+  Edit2,
+  MoreVertical,
 } from "lucide-react";
 import africanPattern from "@/assets/african-pattern.jpg";
 import { cn } from "@/lib/utils";
@@ -62,8 +65,15 @@ import { SignOutAlertDialog } from "@/components/SignOutAlertDialog";
 import { EmailVerificationDialog } from "@/components/EmailVerificationDialog";
 import { AddBankDialog } from "@/components/AddBankDialog";
 import { DeleteBankAlertDialog } from "@/components/DeleteBankAlertDialog";
+import { AddTeamMemberDialog } from "@/components/AddTeamMemberDialog";
+import { EditTeamMemberPermissionsDialog } from "@/components/EditTeamMemberPermissionsDialog";
+import { RemoveTeamMemberDialog } from "@/components/RemoveTeamMemberDialog";
 import { useTheme } from "@/components/ThemeProvider";
-import { useUser, subgraphKeys } from "@/services/subgraph/queries";
+import {
+  useUser,
+  useTeamMembers,
+  subgraphKeys,
+} from "@/services/subgraph/queries";
 import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useQueryClient } from "@tanstack/react-query";
@@ -81,6 +91,9 @@ import {
   useMarkKYCPending,
   useUpdateProfile,
   useSetReferralCode,
+  useAddTeamMember,
+  useRemoveTeamMember,
+  useUpdateTeamMemberPermissions,
 } from "@/services/contracts/mutations";
 import type { UserProfile, UserProfileMetadata } from "@/types/user";
 import {
@@ -169,6 +182,21 @@ export default function Settings() {
   const [deleteBankOpen, setDeleteBankOpen] = useState(false);
   const [selectedBankToDelete, setSelectedBankToDelete] =
     useState<BankAccount | null>(null);
+
+  // Team management
+  const isOrganizer = userData?.isOrganizer ?? false;
+  const { data: teamMembers = [], isLoading: isLoadingTeamMembers } =
+    useTeamMembers(walletAddress || null);
+  const addTeamMemberMutation = useAddTeamMember();
+  const removeTeamMemberMutation = useRemoveTeamMember();
+  const updateTeamMemberPermissionsMutation = useUpdateTeamMemberPermissions();
+
+  const [addTeamMemberOpen, setAddTeamMemberOpen] = useState(false);
+  const [editTeamMemberOpen, setEditTeamMemberOpen] = useState(false);
+  const [removeTeamMemberOpen, setRemoveTeamMemberOpen] = useState(false);
+  const [selectedTeamMember, setSelectedTeamMember] = useState<
+    (typeof teamMembers)[0] | null
+  >(null);
 
   // Load profile metadata from contract if available
   useEffect(() => {
@@ -423,6 +451,11 @@ export default function Settings() {
             <TabsTrigger value="referral" className="text-xs sm:text-sm">
               Referral
             </TabsTrigger>
+            {isOrganizer && (
+              <TabsTrigger value="team" className="text-xs sm:text-sm">
+                Team
+              </TabsTrigger>
+            )}
             <TabsTrigger value="banks" className="text-xs sm:text-sm" disabled>
               Banks
               <Badge
@@ -1463,6 +1496,209 @@ export default function Settings() {
           </Card>
         </TabsContent>
 
+        {/* Team Tab */}
+        {isOrganizer && (
+          <TabsContent value="team" className="space-y-6">
+            {/* Team Overview */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base font-medium flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      Team Members
+                    </CardTitle>
+                    <CardDescription>
+                      Manage your team members and their permissions
+                    </CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => setAddTeamMemberOpen(true)}
+                    disabled={addTeamMemberMutation.isTransactionPending}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Member
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {isLoadingTeamMembers ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : teamMembers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="w-12 h-12 mx-auto text-muted-foreground/50 mb-4" />
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      No team members yet
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Add team members to help manage your cleanups
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => setAddTeamMemberOpen(true)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Your First Member
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {teamMembers.map((member) => (
+                      <Card key={member.id} className="border">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-3 mb-2">
+                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                  <User className="w-5 h-5 text-primary" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium truncate">
+                                    {member.member.slice(0, 6)}...
+                                    {member.member.slice(-4)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground font-mono truncate">
+                                    {member.member}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2 mt-3">
+                                {member.canEditCleanups && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    Edit Cleanups
+                                  </Badge>
+                                )}
+                                {member.canManageParticipants && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    Manage Participants
+                                  </Badge>
+                                )}
+                                {member.canSubmitProof && (
+                                  <Badge
+                                    variant="secondary"
+                                    className="text-xs"
+                                  >
+                                    Submit Proof
+                                  </Badge>
+                                )}
+                                {!member.canEditCleanups &&
+                                  !member.canManageParticipants &&
+                                  !member.canSubmitProof && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs"
+                                    >
+                                      No permissions
+                                    </Badge>
+                                  )}
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-2">
+                                Added{" "}
+                                {format(
+                                  new Date(parseInt(member.addedAt) * 1000),
+                                  "MMM d, yyyy"
+                                )}
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                                onClick={() => {
+                                  setSelectedTeamMember(member);
+                                  setEditTeamMemberOpen(true);
+                                }}
+                                disabled={
+                                  updateTeamMemberPermissionsMutation.isTransactionPending
+                                }
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                  setSelectedTeamMember(member);
+                                  setRemoveTeamMemberOpen(true);
+                                }}
+                                disabled={
+                                  removeTeamMemberMutation.isTransactionPending
+                                }
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Team Help */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium">
+                  About Team Management
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-primary">1</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Add Team Members</p>
+                      <p className="text-sm text-muted-foreground">
+                        Add team members by their wallet address. They must be
+                        registered users on the platform.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-primary">2</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Set Permissions</p>
+                      <p className="text-sm text-muted-foreground">
+                        Grant specific permissions to each team member: edit
+                        cleanups, manage participants, or submit proof of work.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                      <span className="text-sm font-bold text-primary">3</span>
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">Manage Access</p>
+                      <p className="text-sm text-muted-foreground">
+                        Update permissions or remove team members at any time.
+                        Changes take effect immediately.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
         {/* Banks Tab */}
         <TabsContent value="banks" className="space-y-6">
           <Card>
@@ -1582,6 +1818,59 @@ export default function Settings() {
         onCancel={() => {
           setSelectedBankToDelete(null);
         }}
+      />
+
+      {/* Add Team Member Dialog */}
+      <AddTeamMemberDialog
+        open={addTeamMemberOpen}
+        onOpenChange={setAddTeamMemberOpen}
+        onSubmit={async (params) => {
+          try {
+            await addTeamMemberMutation.sendTransaction(params);
+            setAddTeamMemberOpen(false);
+          } catch (error) {
+            console.error("Failed to add team member:", error);
+          }
+        }}
+        isPending={addTeamMemberMutation.isTransactionPending}
+      />
+
+      {/* Edit Team Member Dialog */}
+      <EditTeamMemberPermissionsDialog
+        open={editTeamMemberOpen}
+        onOpenChange={setEditTeamMemberOpen}
+        teamMember={selectedTeamMember}
+        onSubmit={async (params) => {
+          try {
+            await updateTeamMemberPermissionsMutation.sendTransaction(params);
+            setEditTeamMemberOpen(false);
+            setSelectedTeamMember(null);
+          } catch (error) {
+            console.error("Failed to update team member:", error);
+          }
+        }}
+        isPending={updateTeamMemberPermissionsMutation.isTransactionPending}
+      />
+
+      {/* Remove Team Member Dialog */}
+      <RemoveTeamMemberDialog
+        open={removeTeamMemberOpen}
+        onOpenChange={setRemoveTeamMemberOpen}
+        memberAddress={selectedTeamMember?.member || ""}
+        onConfirm={async () => {
+          if (selectedTeamMember) {
+            try {
+              await removeTeamMemberMutation.sendTransaction(
+                selectedTeamMember.member
+              );
+              setRemoveTeamMemberOpen(false);
+              setSelectedTeamMember(null);
+            } catch (error) {
+              console.error("Failed to remove team member:", error);
+            }
+          }
+        }}
+        isPending={removeTeamMemberMutation.isTransactionPending}
       />
     </div>
   );

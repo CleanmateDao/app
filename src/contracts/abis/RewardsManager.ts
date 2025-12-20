@@ -1,12 +1,233 @@
 export const RewardsManagerABI = [
   {
+    inputs: [
+      {
+        internalType: "address",
+        name: "addressesProviderAddr",
+        type: "address",
+      },
+      {
+        internalType: "bytes32",
+        name: "appIdValue",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    inputs: [],
+    name: "AccessControlBadConfirmation",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        internalType: "bytes32",
+        name: "neededRole",
+        type: "bytes32",
+      },
+    ],
+    name: "AccessControlUnauthorizedAccount",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "CleanupDoesNotExist",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "CleanupNotCompleted",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ECDSAInvalidSignature",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "length",
+        type: "uint256",
+      },
+    ],
+    name: "ECDSAInvalidSignatureLength",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "s",
+        type: "bytes32",
+      },
+    ],
+    name: "ECDSAInvalidSignatureS",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "EnforcedPause",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ExpectedPause",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InsufficientPendingRewards",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidAppId",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidCleanupAddress",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidInput",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidRewardsPoolAddress",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "InvalidUserRegistryAddress",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "LengthMismatch",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ParticipantNotAcceptedInCleanup",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ProofNotSubmitted",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ReentrancyGuardReentrantCall",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "RewardsExceedLimit",
+    type: "error",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "value",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "length",
+        type: "uint256",
+      },
+    ],
+    name: "StringsInsufficientHexLength",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "Unauthorized",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "UserDoesNotExist",
+    type: "error",
+  },
+  {
+    inputs: [],
+    name: "ZeroAddress",
+    type: "error",
+  },
+  {
     anonymous: false,
     inputs: [
       {
         indexed: true,
         internalType: "address",
-        name: "cleanupId",
+        name: "oldProvider",
         type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "newProvider",
+        type: "address",
+      },
+    ],
+    name: "AddressesProviderUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "bytes32",
+        name: "oldAppId",
+        type: "bytes32",
+      },
+      {
+        indexed: false,
+        internalType: "bytes32",
+        name: "newAppId",
+        type: "bytes32",
+      },
+    ],
+    name: "AppIdUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "Paused",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "cleanupId",
+        type: "uint256",
       },
       {
         indexed: true,
@@ -15,10 +236,22 @@ export const RewardsManagerABI = [
         type: "address",
       },
       {
+        indexed: true,
+        internalType: "uint256",
+        name: "streakSubmissionId",
+        type: "uint256",
+      },
+      {
         indexed: false,
         internalType: "uint256",
         name: "amount",
         type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint8",
+        name: "rewardType",
+        type: "uint8",
       },
     ],
     name: "RewardEarned",
@@ -30,8 +263,27 @@ export const RewardsManagerABI = [
       {
         indexed: true,
         internalType: "address",
-        name: "cleanupId",
+        name: "user",
         type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "amount",
+        type: "uint256",
+      },
+    ],
+    name: "RewardsClaimed",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "uint256",
+        name: "cleanupId",
+        type: "uint256",
       },
       {
         indexed: true,
@@ -61,18 +313,216 @@ export const RewardsManagerABI = [
       {
         indexed: true,
         internalType: "address",
-        name: "user",
+        name: "oldPool",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "newPool",
+        type: "address",
+      },
+    ],
+    name: "RewardsPoolUpdated",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "previousAdminRole",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "newAdminRole",
+        type: "bytes32",
+      },
+    ],
+    name: "RoleAdminChanged",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleGranted",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "sender",
+        type: "address",
+      },
+    ],
+    name: "RoleRevoked",
+    type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "distributor",
         type: "address",
       },
       {
         indexed: false,
         internalType: "uint256",
-        name: "amount",
+        name: "totalAmount",
+        type: "uint256",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "submissionCount",
         type: "uint256",
       },
     ],
-    name: "RewardsClaimed",
+    name: "StreaksRewardDistributed",
     type: "event",
+  },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: false,
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "Unpaused",
+    type: "event",
+  },
+  {
+    inputs: [],
+    name: "ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "DEFAULT_ADMIN_ROLE",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "DOMAIN_SEPARATOR",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "addressesProvider",
+    outputs: [
+      {
+        internalType: "contract IAddressesProvider",
+        name: "",
+        type: "address",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "appId",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
+          },
+        ],
+        internalType: "struct Params.ClaimRewardsParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "claimRewards",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
   },
   {
     inputs: [
@@ -80,8 +530,53 @@ export const RewardsManagerABI = [
         components: [
           {
             internalType: "address",
-            name: "cleanup",
+            name: "user",
             type: "address",
+          },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
+          },
+        ],
+        internalType: "struct Params.ClaimRewardsWithPermitParams",
+        name: "params",
+        type: "tuple",
+      },
+      {
+        internalType: "uint256",
+        name: "deadline",
+        type: "uint256",
+      },
+      {
+        internalType: "uint8",
+        name: "v",
+        type: "uint8",
+      },
+      {
+        internalType: "bytes32",
+        name: "r",
+        type: "bytes32",
+      },
+      {
+        internalType: "bytes32",
+        name: "s",
+        type: "bytes32",
+      },
+    ],
+    name: "claimRewardsWithPermit",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "uint256",
+            name: "cleanupId",
+            type: "uint256",
           },
           {
             internalType: "address[]",
@@ -109,17 +604,171 @@ export const RewardsManagerABI = [
       {
         components: [
           {
-            internalType: "uint256",
-            name: "amount",
-            type: "uint256",
+            internalType: "uint256[]",
+            name: "submissionIds",
+            type: "uint256[]",
+          },
+          {
+            internalType: "uint256[]",
+            name: "amounts",
+            type: "uint256[]",
           },
         ],
-        internalType: "struct Params.ClaimRewardsParams",
+        internalType: "struct Params.DistributeStreaksRewardParams",
         name: "params",
         type: "tuple",
       },
     ],
-    name: "claimRewards",
+    name: "distributeStreaksReward",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "getAvailableFunds",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "funds",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+    ],
+    name: "getRoleAdmin",
+    outputs: [
+      {
+        internalType: "bytes32",
+        name: "",
+        type: "bytes32",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "grantRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "hasRole",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "",
+        type: "address",
+      },
+    ],
+    name: "nonces",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "pause",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "paused",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "callerConfirmation",
+        type: "address",
+      },
+    ],
+    name: "renounceRole",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "role",
+        type: "bytes32",
+      },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+    ],
+    name: "revokeRole",
     outputs: [],
     stateMutability: "nonpayable",
     type: "function",
@@ -128,32 +777,157 @@ export const RewardsManagerABI = [
     inputs: [
       {
         internalType: "address",
-        name: "user",
+        name: "",
         type: "address",
       },
     ],
     name: "rewards",
     outputs: [
       {
-        components: [
-          {
-            internalType: "uint256",
-            name: "pending",
-            type: "uint256",
-          },
-          {
-            internalType: "uint256",
-            name: "claimed",
-            type: "uint256",
-          },
-        ],
-        internalType: "struct IRewardsManager.Reward",
-        name: "",
-        type: "tuple",
+        internalType: "uint256",
+        name: "pending",
+        type: "uint256",
+      },
+      {
+        internalType: "uint256",
+        name: "claimed",
+        type: "uint256",
       },
     ],
     stateMutability: "view",
     type: "function",
   },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "rewardsDistributed",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        components: [
+          {
+            internalType: "address[]",
+            name: "recipients",
+            type: "address[]",
+          },
+          {
+            internalType: "uint256[]",
+            name: "amounts",
+            type: "uint256[]",
+          },
+          {
+            internalType: "enum Params.RewardType[]",
+            name: "rewardTypes",
+            type: "uint8[]",
+          },
+        ],
+        internalType: "struct Params.SendRewardsParams",
+        name: "params",
+        type: "tuple",
+      },
+    ],
+    name: "sendRewards",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "address",
+        name: "newAddressesProvider",
+        type: "address",
+      },
+    ],
+    name: "setAddressesProvider",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes32",
+        name: "newAppId",
+        type: "bytes32",
+      },
+    ],
+    name: "setAppId",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    name: "streakRewardsDistributed",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      {
+        internalType: "bytes4",
+        name: "interfaceId",
+        type: "bytes4",
+      },
+    ],
+    name: "supportsInterface",
+    outputs: [
+      {
+        internalType: "bool",
+        name: "",
+        type: "bool",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalDistributed",
+    outputs: [
+      {
+        internalType: "uint256",
+        name: "",
+        type: "uint256",
+      },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "unpause",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
 ] as const;
-

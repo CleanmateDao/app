@@ -186,7 +186,7 @@ export default function SubmitProofOfWork() {
       toast.info("Submitting proof of work to blockchain...");
 
       await submitProofMutation.sendTransaction({
-        cleanupAddress: id,
+        cleanupId: id,
         ipfsHashes,
         mimetypes,
       });

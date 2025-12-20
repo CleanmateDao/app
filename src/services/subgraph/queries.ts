@@ -332,6 +332,36 @@ export function useTeamMember(
   });
 }
 
+export function useTeamMembers(
+  organizerAddress: string | null | undefined,
+  options?: Omit<
+    UseQueryOptions<SubgraphTeamMembership[]>,
+    "queryKey" | "queryFn"
+  >
+) {
+  return useQuery({
+    queryKey: [
+      ...subgraphKeys.teamMemberships(),
+      "organizer",
+      organizerAddress || "",
+    ],
+    queryFn: async () => {
+      if (!organizerAddress) return [];
+      const response = await subgraphClient.getTeamMemberships({
+        first: 100,
+        where: {
+          organizer: organizerAddress,
+        },
+        orderBy: "addedAt",
+        orderDirection: "desc",
+      });
+      return response.teamMemberships;
+    },
+    enabled: !!organizerAddress,
+    ...options,
+  });
+}
+
 export function useTeamMemberPermission(
   organizerAddress: string | null | undefined,
   memberAddress: string | null | undefined,

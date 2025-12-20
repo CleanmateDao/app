@@ -1,4 +1,5 @@
 import { Bell, Sparkles, Menu, Moon, Sun } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { WalletButton } from "@vechain/vechain-kit";
 import {
@@ -30,7 +31,13 @@ export function Topbar({ onMenuClick }: TopbarProps) {
   const unreadCount = notifications.length;
 
   return (
-    <header className="h-14 lg:h-16 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 bg-background/80 backdrop-blur-sm border-b border-border/50 lg:border-0 lg:bg-transparent">
+    <motion.header
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.2 }}
+      className="h-14 lg:h-16 px-4 lg:px-6 flex items-center justify-between sticky top-0 z-40 bg-background/80 backdrop-blur-sm border-b border-border/50 lg:border-0 lg:bg-transparent"
+    >
       {/* Left section */}
       <div className="flex items-center gap-3">
         {/* Mobile Menu Button - hidden when bottom nav is visible */}
@@ -185,6 +192,6 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           </PopoverContent>
         </Popover>
       </div>
-    </header>
+    </motion.header>
   );
 }

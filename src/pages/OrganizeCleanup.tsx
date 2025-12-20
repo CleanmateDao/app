@@ -187,6 +187,22 @@ export default function OrganizeCleanup() {
       const startTime = Math.floor(startDate.getTime() / 1000);
       const endTime = Math.floor(endDate.getTime() / 1000);
 
+      console.log({
+        metadata: metadataJsonString,
+        category: formData.category,
+        location: {
+          address_: location.address,
+          city: location.city,
+          country: location.country,
+          latitude: Math.round(location.latitude * 1e6).toString(),
+          longitude: Math.round(location.longitude * 1e6).toString(),
+        },
+        date: dateTimestamp.toString(),
+        startTime: startTime.toString(),
+        endTime: endTime.toString(),
+        maxParticipants: schedule.maxParticipants.toString(),
+      });
+
       // Submit to contract
       toast.info("Creating cleanup on blockchain...");
       await createCleanupMutation.sendTransaction({
