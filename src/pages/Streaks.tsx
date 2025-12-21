@@ -23,6 +23,10 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+  MediaViewerDialog,
+  type MediaItem,
+} from "@/components/MediaViewerDialog";
+import {
   StreakSubmission,
   transformStreakSubmission,
   transformUserStreakStats,
@@ -43,6 +47,7 @@ import {
   subWeeks,
 } from "date-fns";
 import africanPattern from "@/assets/african-pattern.jpg";
+import { toReadableB3tr } from "@/lib/utils";
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -99,7 +104,13 @@ function groupStreaksByWeek(streaks: StreakSubmission[]) {
   return grouped;
 }
 
-function StreakCard({ streak }: { streak: StreakSubmission }) {
+function StreakCard({
+  streak,
+  onClick,
+}: {
+  streak: StreakSubmission;
+  onClick: () => void;
+}) {
   const statusConfig = {
     pending: {
       icon: Clock,
@@ -124,6 +135,12 @@ function StreakCard({ streak }: { streak: StreakSubmission }) {
   const config = statusConfig[streak.status];
   const StatusIcon = config.icon;
 
+  // Get the first video URL for thumbnail
+  const videoUrl =
+    streak.ipfsHashes.find((_, index) =>
+      streak.mimetypes[index]?.startsWith("video/")
+    ) || streak.ipfsHashes[0];
+
   return (
     <motion.div
       variants={fadeIn}
@@ -132,17 +149,42 @@ function StreakCard({ streak }: { streak: StreakSubmission }) {
       className="relative flex-shrink-0 w-32 sm:w-36"
     >
       {/* 2:3 aspect ratio video card */}
-      <div className="relative aspect-[2/3] rounded-xl overflow-hidden bg-muted group cursor-pointer">
-        {/* Full video background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-muted-foreground/20 to-muted flex items-center justify-center">
-          <Play className="h-8 w-8 text-white/60 group-hover:scale-110 transition-transform" />
-        </div>
+      <div
+        className="relative aspect-[2/3] rounded-xl overflow-hidden bg-muted group cursor-pointer"
+        onClick={onClick}
+      >
+        {/* Video thumbnail */}
+        {videoUrl ? (
+          <video
+            src={videoUrl}
+            className="absolute inset-0 w-full h-full object-cover"
+            preload="metadata"
+            muted
+            playsInline
+            onLoadedMetadata={(e) => {
+              // Seek to first frame for thumbnail
+              const video = e.currentTarget;
+              video.currentTime = 0.1;
+            }}
+          />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-muted-foreground/20 to-muted flex items-center justify-center">
+            <Play className="h-8 w-8 text-white/60 group-hover:scale-110 transition-transform" />
+          </div>
+        )}
 
         {/* Gradient overlay for text readability */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
+        {/* Play button overlay */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
+            <Play className="h-6 w-6 text-white ml-1" fill="white" />
+          </div>
+        </div>
+
         {/* Top badges */}
-        <div className="absolute top-2 left-2 right-2 flex items-center justify-between">
+        <div className="absolute top-2 left-2 right-2 flex items-center justify-between z-10">
           <Badge
             className={`${config.bg} ${config.color} border-0 text-[10px] px-1.5 py-0.5 backdrop-blur-sm`}
           >
@@ -155,11 +197,11 @@ function StreakCard({ streak }: { streak: StreakSubmission }) {
         </div>
 
         {/* Bottom overlay info */}
-        <div className="absolute bottom-0 left-0 right-0 p-2.5">
+        <div className="absolute bottom-0 left-0 right-0 p-2.5 z-10">
           {streak.status === "approved" && streak.amount && (
             <div className="flex items-center gap-1 mb-1">
               <span className="text-sm font-bold text-white">
-                +{streak.amount}
+                +{toReadableB3tr(streak.amount)}
               </span>
               <span className="text-xs text-white/70">B3TR</span>
             </div>
@@ -192,6 +234,11 @@ export default function Streaks() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
   const walletAddress = useWalletAddress();
+
+  // Media viewer state
+  const [mediaViewerOpen, setMediaViewerOpen] = useState(false);
+  const [viewerMedia, setViewerMedia] = useState<MediaItem[]>([]);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
 
   // Fetch streak stats
   const { data: streakStatsData, isLoading: isLoadingStats } =
@@ -275,6 +322,38 @@ export default function Streaks() {
   }, [submissions]);
 
   const isLoading = isLoadingStats || isLoadingSubmissions;
+
+  // Convert streak IPFS hashes to MediaItem format
+  const convertStreakToMediaItems = useCallback(
+    (streak: StreakSubmission): MediaItem[] => {
+      return streak.ipfsHashes.map((hash, index) => {
+        const mimetype = streak.mimetypes[index] || "";
+        const isVideo = mimetype.startsWith("video/");
+        return {
+          url: hash,
+          type: isVideo ? "video" : "image",
+          caption: `Streak submission from ${format(
+            parseISO(streak.submittedAt),
+            "MMM d, yyyy"
+          )}`,
+        };
+      });
+    },
+    []
+  );
+
+  // Handle opening media viewer
+  const handleOpenMediaViewer = useCallback(
+    (streak: StreakSubmission) => {
+      const mediaItems = convertStreakToMediaItems(streak);
+      if (mediaItems.length > 0) {
+        setViewerMedia(mediaItems);
+        setViewerInitialIndex(0);
+        setMediaViewerOpen(true);
+      }
+    },
+    [convertStreakToMediaItems]
+  );
 
   // Intersection Observer for infinite scroll
   const loadMoreRef = useRef<HTMLDivElement>(null);
@@ -404,7 +483,7 @@ export default function Streaks() {
                           animate={{ scale: 1 }}
                           transition={{ type: "spring", stiffness: 300 }}
                         >
-                          {stats.totalAmount.toLocaleString()}
+                          {toReadableB3tr(stats.totalAmount)}
                         </motion.span>
                         <span className="text-lg font-semibold text-primary/70">
                           B3TR
@@ -566,7 +645,11 @@ export default function Streaks() {
 
                   <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
                     {group.streaks.map((streak) => (
-                      <StreakCard key={streak.id} streak={streak} />
+                      <StreakCard
+                        key={streak.id}
+                        streak={streak}
+                        onClick={() => handleOpenMediaViewer(streak)}
+                      />
                     ))}
                   </div>
                 </motion.div>
@@ -605,6 +688,14 @@ export default function Streaks() {
           ) : null}
         </AnimatePresence>
       </div>
+
+      {/* Media Viewer Dialog */}
+      <MediaViewerDialog
+        open={mediaViewerOpen}
+        onOpenChange={setMediaViewerOpen}
+        media={viewerMedia}
+        initialIndex={viewerInitialIndex}
+      />
     </div>
   );
 }

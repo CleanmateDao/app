@@ -79,6 +79,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { toReadableB3tr } from "@/lib/utils";
 
 type PaymentMethod = "wallet" | "bank";
 
@@ -134,7 +135,6 @@ export default function Rewards() {
   // Transform and flatten infinite query data
   const rewardTransactions = useMemo(() => {
     if (!infiniteTransactionsData) return [];
-    // Handle infinite query format (with pages)
     type InfiniteData = { pages?: Array<Array<unknown>> };
     const infiniteData = infiniteTransactionsData as InfiniteData;
     if (infiniteData.pages) {
@@ -479,7 +479,7 @@ export default function Rewards() {
               </span>
             </div>
             <p className="text-3xl font-semibold">
-              {userProfile?.pendingRewards || 0}{" "}
+              {toReadableB3tr(userProfile?.pendingRewards || 0)}{" "}
               <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
             {isMobile ? (
@@ -673,7 +673,9 @@ export default function Rewards() {
                       />
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
-                          Available: {userProfile?.pendingRewards || 0} B3TR
+                          Available:{" "}
+                          {toReadableB3tr(userProfile?.pendingRewards || 0)}{" "}
+                          B3TR
                         </p>
                         <Button
                           type="button"
@@ -682,7 +684,9 @@ export default function Rewards() {
                           className="text-xs h-auto py-1"
                           onClick={() =>
                             setClaimAmount(
-                              (userProfile?.pendingRewards || 0).toString()
+                              toReadableB3tr(
+                                userProfile?.pendingRewards || 0
+                              ).toString()
                             )
                           }
                           disabled={isClaiming}
@@ -956,7 +960,9 @@ export default function Rewards() {
                       />
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-muted-foreground">
-                          Available: {userProfile?.pendingRewards || 0} B3TR
+                          Available:{" "}
+                          {toReadableB3tr(userProfile?.pendingRewards || 0)}{" "}
+                          B3TR
                         </p>
                         <Button
                           type="button"
@@ -965,7 +971,9 @@ export default function Rewards() {
                           className="text-xs h-auto py-1"
                           onClick={() =>
                             setClaimAmount(
-                              (userProfile?.pendingRewards || 0).toString()
+                              toReadableB3tr(
+                                userProfile?.pendingRewards || 0
+                              ).toString()
                             )
                           }
                           disabled={isClaiming}
@@ -1068,7 +1076,7 @@ export default function Rewards() {
               </span>
             </div>
             <p className="text-3xl font-semibold text-status-approved">
-              {userProfile?.totalRewards || 0}{" "}
+              {toReadableB3tr(userProfile?.totalRewards || 0)}{" "}
               <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
           </CardContent>
@@ -1089,7 +1097,7 @@ export default function Rewards() {
               </span>
             </div>
             <p className="text-3xl font-semibold">
-              {userProfile?.claimedRewards || 0}{" "}
+              {toReadableB3tr(userProfile?.claimedRewards || 0)}{" "}
               <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
           </CardContent>
@@ -1148,7 +1156,7 @@ export default function Rewards() {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Type</TableHead>
-                    <TableHead>Cleanup</TableHead>
+                    <TableHead>Description</TableHead>
                     <TableHead>Amount</TableHead>
                     <TableHead>Status</TableHead>
                   </TableRow>
@@ -1193,7 +1201,8 @@ export default function Rewards() {
                             }`}
                           >
                             {tx.type === "earned" ? "+" : "-"}
-                            {tx.amount} B3TR
+                            {toReadableB3tr(tx.amount)}{" "}
+                            <span className="text-muted-foreground">B3TR</span>
                           </span>
                         </TableCell>
                         <TableCell>

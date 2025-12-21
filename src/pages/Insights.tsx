@@ -36,6 +36,7 @@ import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { transformUserStreakStats } from "@/types/streak";
 import { JoinStreakDrawer } from "@/components/JoinStreakDrawer";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { toReadableB3tr } from "@/lib/utils";
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -119,12 +120,10 @@ export default function Insights() {
   const isLoadingCleanups = isLoadingOrganizedCleanups || isLoadingAllCleanups;
 
   // Fetch earned rewards (transactions)
-  const { data: rewardsData, isLoading: isLoadingRewards } = useTransactions(
-    {
-      where: { user: walletAddress || undefined, transactionType: "RECEIVE" },
-      first: 1000,
-    }
-  );
+  const { data: rewardsData, isLoading: isLoadingRewards } = useTransactions({
+    where: { user: walletAddress || undefined, transactionType: "RECEIVE" },
+    first: 1000,
+  });
   const rewards = useMemo(() => {
     if (!rewardsData) return [];
     return rewardsData.map((r) => transformTransaction(r));
@@ -268,7 +267,7 @@ export default function Insights() {
                       <>
                         <span>{streakStats.approvedSubmissions} approved</span>
                         <span className="text-primary font-medium">
-                          +{streakStats.totalAmount} B3TR
+                          +{toReadableB3tr(streakStats.totalAmount)} B3TR
                         </span>
                       </>
                     ) : (

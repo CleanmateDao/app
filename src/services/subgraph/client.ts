@@ -228,7 +228,6 @@ export const subgraphClient = {
 
     if (params?.where) {
       if (params.where.type) where.type = params.where.type;
-      if (params.where.read !== undefined) where.read = params.where.read;
       if (params.where.relatedEntity)
         where.relatedEntity = normalizeAddress(params.where.relatedEntity);
       if (params.where.relatedEntityType)

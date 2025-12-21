@@ -267,8 +267,9 @@ export default function OrganizeCleanup() {
     [userData, walletAddress]
   );
 
-  // Check if user has completed KYC
+  // Check if user has completed KYC and is an organizer
   const isKycVerified = userProfile?.kycStatus === "verified";
+  const isOrganizer = userData?.isOrganizer ?? false;
 
   if (!isKycVerified) {
     return (
@@ -294,6 +295,35 @@ export default function OrganizeCleanup() {
                     Complete KYC Verification
                   </Link>
                 </Button>
+                <Button variant="ghost" asChild>
+                  <Link to="/cleanups">Back to Cleanups</Link>
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (isKycVerified && !isOrganizer) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="max-w-md w-full">
+          <CardContent className="pt-6">
+            <div className="text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+                <Shield className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-xl font-semibold">
+                Organizer Status Pending
+              </h2>
+              <p className="text-muted-foreground">
+                Although you have completed your KYC, we are still yet to make
+                you an organizer. Please wait for your organizer status to be
+                approved.
+              </p>
+              <div className="flex flex-col gap-2 pt-4">
                 <Button variant="ghost" asChild>
                   <Link to="/cleanups">Back to Cleanups</Link>
                 </Button>

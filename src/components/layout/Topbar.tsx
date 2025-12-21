@@ -9,12 +9,13 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
+import { useState, useMemo } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useReadNotification } from "@/hooks/use-read-notification";
 import { useNotifications as useSubgraphNotifications } from "@/services/subgraph/queries";
-import { formatRelativeTimeFromBigInt } from "@/lib/time";
+import { formatRelativeTime } from "@/lib/time";
 import temiAvatar from "@/assets/temi.png";
 import appLogo from "@/assets/logo.png";
 
@@ -22,17 +23,90 @@ interface TopbarProps {
   onMenuClick?: () => void;
 }
 
+// Route to breadcrumb label mapping
+const routeLabels: Record<string, string> = {
+  "/dashboard": "Overview",
+  "/cleanups": "Cleanups",
+  "/organize": "Organize",
+  "/rewards": "Rewards",
+  "/ai-chat": "AI Chat",
+  "/notifications": "Notifications",
+  "/settings": "Settings",
+  "/streaks": "Streaks",
+  "/streaks/submit": "Submit Streak",
+};
+
+// Get breadcrumb segments from current path
+const getBreadcrumbs = (
+  pathname: string,
+  params: Record<string, string | undefined>
+) => {
+  const segments: Array<{ label: string; path?: string }> = [];
+
+  // Always start with Dashboard
+  segments.push({ label: "Dashboard", path: "/dashboard" });
+
+  // Handle specific routes
+  if (pathname === "/dashboard") {
+    segments.push({ label: "Overview" });
+  } else if (pathname.startsWith("/cleanups")) {
+    segments.push({ label: "Cleanups", path: "/cleanups" });
+
+    if (params.id) {
+      if (pathname.includes("/submit-proof")) {
+        segments.push({ label: "Submit Proof" });
+      } else {
+        segments.push({ label: `Cleanup #${params.id}` });
+      }
+    }
+  } else if (pathname.startsWith("/streaks")) {
+    segments.push({ label: "Streaks", path: "/streaks" });
+
+    if (pathname === "/streaks/submit") {
+      segments.push({ label: "Submit Streak" });
+    }
+  } else {
+    // For other routes, use the label from mapping or capitalize the route name
+    const routeLabel = routeLabels[pathname];
+    if (routeLabel) {
+      segments.push({ label: routeLabel });
+    } else {
+      // Fallback: capitalize first letter of route name
+      const routeName = pathname.slice(1).split("/")[0];
+      segments.push({
+        label: routeName.charAt(0).toUpperCase() + routeName.slice(1),
+      });
+    }
+  }
+
+  return segments;
+};
+
 export function Topbar({ onMenuClick }: TopbarProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
   const { theme, setTheme } = useTheme();
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const walletAddress = useWalletAddress();
+  const { isRead, markAsRead } = useReadNotification();
   const { data: notifications = [], isLoading } = useSubgraphNotifications(
     walletAddress,
-    { first: 8, where: { read: false } },
+    { first: 8 },
     { refetchInterval: 20_000 }
   );
-  const unreadCount = notifications.length;
+  // Check if the last (most recent) notification is unread
+  const hasUnreadLastNotification = useMemo(() => {
+    if (notifications.length === 0) return false;
+    const lastNotification = notifications[0]; // Most recent is first
+    return !isRead(lastNotification);
+  }, [notifications, isRead]);
+
+  // Get breadcrumb segments for current route
+  const breadcrumbs = useMemo(
+    () => getBreadcrumbs(location.pathname, params),
+    [location.pathname, params]
+  );
 
   return (
     <motion.header
@@ -63,11 +137,33 @@ export function Topbar({ onMenuClick }: TopbarProps) {
         </button>
 
         <div className="flex items-center gap-2 text-sm">
-          <span className="text-muted-foreground hidden md:inline">
-            Dashboard
-          </span>
-          <span className="text-muted-foreground hidden md:inline">/</span>
-          <span className="font-medium hidden md:inline">Overview</span>
+          {breadcrumbs.map((crumb, index) => (
+            <div key={index} className="flex items-center gap-2">
+              {index > 0 && (
+                <span className="text-muted-foreground hidden md:inline">
+                  /
+                </span>
+              )}
+              {crumb.path ? (
+                <button
+                  onClick={() => navigate(crumb.path!)}
+                  className="text-muted-foreground hidden md:inline hover:text-foreground transition-colors"
+                >
+                  {crumb.label}
+                </button>
+              ) : (
+                <span
+                  className={`hidden md:inline ${
+                    index === breadcrumbs.length - 1
+                      ? "font-medium"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {crumb.label}
+                </span>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -91,16 +187,13 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             </AvatarViewerTrigger>
             <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
           </div>
-          <span className="hidden sm:inline text-sm font-medium">Temi</span>
+          <span className="text-sm font-medium">Temi</span>
         </Button>
 
         <div className="w-px h-6 bg-border/60 mx-1" />
 
         {/* Wallet Connect Style Button */}
-        <WalletButton
-          mobileVariant="iconAndDomain"
-          desktopVariant="iconAndDomain"
-        />
+        <WalletButton mobileVariant="icon" desktopVariant="iconAndDomain" />
 
         {/* Theme Toggle */}
         <Button
@@ -125,10 +218,8 @@ export function Topbar({ onMenuClick }: TopbarProps) {
               className="relative h-8 w-8 hover:bg-secondary transition-colors"
             >
               <Bell className="w-4 h-4" />
-              {unreadCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-primary text-primary-foreground text-[10px] font-bold rounded-full flex items-center justify-center px-1">
-                  {unreadCount}
-                </span>
+              {hasUnreadLastNotification && (
+                <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-primary rounded-full" />
               )}
             </Button>
           </PopoverTrigger>
@@ -142,8 +233,8 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                 variant="ghost"
                 size="sm"
                 className="text-xs text-primary h-auto p-0 hover:bg-transparent"
-                disabled
-                title="Read status is sourced from the subgraph"
+                onClick={() => markAsRead()}
+                disabled={!hasUnreadLastNotification}
               >
                 Mark all read
               </Button>
@@ -162,37 +253,40 @@ export function Topbar({ onMenuClick }: TopbarProps) {
                   No notifications yet
                 </div>
               ) : (
-                notifications.map((notification) => (
-                  <div
-                    key={notification.id}
-                    className={`p-4 border-b border-border/50 last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer ${
-                      !notification.read ? "bg-primary/5" : ""
-                    }`}
-                    onClick={() => {
-                      setNotificationsOpen(false);
-                      navigate("/notifications");
-                    }}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                          !notification.read ? "bg-primary" : "bg-muted"
-                        }`}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {notification.title}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {formatRelativeTimeFromBigInt(notification.createdAt)}
-                        </p>
+                notifications.map((notification) => {
+                  const notificationRead = isRead(notification);
+                  return (
+                    <div
+                      key={notification.id}
+                      className={`p-4 border-b border-border/50 last:border-0 hover:bg-secondary/50 transition-colors cursor-pointer ${
+                        !notificationRead ? "bg-primary/5" : ""
+                      }`}
+                      onClick={() => {
+                        setNotificationsOpen(false);
+                        navigate("/notifications");
+                      }}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                            !notificationRead ? "bg-primary" : "bg-muted"
+                          }`}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {notification.title}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {formatRelativeTime(notification.createdAt)}
+                          </p>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
             <div className="p-3 border-t border-border">

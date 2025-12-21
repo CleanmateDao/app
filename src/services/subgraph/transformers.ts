@@ -27,6 +27,7 @@ import {
   parseCleanupUpdateMetadata,
   parseUserProfileMetadata,
 } from "@cleanmate/cip-sdk";
+import { toB3tr } from "@/lib/utils";
 
 /**
  * Transform subgraph user to app user profile
@@ -199,14 +200,6 @@ export function transformTransaction(
     : "pending";
 
   const fallbackTitle = (() => {
-    // Prefer cleanup title if we have a cleanupId
-    if (transaction.cleanupId)
-      return cleanupMetadata?.title || "Cleanup reward";
-    // Streak rewards
-    if (transaction.streakSubmissionId) {
-      return `Streak reward #${transaction.streakSubmissionId}`;
-    }
-    // Other rewards: infer from rewardType when available
     switch (transaction.rewardType) {
       case 0:
         return "Referral reward";
@@ -304,7 +297,7 @@ export function calculateInsights(
           r.type === "earned"
         );
       })
-      .reduce((sum, r) => sum + r.amount, 0);
+      .reduce((sum, r) => sum + toB3tr(r.amount.toString()), 0);
 
     monthlyData.push({ month, cleanups: monthCleanups, rewards: monthRewards });
   }
@@ -322,7 +315,7 @@ export function calculateInsights(
   }, 0);
 
   return {
-    totalRewards: userProfile?.totalRewards || 0,
+    totalRewards: toB3tr(userProfile?.totalRewards.toString() || "0"),
     cleanupsCompleted: completedCleanups.length,
     activeCleanupsNearby: activeCleanups.length,
     participantsHelped,

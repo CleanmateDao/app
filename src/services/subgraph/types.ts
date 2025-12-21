@@ -158,7 +158,6 @@ export interface GetTransactionsQueryParams {
 export interface NotificationFilter {
   user: string; // Bytes - address
   type?: string;
-  read?: boolean;
   relatedEntity?: string; // String - ID of related entity
   relatedEntityType?: string;
 }

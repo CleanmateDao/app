@@ -296,7 +296,7 @@ export default function Settings() {
 
     try {
       // Step 1: Submit KYC data to KYC service
-      toast.info("Submitting KYC data...");
+      toast.info("Securely submitting KYC data...");
 
       // Prepare files array
       const files: File[] = [];
@@ -331,7 +331,7 @@ export default function Settings() {
       await submitKYCToAPIMutation.mutateAsync(kycSubmissionData);
 
       // Step 2: After successful POST, call smart contract mutation
-      toast.info("Submitting KYC to blockchain...");
+      toast.info("Updating KYC status on blockchain...");
       await markKYCPendingMutation.sendTransaction();
     } catch (error) {
       console.error("Error submitting KYC:", error);

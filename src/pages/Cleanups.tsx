@@ -14,6 +14,7 @@ import {
   Map,
   List,
   Loader2,
+  Menu,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -54,6 +55,8 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { CleanupMap } from "@/components/cleanup/CleanupMap";
 import { BottomNav } from "@/components/layout/BottomNav";
+import { Sidebar } from "@/components/layout/Sidebar";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   useInfiniteCleanups,
   useUserCleanups,
@@ -114,6 +117,7 @@ export default function Cleanups() {
     const saved = localStorage.getItem("cleanups-view-mode");
     return saved === "list" || saved === "map" ? saved : "map";
   });
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   // Determine which query to use based on active tab
   const isCreatedTab = activeTab === "created";
@@ -171,9 +175,11 @@ export default function Cleanups() {
     fetchNextPage,
   });
 
-  // Persist view mode
+  // Persist view mode and notify DashboardLayout
   useEffect(() => {
     localStorage.setItem("cleanups-view-mode", viewMode);
+    // Dispatch custom event to notify DashboardLayout of view mode change
+    window.dispatchEvent(new Event("cleanups-view-mode-changed"));
   }, [viewMode]);
 
   const handleDeleteCleanup = () => {
@@ -192,11 +198,22 @@ export default function Cleanups() {
           {/* Floating header */}
           <div className="absolute top-4 left-4 right-4 z-50 flex flex-col gap-3 pointer-events-none">
             <div className="flex items-center justify-between">
-              <div className="bg-card/95 backdrop-blur-sm rounded-lg p-3 shadow-lg border border-border pointer-events-auto">
-                <h1 className="text-lg font-semibold">Cleanups</h1>
-                <p className="text-muted-foreground text-xs">
-                  Browse cleanup events near you
-                </p>
+              <div className="flex items-center gap-2">
+                {/* Hamburger Menu Button - Hidden on mobile */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden lg:flex h-10 w-10 bg-card/95 backdrop-blur-sm border border-border shadow-lg pointer-events-auto"
+                  onClick={() => setSidebarOpen(true)}
+                >
+                  <Menu className="w-5 h-5" />
+                </Button>
+                <div className="bg-card/95 backdrop-blur-sm rounded-lg p-3 shadow-lg border border-border pointer-events-auto">
+                  <h1 className="text-lg font-semibold">Cleanups</h1>
+                  <p className="text-muted-foreground text-xs">
+                    Browse cleanup events near you
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2 pointer-events-auto">
                 {/* View Toggle */}
@@ -230,22 +247,49 @@ export default function Cleanups() {
             </div>
 
             {/* Filters for map view */}
-            <div className="overflow-x-auto w-fit pointer-events-auto">
-              <div className="flex gap-1 bg-card/95 backdrop-blur-sm border border-border rounded-lg p-1 shadow-lg w-fit">
-                {statusTabs.map((tab) => (
-                  <button
-                    key={tab.value}
-                    onClick={() => setActiveTab(tab.value)}
-                    className={cn(
-                      "px-3 py-1.5 text-xs font-medium transition-colors rounded-md whitespace-nowrap",
-                      activeTab === tab.value
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground hover:bg-card"
-                    )}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+            <div className="pointer-events-auto">
+              {/* Mobile: Dropdown */}
+              <div className="lg:hidden w-fit min-w-20">
+                <Select
+                  value={activeTab}
+                  onValueChange={(value) =>
+                    setActiveTab(value as CleanupStatusUI | "all" | "created")
+                  }
+                >
+                  <SelectTrigger className="w-full bg-card/95 backdrop-blur-sm border border-border shadow-lg">
+                    <SelectValue>
+                      {statusTabs.find((tab) => tab.value === activeTab)
+                        ?.label || "All"}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statusTabs.map((tab) => (
+                      <SelectItem key={tab.value} value={tab.value}>
+                        {tab.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Desktop: Tabs */}
+              <div className="hidden lg:block overflow-x-auto w-fit">
+                <div className="flex gap-1 bg-card/95 backdrop-blur-sm border border-border rounded-lg p-1 shadow-lg w-fit">
+                  {statusTabs.map((tab) => (
+                    <button
+                      key={tab.value}
+                      onClick={() => setActiveTab(tab.value)}
+                      className={cn(
+                        "px-3 py-1.5 text-xs font-medium transition-colors rounded-md whitespace-nowrap",
+                        activeTab === tab.value
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:text-foreground hover:bg-card"
+                      )}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -259,6 +303,17 @@ export default function Cleanups() {
             <CleanupMap cleanups={cleanups} className="h-full w-full" />
           )}
         </div>
+
+        {/* Sidebar Sheet for Navigation */}
+        <Sheet open={sidebarOpen} onOpenChange={setSidebarOpen}>
+          <SheetContent
+            side="left"
+            className="p-0 w-72 bg-transparent border-0 shadow-none"
+            overlayClassName="bg-transparent"
+          >
+            <Sidebar onNavigate={() => setSidebarOpen(false)} />
+          </SheetContent>
+        </Sheet>
 
         {/* Mobile Bottom Navigation */}
         <BottomNav />

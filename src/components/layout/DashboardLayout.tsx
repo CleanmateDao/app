@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode, useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import { AnimatePresence } from "framer-motion";
 import { Sidebar } from "./Sidebar";
@@ -13,6 +13,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isMapView, setIsMapView] = useState(false);
   const location = useLocation();
   const { isRecording } = useRecording();
 
@@ -20,15 +21,56 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const hideBottomNav =
     location.pathname === "/streaks" || location.pathname === "/streaks/submit";
 
-  // Hide topbar when recording video for streak
-  const hideTopbar = isRecording;
+  // Hide topbar when recording video for streak or in map view
+  const hideTopbar = isRecording || isMapView;
+
+  // Check if we're in map view and update reactively
+  useEffect(() => {
+    const checkMapView = () => {
+      const viewMode = localStorage.getItem("cleanups-view-mode");
+      setIsMapView(
+        location.pathname.startsWith("/cleanups") && viewMode === "map"
+      );
+    };
+
+    // Check initially
+    checkMapView();
+
+    // Listen for storage changes (when view mode changes in Cleanups component)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "cleanups-view-mode") {
+        checkMapView();
+      }
+    };
+
+    // Listen for custom storage event (for same-tab updates)
+    const handleCustomStorage = () => {
+      checkMapView();
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("cleanups-view-mode-changed", handleCustomStorage);
+
+    // Also check on location change
+    checkMapView();
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener(
+        "cleanups-view-mode-changed",
+        handleCustomStorage
+      );
+    };
+  }, [location.pathname]);
 
   return (
     <div className="min-h-screen flex bg-background">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block">
-        <Sidebar />
-      </div>
+      {!isMapView && (
+        <div className="hidden lg:block">
+          <Sidebar />
+        </div>
+      )}
 
       {/* Mobile Sidebar Sheet */}
       <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>

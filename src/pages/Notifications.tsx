@@ -4,13 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
+import type { InfiniteData } from "@tanstack/react-query";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useReadNotification } from "@/hooks/use-read-notification";
 import { useInfiniteNotifications } from "@/services/subgraph/queries";
 import type { SubgraphNotification } from "@/services/subgraph/types";
-import {
-  formatDateBucketFromBigInt,
-  formatRelativeTimeFromBigInt,
-} from "@/lib/time";
+import { formatDateBucket, formatRelativeTime } from "@/lib/time";
 
 function labelForType(type: string): string {
   return type.replace("_", " ");
@@ -32,6 +31,7 @@ const ITEMS_PER_LOAD = 10;
 
 export default function Notifications() {
   const walletAddress = useWalletAddress();
+  const { isRead, markAsRead } = useReadNotification();
 
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
     useInfiniteNotifications(
@@ -43,19 +43,23 @@ export default function Notifications() {
       }
     );
 
-  const notifications = useMemo<SubgraphNotification[]>(
-    () => (data?.pages ?? []).flat(),
-    [data]
-  );
+  const notifications = useMemo<SubgraphNotification[]>(() => {
+    if (!data) return [];
+    // Type assertion needed due to React Query type inference
+    const infiniteData = data as unknown as InfiniteData<
+      SubgraphNotification[]
+    >;
+    return (infiniteData.pages ?? []).flat();
+  }, [data]);
 
   const unreadCount = useMemo(
-    () => notifications.reduce((acc, n) => acc + (n.read ? 0 : 1), 0),
-    [notifications]
+    () => notifications.reduce((acc, n) => acc + (isRead(n) ? 0 : 1), 0),
+    [notifications, isRead]
   );
 
   const groupedNotifications = useMemo(() => {
     return notifications.reduce((acc, notification) => {
-      const bucket = formatDateBucketFromBigInt(notification.createdAt);
+      const bucket = formatDateBucket(notification.createdAt);
       if (!acc[bucket]) {
         acc[bucket] = [];
       }
@@ -112,9 +116,9 @@ export default function Notifications() {
           <Button
             variant="outline"
             size="sm"
-            disabled
+            onClick={() => markAsRead()}
             className="gap-2"
-            title="Read status is sourced from the subgraph"
+            disabled={unreadCount === 0}
           >
             <CheckCheck className="w-4 h-4" />
             Mark all read
@@ -167,7 +171,7 @@ export default function Notifications() {
                     exit={{ opacity: 0, x: -100 }}
                     className={cn(
                       "group relative p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-card transition-all",
-                      notification.read && "bg-muted/5 border-muted/20"
+                      isRead(notification) && "bg-muted/5 border-muted/20"
                     )}
                   >
                     <div className="flex items-start gap-4">
@@ -175,7 +179,7 @@ export default function Notifications() {
                       <div
                         className={cn(
                           "w-2 h-2 rounded-full mt-2 shrink-0 transition-colors",
-                          notification.read ? "bg-muted" : "bg-primary"
+                          isRead(notification) ? "bg-muted" : "bg-primary"
                         )}
                       />
 
@@ -201,9 +205,7 @@ export default function Notifications() {
                               {notification.message}
                             </p>
                             <p className="text-xs text-muted-foreground/70 mt-2">
-                              {formatRelativeTimeFromBigInt(
-                                notification.createdAt
-                              )}
+                              {formatRelativeTime(notification.createdAt)}
                             </p>
                           </div>
                         </div>

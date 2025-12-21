@@ -1,15 +1,5 @@
-/**
- * Subgraph timestamps are usually `BigInt` (string) in **seconds**.
- * Some sources might already be milliseconds; this helper handles both.
- */
-export function bigIntTimestampToMs(bigIntString: string): number {
-  const n = Number(bigIntString);
-  if (!Number.isFinite(n)) return Date.now();
-  return n > 1e12 ? n : n * 1000;
-}
-
-export function formatRelativeTimeFromBigInt(createdAt: string): string {
-  const createdAtMs = bigIntTimestampToMs(createdAt);
+export function formatRelativeTime(createdAt: number): string {
+  const createdAtMs = createdAt * 1000;
   const diffMs = Date.now() - createdAtMs;
   const mins = Math.floor(diffMs / 60000);
   if (mins < 1) return "just now";
@@ -20,8 +10,8 @@ export function formatRelativeTimeFromBigInt(createdAt: string): string {
   return `${days} day${days === 1 ? "" : "s"} ago`;
 }
 
-export function formatDateBucketFromBigInt(createdAt: string): string {
-  const d = new Date(bigIntTimestampToMs(createdAt));
+export function formatDateBucket(createdAt: number): string {
+  const d = new Date(createdAt * 1000);
   const now = new Date();
   const startOfToday = new Date(
     now.getFullYear(),
@@ -44,5 +34,3 @@ export function formatDateBucketFromBigInt(createdAt: string): string {
     day: "numeric",
   });
 }
-
-

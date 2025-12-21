@@ -11,13 +11,14 @@ interface CleanupMapProps {
   className?: string;
 }
 
-const statusConfig: Record<CleanupStatusUI, { label: string; color: string }> = {
-  unpublished: { label: "Unpublished", color: "#6b7280" },
-  open: { label: "Open", color: "#22c55e" },
-  in_progress: { label: "In Progress", color: "#f97316" },
-  completed: { label: "Completed", color: "#8b5cf6" },
-  rewarded: { label: "Rewarded", color: "#06b6d4" },
-};
+const statusConfig: Record<CleanupStatusUI, { label: string; color: string }> =
+  {
+    unpublished: { label: "Unpublished", color: "#6b7280" },
+    open: { label: "Open", color: "#22c55e" },
+    in_progress: { label: "In Progress", color: "#f97316" },
+    completed: { label: "Completed", color: "#8b5cf6" },
+    rewarded: { label: "Rewarded", color: "#06b6d4" },
+  };
 
 const lightMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
@@ -383,16 +384,22 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       });
 
       marker.addListener("click", () => {
-        const routeButtonText =
-          activeRoute === cleanup.id ? "Hide Route" : "Show Route";
         const content = `
           <div style="padding: 8px; max-width: 250px;">
             <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">${
               cleanup.title
             }</h3>
-            ${cleanup.location.address ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #333; font-weight: 500;">📍 ${cleanup.location.address}</p>` : ""}
+            ${
+              cleanup.location.address
+                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #333; font-weight: 500;">📍 ${cleanup.location.address}</p>`
+                : ""
+            }
             <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">
-              ${[cleanup.location.city, cleanup.location.country].filter(Boolean).join(", ") || "Location not specified"}
+              ${
+                [cleanup.location.city, cleanup.location.country]
+                  .filter(Boolean)
+                  .join(", ") || "Location not specified"
+              }
             </p>
             ${
               distanceText
