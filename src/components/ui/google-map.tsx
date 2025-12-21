@@ -122,7 +122,7 @@ export function GoogleMap({
 
     setMap(newMap);
     setMarker(newMarker);
-  }, [isLoaded, onLocationSelect]);
+  }, [isLoaded, map, onLocationSelect]);
 
   // Geocode address when it changes
   useEffect(() => {

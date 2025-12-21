@@ -5,13 +5,18 @@ import { nodePolyfills } from "vite-plugin-node-polyfills";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
-  plugins: [
-    react(),
-    mode === "development" ? undefined : nodePolyfills(),
-  ].filter(Boolean),
+  plugins: [react(), nodePolyfills()],
+  server: {
+    port: 5174,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      ...(mode === "development"
+        ? {
+            "@cleanmate/cip-sdk": path.resolve(__dirname, "../sdk"),
+          }
+        : {}),
       buffer: "buffer",
       process: "process/browser",
       stream: "stream-browserify",
@@ -19,15 +24,24 @@ export default defineConfig(({ mode }) => ({
       https: "https-browserify",
       url: "url",
       util: "util",
-      os: "os-browserify",
+      os: "os-browserify/browser",
     },
   },
+  define: {
+    "process.env": {},
+  },
   build: {
-    minify: false,
+    minify: "esbuild",
     commonjsOptions: { transformMixedEsModules: true },
+    chunkSizeWarningLimit: 1000,
+    rollupOptions: {
+      external: ["@privy-io/react-auth"],
+    },
   },
   optimizeDeps: {
     include: [
+      "react",
+      "react-dom",
       "buffer",
       "process",
       "crypto-browserify",

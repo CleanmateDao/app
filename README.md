@@ -52,7 +52,7 @@ Top navigation bar with:
 - Mobile hamburger menu trigger
 - Breadcrumb navigation
 - AI Assistant quick access
-- Currency selector (USD, NGN, VET)
+- Currency selector (USD, NGN, B3TR)
 - Notifications popover with unread count
 - User profile dropdown
 
@@ -319,7 +319,7 @@ TypeScript interfaces:
 - **Responsive Design**: Mobile-first approach with tablet and desktop layouts
 - **Dark/Light Theme**: System preference detection with manual toggle
 - **Web3 Integration**: Wallet connection and transaction tracking
-- **Multi-currency Support**: USD, NGN, VET
+- **Multi-currency Support**: USD, NGN, B3TR
 - **Rich Text Editing**: TipTap-powered content editing
 - **File Uploads**: Media and document management
 - **Voting System**: Community governance for proposals
@@ -341,6 +341,33 @@ npm run dev
 # Build for production
 npm run build
 ```
+
+## Environment Variables
+
+Create a `.env` file in the `app` directory with the following variables:
+
+```env
+# API Configuration
+VITE_API_BASE_URL=https://api.cleanmate.app
+
+# KYC Service Configuration
+# URL of the KYC service backend (default: http://localhost:3001)
+VITE_KYC_SERVICE_URL=http://localhost:3001
+
+# API key for authenticating with the KYC service
+# This should match one of the API keys configured in the KYC service
+VITE_KYC_API_KEY=your-api-key-here
+```
+
+### KYC Service Integration
+
+The app integrates with a separate KYC service for identity verification. The KYC service:
+- Accepts multipart/form-data requests with file uploads
+- Requires API key authentication via the `x-api-key` header
+- Stores uploaded documents and KYC data in AWS S3
+- Returns submission IDs and media URLs upon successful submission
+
+See the `kycservice` directory for the KYC service implementation and configuration.
 
 ---
 

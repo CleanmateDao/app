@@ -7,9 +7,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeProvider, useTheme } from "@/components/ThemeProvider";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import Landing from "./pages/Landing";
 import Insights from "./pages/Insights";
 import Cleanups from "./pages/Cleanups";
 import CleanupDetail from "./pages/CleanupDetail";
@@ -21,29 +20,57 @@ import AIChat from "./pages/AIChat";
 import Onboarding from "./pages/Onboarding";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
-import TermsOfService from "./pages/TermsOfService";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import HelpCenter from "./pages/HelpCenter";
+import Streaks from "./pages/Streaks";
+import StreakSubmit from "./pages/StreakSubmit";
+import { useWalletAddress } from "./hooks/use-wallet-address";
+import { RecordingProvider } from "./contexts/RecordingContext";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 30, // 30 minutes (formerly cacheTime)
+      retry: 2,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 // Check if user has completed onboarding
 const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
-  const isOnboarded = localStorage.getItem("onboardingComplete") === "true";
-  if (!isOnboarded) {
+  const walletAddress = useWalletAddress();
+  const skipOnboarding = localStorage.getItem("skipOnboarding") === "true";
+
+  if (!walletAddress && !skipOnboarding) {
     return <Navigate to="/onboarding" replace />;
   }
+
   return <>{children}</>;
 };
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
+const AppInner = () => {
+  const { theme } = useTheme();
+  const isDarkMode = theme === "dark";
+
+  return (
+    <QueryClientProvider client={queryClient}>
       <VeChainKitProvider
         feeDelegation={{
           delegatorUrl: import.meta.env.VITE_DELEGATOR_URL!,
           delegateAllTransactions: true,
           b3trTransfers: { minAmountInEther: 1 },
+        }}
+        privy={{
+          appId: import.meta.env.VITE_PRIVY_APP_ID!,
+          clientId: import.meta.env.VITE_PRIVY_CLIENT_ID!,
+          loginMethods: ["google", "apple"],
+          embeddedWallets: {
+            createOnLogin: "all-users",
+          },
+          appearance: {
+            logo: "/logo.png",
+            loginMessage: "Login to CleanMate",
+          },
         }}
         dappKit={{
           allowedWallets: ["veworld", "sync2", "wallet-connect"],
@@ -58,6 +85,7 @@ const App = () => (
           },
           usePersistence: true,
           useFirstDetectedSource: false,
+          modalParent: document.body,
         }}
         loginMethods={[
           { method: "vechain", gridColumn: 4 },
@@ -67,9 +95,11 @@ const App = () => (
         loginModalUI={{
           description:
             "Choose between social login through VeChain or by connecting your wallet.",
+          logo: "/logo.png",
         }}
         network={{ type: import.meta.env.VITE_VECHAIN_NETWORK }}
         allowCustomTokens={false}
+        darkMode={isDarkMode}
       >
         <TransactionModalProvider>
           <TooltipProvider>
@@ -77,11 +107,11 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                <Route path="/" element={<Landing />} />
+                <Route
+                  path="/"
+                  element={<Navigate to="/onboarding" replace />}
+                />
                 <Route path="/onboarding" element={<Onboarding />} />
-                <Route path="/terms" element={<TermsOfService />} />
-                <Route path="/privacy" element={<PrivacyPolicy />} />
-                <Route path="/help" element={<HelpCenter />} />
                 <Route
                   path="/dashboard"
                   element={
@@ -172,14 +202,42 @@ const App = () => (
                     </RequireOnboarding>
                   }
                 />
+                <Route
+                  path="/streaks"
+                  element={
+                    <RequireOnboarding>
+                      <DashboardLayout>
+                        <Streaks />
+                      </DashboardLayout>
+                    </RequireOnboarding>
+                  }
+                />
+                <Route
+                  path="/streaks/submit"
+                  element={
+                    <RequireOnboarding>
+                      <DashboardLayout>
+                        <StreakSubmit />
+                      </DashboardLayout>
+                    </RequireOnboarding>
+                  }
+                />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
           </TooltipProvider>
         </TransactionModalProvider>
       </VeChainKitProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
+    </QueryClientProvider>
+  );
+};
+
+const App = () => (
+  <ThemeProvider>
+    <RecordingProvider>
+      <AppInner />
+    </RecordingProvider>
+  </ThemeProvider>
 );
 
 export default App;

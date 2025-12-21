@@ -36,15 +36,38 @@
     --radius: 0.75rem;
 
     /* Custom tokens */
-    --gradient-soft: linear-gradient(135deg, hsl(0 0% 96%) 0%, hsl(0 0% 94%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 100% / 0.8) 0%, hsl(0 0% 98% / 0.6) 100%);
-    --gradient-primary: linear-gradient(135deg, hsl(24 95% 53%) 0%, hsl(20 90% 45%) 100%);
-    --gradient-accent: linear-gradient(135deg, hsl(24 100% 60%) 0%, hsl(35 95% 55%) 100%);
-    --gradient-sidebar: linear-gradient(180deg, hsl(0 0% 100% / 0.9) 0%, hsl(0 0% 98% / 0.8) 100%);
-    
-    --shadow-soft: 0 1px 3px hsl(0 0% 10% / 0.04), 0 4px 12px hsl(0 0% 10% / 0.03);
-    --shadow-card: 0 2px 8px hsl(0 0% 10% / 0.06), 0 8px 24px hsl(0 0% 10% / 0.04);
-    --shadow-elevated: 0 4px 20px hsl(0 0% 10% / 0.1), 0 12px 40px hsl(0 0% 10% / 0.06);
+    --gradient-soft: linear-gradient(
+      135deg,
+      hsl(0 0% 96%) 0%,
+      hsl(0 0% 94%) 100%
+    );
+    --gradient-card: linear-gradient(
+      180deg,
+      hsl(0 0% 100% / 0.8) 0%,
+      hsl(0 0% 98% / 0.6) 100%
+    );
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(24 95% 53%) 0%,
+      hsl(20 90% 45%) 100%
+    );
+    --gradient-accent: linear-gradient(
+      135deg,
+      hsl(24 100% 60%) 0%,
+      hsl(35 95% 55%) 100%
+    );
+    --gradient-sidebar: linear-gradient(
+      180deg,
+      hsl(0 0% 100% / 0.9) 0%,
+      hsl(0 0% 98% / 0.8) 100%
+    );
+
+    --shadow-soft: 0 1px 3px hsl(0 0% 10% / 0.04),
+      0 4px 12px hsl(0 0% 10% / 0.03);
+    --shadow-card: 0 2px 8px hsl(0 0% 10% / 0.06),
+      0 8px 24px hsl(0 0% 10% / 0.04);
+    --shadow-elevated: 0 4px 20px hsl(0 0% 10% / 0.1),
+      0 12px 40px hsl(0 0% 10% / 0.06);
 
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 0 0% 10%;
@@ -74,6 +97,10 @@
     --chart-3: 200 60% 50%;
     --chart-4: 280 45% 55%;
     --chart-5: 0 72% 51%;
+
+    --cleanmate-logo-color: #1a1a1a;
+    --cleanmate-logo-invariant-color: #1a1a1a;
+    --cleanmate-logo-invariant-bg: #ebebeb;
   }
 
   .dark {
@@ -105,9 +132,21 @@
     --input: 0 0% 18%;
     --ring: 24 95% 55%;
 
-    --gradient-soft: linear-gradient(135deg, hsl(0 0% 8%) 0%, hsl(0 0% 10%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(0 0% 12% / 0.8) 0%, hsl(0 0% 10% / 0.6) 100%);
-    --gradient-sidebar: linear-gradient(180deg, hsl(0 0% 8% / 0.9) 0%, hsl(0 0% 6% / 0.8) 100%);
+    --gradient-soft: linear-gradient(
+      135deg,
+      hsl(0 0% 8%) 0%,
+      hsl(0 0% 10%) 100%
+    );
+    --gradient-card: linear-gradient(
+      180deg,
+      hsl(0 0% 12% / 0.8) 0%,
+      hsl(0 0% 10% / 0.6) 100%
+    );
+    --gradient-sidebar: linear-gradient(
+      180deg,
+      hsl(0 0% 8% / 0.9) 0%,
+      hsl(0 0% 6% / 0.8) 100%
+    );
 
     --shadow-soft: 0 1px 3px hsl(0 0% 0% / 0.2);
     --shadow-card: 0 2px 8px hsl(0 0% 0% / 0.25);
@@ -120,6 +159,10 @@
 
     --glass-bg: hsl(0 0% 10% / 0.7);
     --glass-border: hsl(0 0% 20% / 0.5);
+
+    --cleanmate-logo-color: #ebebeb;
+    --cleanmate-logo-invariant-color: #ebebeb;
+    --cleanmate-logo-invariant-bg: #1a1a1a;
   }
 }
 
@@ -166,31 +209,31 @@
   .gradient-soft {
     background: var(--gradient-soft);
   }
-  
+
   .gradient-card {
     background: var(--gradient-card);
   }
-  
+
   .gradient-primary {
     background: var(--gradient-primary);
   }
-  
+
   .gradient-accent {
     background: var(--gradient-accent);
   }
-  
+
   .gradient-sidebar {
     background: var(--gradient-sidebar);
   }
-  
+
   .shadow-soft {
     box-shadow: var(--shadow-soft);
   }
-  
+
   .shadow-card {
     box-shadow: var(--shadow-card);
   }
-  
+
   .shadow-elevated {
     box-shadow: var(--shadow-elevated);
   }
@@ -212,7 +255,8 @@
   .dark .glass-card {
     background: linear-gradient(135deg, hsl(0 0% 12%) 0%, hsl(0 0% 10%) 100%);
     border: 1px solid hsl(0 0% 20% / 0.5);
-    box-shadow: 0 4px 24px hsl(0 0% 0% / 0.3), inset 0 1px 0 hsl(0 0% 100% / 0.03);
+    box-shadow: 0 4px 24px hsl(0 0% 0% / 0.3),
+      inset 0 1px 0 hsl(0 0% 100% / 0.03);
   }
 
   .glass-sidebar {

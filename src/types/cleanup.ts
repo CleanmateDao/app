@@ -1,7 +1,92 @@
-export type CleanupStatus = 'open' | 'in_progress' | 'completed' | 'rewarded';
+// ICleanup contract types
 
-export type ParticipantStatus = 'pending' | 'accepted' | 'rejected';
+import { SupportedCountryCode } from "@/constants/supported";
 
+export enum CleanupStatus {
+  UNPUBLISHED = 0,
+  OPEN = 1,
+  IN_PROGRESS = 2,
+  COMPLETED = 3,
+  REWARDED = 4,
+}
+
+export enum ParticipantStatus {
+  PENDING = 0,
+  ACCEPTED = 1,
+  REJECTED = 2,
+}
+
+// UI-friendly status unions (used by the frontend views & transformers)
+export type CleanupStatusUI =
+  | "unpublished"
+  | "open"
+  | "in_progress"
+  | "completed"
+  | "rewarded";
+export type ParticipantStatusUI = "pending" | "accepted" | "rejected";
+
+/**
+ * Location struct from ICleanup
+ * Note: address_ is used in Solidity to avoid conflict with address type
+ */
+export interface Location {
+  address_: string;
+  city: string;
+  country: string;
+  latitude: string; // int256 in Solidity, use string for big numbers
+  longitude: string; // int256 in Solidity, use string for big numbers
+}
+
+/**
+ * Participant struct from ICleanup
+ */
+export interface Participant {
+  participantAddress: string;
+  status: ParticipantStatus;
+  appliedAt: string; // uint256 timestamp
+}
+
+/**
+ * ProofMedia struct from ICleanup
+ */
+export interface ProofMedia {
+  ipfsHash: string;
+  mimetype: string;
+  uploadedAt: string; // uint256 timestamp
+}
+
+/**
+ * CleanupData struct from ICleanup
+ */
+export interface CleanupData {
+  id: string; // address - cleanup contract address
+  metadata: string;
+  category: string;
+  status: CleanupStatus;
+  location: Location;
+  date: string; // uint256 timestamp
+  startTime: string; // uint256 timestamp
+  endTime: string; // uint256 timestamp
+  maxParticipants: string; // uint256
+  organizer: string; // address
+  createdAt: string; // uint256 timestamp
+  updatedAt: string; // uint256 timestamp
+  rewardAmount: string; // uint256
+  proofSubmitted: boolean;
+  proofSubmittedAt: string; // uint256 timestamp
+}
+
+export interface CleanupDataMetadata {
+  title: string;
+  description: string;
+  category?: string;
+  media?: Array<{
+    ipfsHash: string;
+    type: "image" | "video";
+    name: string;
+  }>;
+}
+// Extended types for UI (not in contract but useful for frontend)
 export interface CleanupLocation {
   address: string;
   city: string;
@@ -13,9 +98,8 @@ export interface CleanupLocation {
 export interface CleanupMedia {
   id: string;
   name: string;
-  type: 'image' | 'video';
+  type: "image" | "video";
   url: string;
-  size: string;
   uploadedAt: string;
 }
 
@@ -24,10 +108,13 @@ export interface CleanupParticipant {
   name: string;
   email: string;
   avatar?: string;
-  status: ParticipantStatus;
+  status: ParticipantStatusUI;
   appliedAt: string;
-  rating?: number; // 1-5 stars given by organizer
   isKyced?: boolean; // KYC verification status
+  emailVerified?: boolean; // Email verification status
+  isOrganizer?: boolean; // Whether user is an organizer
+  country: SupportedCountryCode;
+  state?: string;
 }
 
 export interface Cleanup {
@@ -35,7 +122,7 @@ export interface Cleanup {
   title: string;
   description: string;
   category: string;
-  status: CleanupStatus;
+  status: CleanupStatusUI;
   location: CleanupLocation;
   date: string;
   startTime: string;
@@ -50,35 +137,30 @@ export interface Cleanup {
   };
   participants: CleanupParticipant[];
   proofMedia: CleanupMedia[];
+  metadataMedia?: CleanupMedia[]; // Media from metadata (initial images/videos)
   rewardAmount?: number; // B3TR tokens
+  updates: CleanupUpdate[];
 }
 
 export interface RewardTransaction {
   id: string;
-  type: 'earned' | 'claimed';
+  type: "earned" | "claimed";
   amount: number;
-  cleanupId: string;
-  cleanupTitle: string;
+  cleanupId: string | null;
+  streakSubmissionId?: string | null;
+  rewardType?: number | null;
+  title: string;
   date: string;
   txHash?: string;
-  status: 'pending' | 'completed';
+  status: "pending" | "completed";
 }
 
-export interface UserProfile {
+export interface CleanupUpdate {
   id: string;
-  name: string;
-  email: string;
-  avatar?: string;
-  walletAddress: string;
-  totalRewards: number;
-  claimedRewards: number;
-  pendingRewards: number;
-  cleanupsOrganized: number;
-  cleanupsParticipated: number;
-  averageRating: number;
-  isEmailVerified: boolean;
-  kycStatus: 'not_started' | 'pending' | 'verified' | 'rejected';
-  referralCode?: string;
-  referredBy?: string;
-  referralCount: number;
+  organizer: string;
+  description: string;
+  media?: CleanupMedia[];
+  addedAt: string;
+  blockNumber: number;
+  transactionHash: string;
 }

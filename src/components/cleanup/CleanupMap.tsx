@@ -1,7 +1,7 @@
 /// <reference types="google.maps" />
 import { useEffect, useRef, useState } from "react";
 import { MapPin, Loader2, Navigation, X } from "lucide-react";
-import { Cleanup, CleanupStatus } from "@/types/cleanup";
+import { Cleanup, CleanupStatusUI } from "@/types/cleanup";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/ThemeProvider";
 import cleanupMarkerIcon from "@/assets/cleanup-marker.png";
@@ -11,12 +11,14 @@ interface CleanupMapProps {
   className?: string;
 }
 
-const statusConfig: Record<CleanupStatus, { label: string; color: string }> = {
-  open: { label: "Open", color: "#22c55e" },
-  in_progress: { label: "In Progress", color: "#f97316" },
-  completed: { label: "Completed", color: "#8b5cf6" },
-  rewarded: { label: "Rewarded", color: "#06b6d4" },
-};
+const statusConfig: Record<CleanupStatusUI, { label: string; color: string }> =
+  {
+    unpublished: { label: "Unpublished", color: "#6b7280" },
+    open: { label: "Open", color: "#22c55e" },
+    in_progress: { label: "In Progress", color: "#f97316" },
+    completed: { label: "Completed", color: "#8b5cf6" },
+    rewarded: { label: "Rewarded", color: "#06b6d4" },
+  };
 
 const lightMapStyles: google.maps.MapTypeStyle[] = [
   { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
@@ -201,7 +203,7 @@ function formatDistance(km: number): string {
 export function CleanupMap({ cleanups, className }: CleanupMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<google.maps.Map | null>(null);
-  const [markers, setMarkers] = useState<google.maps.Marker[]>([]);
+  const markersRef = useRef<google.maps.Marker[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [infoWindow, setInfoWindow] = useState<google.maps.InfoWindow | null>(
@@ -211,7 +213,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     lat: number;
     lng: number;
   } | null>(null);
-  const [userMarker, setUserMarker] = useState<google.maps.Marker | null>(null);
+  const userMarkerRef = useRef<google.maps.Marker | null>(null);
   const [directionsRenderer, setDirectionsRenderer] =
     useState<google.maps.DirectionsRenderer | null>(null);
   const [activeRoute, setActiveRoute] = useState<string | null>(null);
@@ -299,7 +301,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     setDirectionsRenderer(renderer);
 
     setMap(newMap);
-  }, [isLoaded, userLocation, theme]);
+  }, [isLoaded, map, theme, userLocation]);
 
   // Update map styles when theme changes
   useEffect(() => {
@@ -307,14 +309,18 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     map.setOptions({
       styles: theme === "dark" ? darkMapStyles : lightMapStyles,
     });
-  }, [map, theme]);
+    // Close any open InfoWindow when theme changes so it reopens with correct theme
+    if (infoWindow) {
+      infoWindow.close();
+    }
+  }, [map, theme, infoWindow]);
 
   useEffect(() => {
     if (!map || !userLocation) return;
 
     // Remove old user marker
-    if (userMarker) {
-      userMarker.setMap(null);
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setMap(null);
     }
 
     const marker = new window.google.maps.Marker({
@@ -331,7 +337,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       },
     });
 
-    setUserMarker(marker);
+    userMarkerRef.current = marker;
   }, [map, userLocation]);
 
   // Add markers for cleanups
@@ -339,7 +345,8 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     if (!map || !isLoaded || !infoWindow) return;
 
     // Clear existing markers
-    markers.forEach((marker) => marker.setMap(null));
+    markersRef.current.forEach((marker) => marker.setMap(null));
+    markersRef.current = [];
 
     const bounds = new window.google.maps.LatLngBounds();
     const newMarkers: google.maps.Marker[] = [];
@@ -381,25 +388,39 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       });
 
       marker.addListener("click", () => {
-        const routeButtonText =
-          activeRoute === cleanup.id ? "Hide Route" : "Show Route";
+        const isDark = theme === "dark";
+        const bgColor = isDark ? "#1a1a1a" : "#ffffff";
+        const textColor = isDark ? "#e5e5e5" : "#1a1a1a";
+        const textMuted = isDark ? "#a3a3a3" : "#666666";
+        const textSecondary = isDark ? "#d4d4d4" : "#333333";
+        const linkColor = isDark ? "#60a5fa" : "#4285F4";
+        
         const content = `
-          <div style="padding: 8px; max-width: 250px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">${
+          <div style="padding: 8px; max-width: 250px; background: ${bgColor}; color: ${textColor};">
+            <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: ${textColor};">${
               cleanup.title
             }</h3>
-            <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">
-              📍 ${cleanup.location.address}
+            ${
+              cleanup.location.address
+                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: ${textSecondary}; font-weight: 500;">📍 ${cleanup.location.address}</p>`
+                : ""
+            }
+            <p style="margin: 0 0 4px 0; font-size: 12px; color: ${textMuted};">
+              ${
+                [cleanup.location.city, cleanup.location.country]
+                  .filter(Boolean)
+                  .join(", ") || "Location not specified"
+              }
             </p>
             ${
               distanceText
-                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #4285F4; font-weight: 500;">${distanceText}</p>`
+                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: ${linkColor}; font-weight: 500;">${distanceText}</p>`
                 : ""
             }
-            <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; color: ${textMuted};">
               📅 ${cleanup.date} • ${cleanup.startTime} - ${cleanup.endTime}
             </p>
-            <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: ${textMuted};">
               👥 ${
                 cleanup.participants.filter((p) => p.status === "accepted")
                   .length
@@ -412,7 +433,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
                 border-radius: 4px;
                 font-size: 11px;
                 font-weight: 500;
-                background: ${statusConfig[cleanup.status].color}20;
+                background: ${statusConfig[cleanup.status].color}${isDark ? "30" : "20"};
                 color: ${statusConfig[cleanup.status].color};
               ">
                 ${statusConfig[cleanup.status].label}
@@ -473,7 +494,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       bounds.extend(position);
     });
 
-    setMarkers(newMarkers);
+    markersRef.current = newMarkers;
 
     // Fit map to bounds if we have markers
     if (newMarkers.length > 0 || userLocation) {
@@ -543,12 +564,12 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       />
 
       {/* My Location Button - positioned lower to avoid overlap with page header */}
-      <div className="absolute top-24 right-4 flex gap-2 z-10">
+      <div className="absolute top-24 right-4 flex gap-2 z-[100] pointer-events-auto">
         {activeRoute && (
           <Button
             size="sm"
             variant="destructive"
-            className="shadow-lg"
+            className="shadow-lg pointer-events-auto"
             onClick={clearRoute}
           >
             <X className="w-4 h-4 mr-1" />
@@ -559,7 +580,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
           <Button
             size="sm"
             variant="secondary"
-            className="shadow-lg"
+            className="shadow-lg pointer-events-auto"
             onClick={centerOnUser}
           >
             <Navigation className="w-4 h-4 mr-1" />
