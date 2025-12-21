@@ -50,6 +50,7 @@ export default defineConfig(({ mode }) => ({
       "os-browserify",
       "mersenne-twister",
       "@cleanmate/cip-sdk",
+      "@privy-io/react-auth",
     ],
   },
 }));
