@@ -35,7 +35,7 @@ export default defineConfig(({ mode }) => ({
     commonjsOptions: { transformMixedEsModules: true },
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
-      external: ["@privy-io/react-auth"],
+      // external: ["@privy-io/react-auth"],
     },
   },
   optimizeDeps: {
