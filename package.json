@@ -11,8 +11,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@cleanmate/cip-sdk": "file:../sdk",
     "@chakra-ui/react": "^2.8.2",
+    "@cleanmate/cip-sdk": "^1.0.0",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-avatar": "^1.1.10",
     "@radix-ui/react-checkbox": "^1.3.2",
