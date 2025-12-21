@@ -4,7 +4,7 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  NODE_OPTIONS = "--max-old-space-size=12288"
+  NODE_OPTIONS = "--max-old-space-size=16384"
 
 [[redirects]]
 from = "/*"
