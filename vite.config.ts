@@ -32,7 +32,6 @@ export default defineConfig(({ mode }) => ({
   },
   build: {
     minify: "esbuild",
-    sourcemap: false,
     commonjsOptions: { transformMixedEsModules: true },
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
@@ -53,6 +52,7 @@ export default defineConfig(({ mode }) => ({
       "util",
       "os-browserify",
       "mersenne-twister",
+      "@privy-io/react-auth",
     ],
   },
 }));
