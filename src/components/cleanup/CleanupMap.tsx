@@ -309,7 +309,11 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
     map.setOptions({
       styles: theme === "dark" ? darkMapStyles : lightMapStyles,
     });
-  }, [map, theme]);
+    // Close any open InfoWindow when theme changes so it reopens with correct theme
+    if (infoWindow) {
+      infoWindow.close();
+    }
+  }, [map, theme, infoWindow]);
 
   useEffect(() => {
     if (!map || !userLocation) return;
@@ -384,17 +388,24 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       });
 
       marker.addListener("click", () => {
+        const isDark = theme === "dark";
+        const bgColor = isDark ? "#1a1a1a" : "#ffffff";
+        const textColor = isDark ? "#e5e5e5" : "#1a1a1a";
+        const textMuted = isDark ? "#a3a3a3" : "#666666";
+        const textSecondary = isDark ? "#d4d4d4" : "#333333";
+        const linkColor = isDark ? "#60a5fa" : "#4285F4";
+        
         const content = `
-          <div style="padding: 8px; max-width: 250px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px;">${
+          <div style="padding: 8px; max-width: 250px; background: ${bgColor}; color: ${textColor};">
+            <h3 style="margin: 0 0 8px 0; font-weight: 600; font-size: 14px; color: ${textColor};">${
               cleanup.title
             }</h3>
             ${
               cleanup.location.address
-                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #333; font-weight: 500;">📍 ${cleanup.location.address}</p>`
+                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: ${textSecondary}; font-weight: 500;">📍 ${cleanup.location.address}</p>`
                 : ""
             }
-            <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; color: ${textMuted};">
               ${
                 [cleanup.location.city, cleanup.location.country]
                   .filter(Boolean)
@@ -403,13 +414,13 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
             </p>
             ${
               distanceText
-                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: #4285F4; font-weight: 500;">${distanceText}</p>`
+                ? `<p style="margin: 0 0 4px 0; font-size: 12px; color: ${linkColor}; font-weight: 500;">${distanceText}</p>`
                 : ""
             }
-            <p style="margin: 0 0 4px 0; font-size: 12px; color: #666;">
+            <p style="margin: 0 0 4px 0; font-size: 12px; color: ${textMuted};">
               📅 ${cleanup.date} • ${cleanup.startTime} - ${cleanup.endTime}
             </p>
-            <p style="margin: 0 0 8px 0; font-size: 12px; color: #666;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; color: ${textMuted};">
               👥 ${
                 cleanup.participants.filter((p) => p.status === "accepted")
                   .length
@@ -422,7 +433,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
                 border-radius: 4px;
                 font-size: 11px;
                 font-weight: 500;
-                background: ${statusConfig[cleanup.status].color}20;
+                background: ${statusConfig[cleanup.status].color}${isDark ? "30" : "20"};
                 color: ${statusConfig[cleanup.status].color};
               ">
                 ${statusConfig[cleanup.status].label}
@@ -553,12 +564,12 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
       />
 
       {/* My Location Button - positioned lower to avoid overlap with page header */}
-      <div className="absolute top-24 right-4 flex gap-2 z-10">
+      <div className="absolute top-24 right-4 flex gap-2 z-[100] pointer-events-auto">
         {activeRoute && (
           <Button
             size="sm"
             variant="destructive"
-            className="shadow-lg"
+            className="shadow-lg pointer-events-auto"
             onClick={clearRoute}
           >
             <X className="w-4 h-4 mr-1" />
@@ -569,7 +580,7 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
           <Button
             size="sm"
             variant="secondary"
-            className="shadow-lg"
+            className="shadow-lg pointer-events-auto"
             onClick={centerOnUser}
           >
             <Navigation className="w-4 h-4 mr-1" />

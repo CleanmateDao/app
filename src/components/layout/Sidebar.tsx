@@ -12,7 +12,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
-import appLogo from "@/assets/logo.png";
+import CleanMateLogoIcon from "../icons/logo-icon";
+import CleanMateLogo from "../icons/logo";
 
 const navItems = [
   { path: "/dashboard", label: "Insights", icon: LayoutDashboard },
@@ -44,14 +45,7 @@ export function Sidebar({ onNavigate }: SidebarProps) {
       {/* Logo */}
       <div className="h-16 flex items-center px-4 border-b border-border/50">
         <div className="flex items-center gap-3">
-          <img 
-            src={appLogo} 
-            alt="CleanMate Logo" 
-            className="w-9 h-9 rounded-xl object-contain"
-          />
-          {!collapsed && (
-            <span className="font-semibold text-foreground">CleanMate</span>
-          )}
+          {collapsed ? <CleanMateLogoIcon /> : <CleanMateLogo />}
         </div>
       </div>
 

@@ -115,7 +115,6 @@ export interface CleanupParticipant {
   isOrganizer?: boolean; // Whether user is an organizer
   country: SupportedCountryCode;
   state?: string;
-  rating?: number; // Rating from 1-5
 }
 
 export interface Cleanup {
@@ -158,7 +157,6 @@ export interface RewardTransaction {
 
 export interface CleanupUpdate {
   id: string;
-  cleanupId: string;
   organizer: string;
   description: string;
   media?: CleanupMedia[];

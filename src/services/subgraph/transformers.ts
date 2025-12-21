@@ -21,6 +21,7 @@ import {
   mapParticipantStatus,
   mapKycStatus,
   numberToDate,
+  numberToTime,
 } from "./utils";
 import {
   parseCleanupMetadata,
@@ -62,9 +63,9 @@ export function transformUserToProfile(
     state: location?.state,
     interests: metadata?.interests,
     profileImage: metadata?.photo,
-    totalRewards: bigIntToNumber(user.totalRewardsEarned),
-    claimedRewards: bigIntToNumber(user.totalRewardsClaimed),
-    pendingRewards: bigIntToNumber(user.pendingRewards),
+    totalRewards: bigIntToNumber(user.totalRewardsEarned).toString(),
+    claimedRewards: bigIntToNumber(user.totalRewardsClaimed).toString(),
+    pendingRewards: bigIntToNumber(user.pendingRewards).toString(),
     isEmailVerified: user.emailVerified,
     kycStatus: mapKycStatus(user.kycStatus),
     referralCode: user.referralCode || undefined,
@@ -105,7 +106,7 @@ export function transformParticipant(
     email: participant.user.email,
     avatar: userMetadataParsed?.photo,
     status: mapParticipantStatus(participant.status),
-    appliedAt: numberToDate(participant.appliedAt * 1000),
+    appliedAt: numberToDate(participant.appliedAt),
     isKyced: participant.user.kycStatus === 2, // KYC status 2 = VERIFIED
     emailVerified: participant.user.emailVerified || false,
     isOrganizer: participant.user.isOrganizer || false,
@@ -135,7 +136,7 @@ export function transformCleanup(
       name: `Proof of work ${index + 1}`,
       type: "image",
       url: hash,
-      uploadedAt: numberToDate(cleanup.proofOfWork.submittedAt * 1000),
+      uploadedAt: numberToDate(cleanup.proofOfWork.submittedAt),
     });
   });
 
@@ -149,12 +150,14 @@ export function transformCleanup(
       address: cleanup.location || "",
       city: cleanup.city || "",
       country: cleanup.country || "",
-      latitude: cleanup.latitude ? parseFloat(cleanup.latitude) : 0,
-      longitude: cleanup.longitude ? parseFloat(cleanup.longitude) : 0,
+      latitude: cleanup.latitude ? Number((cleanup.latitude as any) / 1e6) : 0,
+      longitude: cleanup.longitude
+        ? Number((cleanup.longitude as any) / 1e6)
+        : 0,
     },
-    date: numberToDate(cleanup.date * 1000) || "",
-    startTime: cleanup.startTime ? numberToDate(cleanup.startTime * 1000) : "",
-    endTime: cleanup.endTime ? numberToDate(cleanup.endTime * 1000) : "",
+    date: numberToDate(cleanup.date) || "",
+    startTime: cleanup.startTime ? numberToTime(cleanup.startTime) || "" : "",
+    endTime: cleanup.endTime ? numberToTime(cleanup.endTime) || "" : "",
     maxParticipants: cleanup.maxParticipants,
     createdAt: numberToDate(cleanup.createdAt) || "",
     updatedAt: numberToDate(cleanup.updatedAt) || "",
@@ -173,7 +176,7 @@ export function transformCleanup(
       name: item.name || "Media",
       type: item.type === "video" ? "video" : "image",
       url: item.ipfsHash,
-      uploadedAt: numberToDate(cleanup.createdAt * 1000),
+      uploadedAt: numberToDate(cleanup.createdAt),
     })),
     rewardAmount: cleanup.rewardAmount
       ? bigIntToNumber(cleanup.rewardAmount)
@@ -270,36 +273,68 @@ export function calculateInsights(
     }))`,
   }));
 
-  // Calculate monthly data (last 6 months) from user's cleanups and rewards
+  // Calculate monthly data: query from start of month -> end of month for each month
+  // If no user data, show 0s
   const monthlyData: Array<{
     month: string;
     cleanups: number;
     rewards: number;
   }> = [];
+
   const now = new Date();
+
+  // Last 6 months
   for (let i = 5; i >= 0; i--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const month = date.toLocaleDateString("en-US", { month: "short" });
-    const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
-    const monthEnd = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+    const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthLabel = monthDate.toLocaleDateString("en-US", {
+      month: "short",
+    });
 
-    const monthCleanups = completedCleanups.filter((c) => {
-      const cleanupDate = new Date(c.date);
-      return cleanupDate >= monthStart && cleanupDate <= monthEnd;
-    }).length;
+    // Start of month (first day, 00:00:00)
+    const monthStart = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth(),
+      1
+    );
+    // End of month (last day, 23:59:59)
+    const monthEnd = new Date(
+      monthDate.getFullYear(),
+      monthDate.getMonth() + 1,
+      0,
+      23,
+      59,
+      59
+    );
 
-    const monthRewards = rewards
-      .filter((r) => {
-        const rewardDate = new Date(r.date);
-        return (
-          rewardDate >= monthStart &&
-          rewardDate <= monthEnd &&
-          r.type === "earned"
-        );
-      })
-      .reduce((sum, r) => sum + toB3tr(r.amount.toString()), 0);
+    // Count cleanups in this month range (user-specific)
+    let monthCleanups = 0;
+    if (userProfile) {
+      monthCleanups = completedCleanups.filter((c) => {
+        const cleanupDate = new Date(c.date);
+        return cleanupDate >= monthStart && cleanupDate <= monthEnd;
+      }).length;
+    }
 
-    monthlyData.push({ month, cleanups: monthCleanups, rewards: monthRewards });
+    // Sum rewards in this month range (user-specific)
+    let monthRewards = 0;
+    if (userProfile) {
+      monthRewards = rewards
+        .filter((r) => {
+          const rewardDate = new Date(r.date);
+          return (
+            rewardDate >= monthStart &&
+            rewardDate <= monthEnd &&
+            r.type === "earned"
+          );
+        })
+        .reduce((sum, r) => sum + toB3tr(r.amount.toString()), 0);
+    }
+
+    monthlyData.push({
+      month: monthLabel,
+      cleanups: monthCleanups,
+      rewards: monthRewards,
+    });
   }
 
   // Calculate total participants helped (only in cleanups user organized, not participated)
@@ -333,22 +368,23 @@ export function transformCleanupUpdate(
   // Parse cleanup update metadata (same format as cleanup metadata)
   const metadata = parseCleanupUpdateMetadata(update.metadata);
 
+  console.log({ update });
+
   // Transform media if present
   const media = metadata.media?.map((item, index) => ({
     id: `update-${update.id}-${index}`,
     name: item.name || "Media",
     type: (item.type === "video" ? "video" : "image") as "image" | "video",
     url: item.ipfsHash,
-    uploadedAt: numberToDate(update.addedAt * 1000),
+    uploadedAt: numberToDate(update.addedAt),
   }));
 
   return {
     id: update.id,
-    cleanupId: update.cleanup.id,
     organizer: update.organizer,
     description: metadata?.description,
     media,
-    addedAt: numberToDate(update.addedAt * 1000),
+    addedAt: numberToDate(update.addedAt),
     blockNumber: update.blockNumber,
     transactionHash: update.transactionHash,
   };

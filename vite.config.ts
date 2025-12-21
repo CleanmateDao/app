@@ -12,7 +12,11 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // "@cleanmate/cip-sdk": path.resolve(__dirname, "../sdk"),
+      ...(mode === "development"
+        ? {
+            "@cleanmate/cip-sdk": path.resolve(__dirname, "../sdk"),
+          }
+        : {}),
       buffer: "buffer",
       process: "process/browser",
       stream: "stream-browserify",

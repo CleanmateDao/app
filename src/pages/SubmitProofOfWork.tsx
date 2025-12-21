@@ -177,9 +177,9 @@ export default function SubmitProofOfWork() {
         id
       );
 
-      // Note: The ratings IPFS hash is stored in the ratings JSON on IPFS
-      // The contract expects ipfsHashes for proof media, but ratings are included in the IPFS data
-      // If needed, you could add the ratings hash as an additional IPFS hash in the array
+      // Attach ratings to ipfsHashes and mimetypes arrays
+      const ipfsHashesWithRatings = [...ipfsHashes, ratingsIpfsUrl];
+      const mimetypesWithRatings = [...mimetypes, "application/json"];
 
       setUploadProgress(90);
 
@@ -188,8 +188,8 @@ export default function SubmitProofOfWork() {
 
       await submitProofMutation.sendTransaction({
         cleanupId: id,
-        ipfsHashes,
-        mimetypes,
+        ipfsHashes: ipfsHashesWithRatings,
+        mimetypes: mimetypesWithRatings,
       });
 
       setUploadProgress(100);
@@ -510,7 +510,11 @@ function ParticipantRatingRow({
     <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-secondary rounded-lg gap-4">
       <div className="flex items-center gap-3">
         {participant.avatar ? (
-          <AvatarViewerTrigger src={participant.avatar} alt={participant.name} size="md">
+          <AvatarViewerTrigger
+            src={participant.avatar}
+            alt={participant.name}
+            size="md"
+          >
             <Avatar className="w-10 h-10">
               <AvatarImage src={participant.avatar} alt={participant.name} />
               <AvatarFallback>{participant.name.charAt(0)}</AvatarFallback>

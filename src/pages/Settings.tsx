@@ -77,6 +77,7 @@ import {
 } from "@/services/subgraph/queries";
 import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
+import { useWallet } from "@vechain/vechain-kit";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSubmitKYCToAPI } from "@/services/api/kyc";
 import {
@@ -96,8 +97,11 @@ import {
   useRemoveTeamMember,
   useUpdateTeamMemberPermissions,
 } from "@/services/contracts/mutations";
-import type { UserProfile, UserProfileMetadata } from "@/types/user";
-import { stringifyUserProfileMetadata } from "@cleanmate/cip-sdk";
+import type { UserProfile } from "@/types/user";
+import {
+  stringifyUserProfileMetadata,
+  UserProfileMetadata,
+} from "@cleanmate/cip-sdk";
 import {
   SUPPORTED_COUNTRIES,
   SUPPORTED_CURRENCIES,
@@ -109,6 +113,7 @@ import { INTEREST_OPTIONS } from "@/constants/interests";
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const walletAddress = useWalletAddress();
+  const { disconnect } = useWallet();
   const queryClient = useQueryClient();
 
   // Fetch user data
@@ -424,6 +429,8 @@ export default function Settings() {
   };
 
   const handleSignOut = () => {
+    queryClient.invalidateQueries();
+    disconnect();
     toast.info("Signed out successfully");
   };
 
@@ -479,50 +486,52 @@ export default function Settings() {
         {/* Profile Tab */}
         <TabsContent value="profile" className="space-y-6">
           {/* Email Verification Status */}
-          <Card
-            className={cn(
-              "border-l-4",
-              isEmailVerified ? "border-l-green-500" : "border-l-primary"
-            )}
-          >
-            <CardContent className="pt-6">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                <div
-                  className={cn(
-                    "w-12 h-12 rounded-full flex items-center justify-center shrink-0",
-                    isEmailVerified ? "bg-green-500/10" : "bg-primary/10"
-                  )}
-                >
-                  {isEmailVerified ? (
-                    <CheckCircle2 className="w-6 h-6 text-green-500" />
-                  ) : (
-                    <Mail className="w-6 h-6 text-primary" />
-                  )}
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold">
-                    {isEmailVerified ? "Email Verified" : "Verify Your Email"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {isEmailVerified
-                      ? `Your email ${
-                          profile.email || ""
-                        } has been verified. You can now use referrals and apply for KYC.`
-                      : "Verify your email to unlock referrals and apply for KYC."}
-                  </p>
-                </div>
-                {!isEmailVerified && (
-                  <Button
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => setEmailVerificationOpen(true)}
+          {walletAddress && (
+            <Card
+              className={cn(
+                "border-l-4",
+                isEmailVerified ? "border-l-green-500" : "border-l-primary"
+              )}
+            >
+              <CardContent className="pt-6">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                  <div
+                    className={cn(
+                      "w-12 h-12 rounded-full flex items-center justify-center shrink-0",
+                      isEmailVerified ? "bg-green-500/10" : "bg-primary/10"
+                    )}
                   >
-                    Verify Email
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                    {isEmailVerified ? (
+                      <CheckCircle2 className="w-6 h-6 text-green-500" />
+                    ) : (
+                      <Mail className="w-6 h-6 text-primary" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-semibold">
+                      {isEmailVerified ? "Email Verified" : "Verify Your Email"}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {isEmailVerified
+                        ? `Your email ${
+                            profile.email || ""
+                          } has been verified. You can now use referrals and apply for KYC.`
+                        : "Verify your email to unlock referrals and apply for KYC."}
+                    </p>
+                  </div>
+                  {!isEmailVerified && (
+                    <Button
+                      size="sm"
+                      className="w-full sm:w-auto"
+                      onClick={() => setEmailVerificationOpen(true)}
+                    >
+                      Verify Email
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Profile Image */}
           <Card>

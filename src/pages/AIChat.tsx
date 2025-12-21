@@ -3,7 +3,7 @@ import { useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Send, Sparkles, User, Bot, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { toast } from "sonner";
@@ -60,6 +60,7 @@ export default function AIChat() {
   const [input, setInput] = useState("");
   const isLoading = temiChatMutation.isPending;
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -146,17 +147,28 @@ export default function AIChat() {
     toast.success("Chat history cleared");
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
   };
 
+  // Auto-resize textarea
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${Math.min(
+        textareaRef.current.scrollHeight,
+        200
+      )}px`;
+    }
+  }, [input]);
+
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)] max-w-3xl mx-auto pb-20 lg:pb-0">
+    <div className="flex flex-col h-[calc(100vh-64px)] max-w-3xl mx-auto w-full relative overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 border-b border-border">
+      <div className="flex items-center justify-between px-4 lg:px-6 py-3 lg:py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-3">
           <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent">
             <Avatar className="h-10 w-10">
@@ -177,7 +189,7 @@ export default function AIChat() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 py-6 space-y-6">
         <AnimatePresence mode="popLayout">
           {messages.map((message) => (
             <motion.div
@@ -190,7 +202,11 @@ export default function AIChat() {
               }`}
             >
               {message.role === "assistant" && (
-                <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent" size="md">
+                <AvatarViewerTrigger
+                  src={temiAvatar}
+                  alt="Temi AI Agent"
+                  size="md"
+                >
                   <Avatar className="w-8 h-8 shrink-0">
                     <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
                     <AvatarFallback className="bg-primary/10">
@@ -258,15 +274,15 @@ export default function AIChat() {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Prompts */}
+      {/* Quick Prompts - Above input */}
       {messages.length <= 2 && (
-        <div className="px-6 pb-4">
+        <div className="px-6 pb-2 shrink-0">
           <div className="flex flex-wrap gap-2">
             {quickPrompts.map((prompt, i) => (
               <button
                 key={i}
                 onClick={() => handleSend(prompt)}
-                className="px-3 py-1.5 text-xs rounded-full border border-border text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
+                className="px-3 py-1.5 text-xs rounded-full border border-border bg-background text-muted-foreground hover:text-foreground hover:border-primary/50 transition-colors"
               >
                 {prompt}
               </button>
@@ -275,21 +291,24 @@ export default function AIChat() {
         </div>
       )}
 
-      {/* Input */}
-      <div className="px-6 py-4 border-t border-border">
-        <div className="flex gap-3">
-          <Input
+      {/* Input - Sticky at bottom */}
+      <div className="sticky bottom-0 bg-background border-t border-border z-10 px-4 lg:px-6 py-4 shrink-0">
+        <div className="flex gap-3 items-end">
+          <Textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about your cleanup insights..."
-            className="flex-1"
+            className="flex-1 min-h-[44px] max-h-[200px] resize-none min-w-0"
             disabled={isLoading}
+            rows={1}
           />
           <Button
             onClick={() => handleSend()}
             disabled={!input.trim() || isLoading}
             size="icon"
+            className="shrink-0"
           >
             <Send className="h-4 w-4" />
           </Button>

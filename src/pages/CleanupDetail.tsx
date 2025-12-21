@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -45,6 +45,7 @@ import {
 } from "@/components/MediaViewerDialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/rich-text-editor";
 import {
   CleanupStatus,
   CleanupParticipant,
@@ -75,6 +76,7 @@ import {
 import { useTeamMember } from "@/services/subgraph/queries";
 import { stringifyCleanupUpdateMetadata } from "@cleanmate/cip-sdk";
 import { uploadFilesToIPFS } from "@/services/ipfs";
+import { formatAddress } from "@/lib/utils";
 const statusConfig: Record<
   CleanupStatusUI,
   { label: string; className: string }
@@ -111,13 +113,20 @@ export default function CleanupDetail() {
   const { data: cleanupData, isLoading: isLoadingCleanup } = useCleanup(
     id || undefined
   );
-  const cleanup = cleanupData ? transformCleanup(cleanupData) : null;
+  const cleanup = useMemo(
+    () => (cleanupData ? transformCleanup(cleanupData) : null),
+    [cleanupData]
+  );
 
   // Fetch current user data
   const { data: currentUserData } = useUser(walletAddress);
-  const currentUserProfile = currentUserData
-    ? transformUserToProfile(currentUserData, walletAddress || undefined)
-    : null;
+  const currentUserProfile = useMemo(
+    () =>
+      currentUserData
+        ? transformUserToProfile(currentUserData, walletAddress || undefined)
+        : null,
+    [currentUserData, walletAddress]
+  );
 
   // All hooks must be called before any early returns
   const [participants, setParticipants] = useState<CleanupParticipant[]>([]);
@@ -155,26 +164,28 @@ export default function CleanupDetail() {
   const [updateDescription, setUpdateDescription] = useState("");
   const [isAddingUpdate, setIsAddingUpdate] = useState(false);
   const [updateMedia, setUpdateMedia] = useState<File[]>([]);
+  const [isUpdateFormExpanded, setIsUpdateFormExpanded] = useState(false);
 
-  // Store preview URLs to clean them up
-  const previewUrlsRef = useRef<string[]>([]);
+  // Helper function to check if HTML content is empty
+  const isHtmlEmpty = (html: string): boolean => {
+    if (!html || !html.trim()) return true;
+    // Remove HTML tags and check if there's any meaningful content
+    const textContent = html.replace(/<[^>]*>/g, "").trim();
+    return !textContent;
+  };
 
-  // Cleanup preview URLs when media changes or component unmounts
+  // Store preview URLs - use useMemo to create URLs and trigger re-renders
+  const previewUrls = useMemo(() => {
+    return updateMedia.map((file) => URL.createObjectURL(file));
+  }, [updateMedia]);
+
+  // Cleanup preview URLs when component unmounts or media changes
   useEffect(() => {
-    // Revoke old URLs
-    previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-    previewUrlsRef.current = [];
-
-    // Create new URLs for current media
-    const newUrls = updateMedia.map((file) => URL.createObjectURL(file));
-    previewUrlsRef.current = newUrls;
-
     // Cleanup on unmount or when media changes
     return () => {
-      previewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
-      previewUrlsRef.current = [];
+      previewUrls.forEach((url) => URL.revokeObjectURL(url));
     };
-  }, [updateMedia]);
+  }, [previewUrls]);
 
   // Search and infinite scroll for accepted participants
   const [participantSearch, setParticipantSearch] = useState("");
@@ -442,7 +453,7 @@ export default function CleanupDetail() {
 
   // Handle adding cleanup update
   const handleAddUpdate = async () => {
-    if (!id || !updateDescription.trim()) {
+    if (!id || isHtmlEmpty(updateDescription)) {
       toast.error("Please enter an update description");
       return;
     }
@@ -479,7 +490,7 @@ export default function CleanupDetail() {
       }
 
       const metadata = stringifyCleanupUpdateMetadata({
-        description: updateDescription.trim(),
+        description: updateDescription.trim() || "",
         media: mediaMetadata,
       });
 
@@ -490,6 +501,7 @@ export default function CleanupDetail() {
 
       setUpdateDescription("");
       setUpdateMedia([]);
+      setIsUpdateFormExpanded(false);
       setIsAddingUpdate(false);
     } catch (error) {
       setIsAddingUpdate(false);
@@ -759,7 +771,7 @@ export default function CleanupDetail() {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Image className="w-4 h-4" />
-                Event Images ({cleanup.metadataMedia.length})
+                Medias ({cleanup.metadataMedia.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -808,7 +820,7 @@ export default function CleanupDetail() {
             <CardHeader>
               <CardTitle className="text-base flex items-center gap-2">
                 <Image className="w-4 h-4" />
-                Proof of Work Media ({cleanup.proofMedia.length})
+                Proof of Work Medias ({cleanup.proofMedia.length})
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1063,42 +1075,11 @@ export default function CleanupDetail() {
                           )}
                           <Info className="w-3 h-3 text-muted-foreground" />
                         </div>
-                        {participant.rating ? (
-                          <div className="flex items-center gap-1">
-                            {[...Array(5)].map((_, i) => (
-                              <Star
-                                key={i}
-                                className={`w-3 h-3 ${
-                                  i < participant.rating!
-                                    ? "text-yellow-500 fill-yellow-500"
-                                    : "text-muted-foreground"
-                                }`}
-                              />
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-muted-foreground">
-                            Not rated yet
-                          </p>
-                        )}
+                        <p className="text-xs text-muted-foreground">
+                          {participant.country}
+                        </p>
                       </div>
                     </button>
-                    {(cleanup.status === "in_progress" ||
-                      cleanup.status === "completed") &&
-                      !participant.rating &&
-                      (isOrganizer || isParticipant) && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => {
-                            setSelectedParticipant(participant);
-                            setRatingDialogOpen(true);
-                          }}
-                        >
-                          <Star className="w-4 h-4 mr-1" />
-                          Rate
-                        </Button>
-                      )}
                   </div>
                 ))}
 
@@ -1145,10 +1126,14 @@ export default function CleanupDetail() {
                 size="sm"
                 variant="outline"
                 onClick={() => {
-                  // Scroll to update form or open dialog
-                  document
-                    .getElementById("add-update-form")
-                    ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                  setIsUpdateFormExpanded(true);
+                  // Scroll to update form after a brief delay to ensure it's rendered
+                  setTimeout(() => {
+                    document.getElementById("add-update-form")?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "nearest",
+                    });
+                  }, 100);
                 }}
               >
                 <Plus className="w-4 h-4 mr-1" />
@@ -1158,15 +1143,13 @@ export default function CleanupDetail() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Add Update Form */}
-            {canEditCleanups && (
+            {canEditCleanups && isUpdateFormExpanded && (
               <div id="add-update-form" className="space-y-3 pb-4 border-b">
                 <div className="space-y-2">
-                  <Textarea
+                  <RichTextEditor
                     placeholder="Share an update about this cleanup..."
                     value={updateDescription}
-                    onChange={(e) => setUpdateDescription(e.target.value)}
-                    rows={3}
-                    className="resize-none"
+                    onChange={(value) => setUpdateDescription(value)}
                   />
                 </div>
 
@@ -1208,7 +1191,7 @@ export default function CleanupDetail() {
                       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                         {updateMedia.map((file, index) => {
                           const isVideo = file.type.startsWith("video/");
-                          const previewUrl = previewUrlsRef.current[index];
+                          const previewUrl = previewUrls[index];
 
                           return (
                             <div
@@ -1258,11 +1241,9 @@ export default function CleanupDetail() {
                     onClick={() => {
                       setUpdateDescription("");
                       setUpdateMedia([]);
+                      setIsUpdateFormExpanded(false);
                     }}
-                    disabled={
-                      isAddingUpdate ||
-                      (!updateDescription.trim() && updateMedia.length === 0)
-                    }
+                    disabled={isAddingUpdate}
                   >
                     Cancel
                   </Button>
@@ -1271,7 +1252,7 @@ export default function CleanupDetail() {
                     onClick={handleAddUpdate}
                     disabled={
                       isAddingUpdate ||
-                      !updateDescription.trim() ||
+                      isHtmlEmpty(updateDescription) ||
                       addUpdateMutation.isTransactionPending
                     }
                   >
@@ -1313,7 +1294,7 @@ export default function CleanupDetail() {
                       {/* Header */}
                       <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-sm">
-                          {update.organizer}
+                          {formatAddress(update.organizer)}
                         </p>
                         {update.organizer.toLowerCase() ===
                           cleanup.organizer.id.toLowerCase() && (
@@ -1331,9 +1312,12 @@ export default function CleanupDetail() {
 
                       {/* Description */}
                       {update.description && (
-                        <p className="text-sm text-foreground whitespace-pre-wrap break-words">
-                          {update.description}
-                        </p>
+                        <div
+                          className="text-sm text-foreground prose prose-sm dark:prose-invert max-w-none break-words"
+                          dangerouslySetInnerHTML={{
+                            __html: update.description,
+                          }}
+                        />
                       )}
 
                       {/* Media */}
@@ -1376,72 +1360,6 @@ export default function CleanupDetail() {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Proof of Work */}
-      {(cleanup.status === "in_progress" ||
-        cleanup.status === "completed" ||
-        cleanup.status === "rewarded") && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Image className="w-4 h-4" />
-                Proof of Work
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              {cleanup.proofMedia.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                  {cleanup.proofMedia.map((media, index) => (
-                    <div
-                      key={media.id}
-                      onClick={() =>
-                        handleOpenMediaViewer(cleanup.proofMedia, index)
-                      }
-                      className="relative rounded-lg overflow-hidden border border-border cursor-pointer hover:border-primary/50 transition-colors"
-                    >
-                      {media.type === "video" ? (
-                        <div className="w-full h-24 flex items-center justify-center bg-secondary">
-                          <Video className="w-6 h-6 text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <img
-                          src={media.url}
-                          alt={media.name}
-                          className="w-full h-24 object-cover"
-                        />
-                      )}
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-1">
-                        <p className="text-xs text-white truncate">
-                          {media.name}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-muted-foreground text-center py-4 mb-4">
-                  No proof uploaded yet
-                </p>
-              )}
-
-              {cleanup.status !== "rewarded" && canSubmitProof && (
-                <Button
-                  className="w-full"
-                  onClick={() => navigate(`/cleanups/${id}/submit-proof`)}
-                >
-                  <Upload className="w-4 h-4 mr-2" />
-                  Submit Proof of Work
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        </motion.div>
-      )}
 
       {/* Rating Dialog */}
       <RatingDialog

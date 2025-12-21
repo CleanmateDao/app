@@ -35,9 +35,16 @@ export function ParticipantInfoDialog({
           {/* Avatar and Name */}
           <div className="flex items-center gap-4">
             {participant.avatar ? (
-              <AvatarViewerTrigger src={participant.avatar} alt={participant.name} size="xl">
+              <AvatarViewerTrigger
+                src={participant.avatar}
+                alt={participant.name}
+                size="xl"
+              >
                 <Avatar className="w-16 h-16">
-                  <AvatarImage src={participant.avatar} alt={participant.name} />
+                  <AvatarImage
+                    src={participant.avatar}
+                    alt={participant.name}
+                  />
                   <AvatarFallback className="text-xl">
                     {participant.name.charAt(0)}
                   </AvatarFallback>
@@ -80,7 +87,7 @@ export function ParticipantInfoDialog({
                     className="bg-status-approved/10 text-status-approved border-status-approved/20"
                   >
                     <ShieldCheck className="w-3 h-3 mr-1" />
-                    KYC Verified
+                    KYC
                   </Badge>
                 )}
                 {participant.emailVerified && (
@@ -89,7 +96,7 @@ export function ParticipantInfoDialog({
                     className="bg-status-approved/10 text-status-approved border-status-approved/20"
                   >
                     <Mail className="w-3 h-3 mr-1" />
-                    Email Verified
+                    Email
                   </Badge>
                 )}
               </div>
@@ -103,15 +110,9 @@ export function ParticipantInfoDialog({
               <div className="flex-1">
                 <p className="text-xs text-muted-foreground">Email</p>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium">{participant.email || "N/A"}</p>
-                  {participant.emailVerified && (
-                    <Badge
-                      variant="secondary"
-                      className="h-4 px-1 text-[10px] bg-status-approved/10 text-status-approved border-status-approved/20"
-                    >
-                      Verified
-                    </Badge>
-                  )}
+                  <p className="text-sm font-medium">
+                    {participant.email || "N/A"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -122,43 +123,16 @@ export function ParticipantInfoDialog({
                 <p className="text-sm font-medium">{participant.appliedAt}</p>
               </div>
             </div>
-            {participant.location && (participant.location.city || participant.location.state || participant.location.country) && (
+            {participant.country && (
               <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
                 <MapPin className="w-4 h-4 text-muted-foreground" />
                 <div>
                   <p className="text-xs text-muted-foreground">Location</p>
                   <p className="text-sm font-medium">
-                    {[
-                      participant.location.city,
-                      participant.location.state,
-                      participant.location.country,
-                    ]
+                    {[participant.state, participant.country]
                       .filter(Boolean)
                       .join(", ")}
                   </p>
-                </div>
-              </div>
-            )}
-            {participant.rating && (
-              <div className="flex items-center gap-3 p-3 bg-secondary rounded-lg">
-                <Star className="w-4 h-4 text-muted-foreground" />
-                <div>
-                  <p className="text-xs text-muted-foreground">Rating</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    {[...Array(5)].map((_, i) => (
-                      <Star
-                        key={i}
-                        className={`w-4 h-4 ${
-                          i < participant.rating!
-                            ? "text-yellow-500 fill-yellow-500"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                    ))}
-                    <span className="text-sm ml-2">
-                      {participant.rating}/5
-                    </span>
-                  </div>
                 </div>
               </div>
             )}
@@ -173,4 +147,3 @@ export function ParticipantInfoDialog({
     </Dialog>
   );
 }
-

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -107,10 +107,21 @@ const statusConfig: Record<
 
 export default function Cleanups() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const walletAddress = useWalletAddress();
+
+  // Initialize activeTab from URL query parameter or default to "all"
+  const tabFromUrl = searchParams.get("tab");
+  const isValidTab = (
+    tab: string | null
+  ): tab is CleanupStatusUI | "all" | "created" => {
+    if (!tab) return false;
+    return statusTabs.some((t) => t.value === tab);
+  };
+
   const [activeTab, setActiveTab] = useState<
     CleanupStatusUI | "all" | "created"
-  >("all");
+  >(isValidTab(tabFromUrl) ? tabFromUrl : "all");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [cleanupToDelete, setCleanupToDelete] = useState<Cleanup | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">(() => {
@@ -118,6 +129,14 @@ export default function Cleanups() {
     return saved === "list" || saved === "map" ? saved : "map";
   });
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Update activeTab when URL query parameter changes
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (isValidTab(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Determine which query to use based on active tab
   const isCreatedTab = activeTab === "created";
@@ -365,14 +384,14 @@ export default function Cleanups() {
       {/* Filters */}
       <div className="flex flex-col gap-4">
         {/* Status Tabs */}
-        <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
+        <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0 rounded-md">
           <div className="flex gap-1 p-1 bg-secondary min-w-max">
             {statusTabs.map((tab) => (
               <button
                 key={tab.value}
                 onClick={() => setActiveTab(tab.value)}
                 className={cn(
-                  "px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium transition-colors whitespace-nowrap",
+                  "px-3 lg:px-4 py-2 text-xs lg:text-sm font-medium rounded-md transition-colors whitespace-nowrap",
                   activeTab === tab.value
                     ? "bg-card text-foreground shadow-soft"
                     : "text-muted-foreground hover:text-foreground"

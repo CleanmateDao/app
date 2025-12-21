@@ -17,9 +17,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const { isRecording } = useRecording();
 
-  // Hide bottom nav on streaks pages
+  // Hide bottom nav on streaks pages and ai-chat page
   const hideBottomNav =
-    location.pathname === "/streaks" || location.pathname === "/streaks/submit";
+    location.pathname === "/streaks" ||
+    location.pathname === "/streaks/submit" ||
+    location.pathname === "/ai-chat";
 
   // Hide topbar when recording video for streak or in map view
   const hideTopbar = isRecording || isMapView;
@@ -28,9 +30,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   useEffect(() => {
     const checkMapView = () => {
       const viewMode = localStorage.getItem("cleanups-view-mode");
-      setIsMapView(
-        location.pathname.startsWith("/cleanups") && viewMode === "map"
-      );
+      setIsMapView(location.pathname === "/cleanups" && viewMode === "map");
     };
 
     // Check initially
@@ -86,7 +86,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
         </AnimatePresence>
         <main
-          className={`flex-1 overflow-auto flex justify-center ${
+          className={`flex-1 overflow-auto overflow-x-hidden flex justify-center ${
             hideBottomNav ? "lg:pb-0" : "pb-20 lg:pb-0"
           }`}
         >

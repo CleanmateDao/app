@@ -20,7 +20,6 @@ import AIChat from "./pages/AIChat";
 import Onboarding from "./pages/Onboarding";
 import Notifications from "./pages/Notifications";
 import NotFound from "./pages/NotFound";
-import appLogo from "./assets/logo.png";
 import Streaks from "./pages/Streaks";
 import StreakSubmit from "./pages/StreakSubmit";
 import { useWalletAddress } from "./hooks/use-wallet-address";
@@ -61,6 +60,18 @@ const AppInner = () => {
           delegateAllTransactions: true,
           b3trTransfers: { minAmountInEther: 1 },
         }}
+        privy={{
+          appId: import.meta.env.VITE_PRIVY_APP_ID!,
+          clientId: import.meta.env.VITE_PRIVY_CLIENT_ID!,
+          loginMethods: ["google", "apple"],
+          embeddedWallets: {
+            createOnLogin: "all-users",
+          },
+          appearance: {
+            logo: "/logo.png",
+            loginMessage: "Login to CleanMate",
+          },
+        }}
         dappKit={{
           allowedWallets: ["veworld", "sync2", "wallet-connect"],
           walletConnectOptions: {
@@ -74,6 +85,7 @@ const AppInner = () => {
           },
           usePersistence: true,
           useFirstDetectedSource: false,
+          modalParent: document.body,
         }}
         loginMethods={[
           { method: "vechain", gridColumn: 4 },
@@ -83,7 +95,7 @@ const AppInner = () => {
         loginModalUI={{
           description:
             "Choose between social login through VeChain or by connecting your wallet.",
-          logo: appLogo,
+          logo: "/logo.png",
         }}
         network={{ type: import.meta.env.VITE_VECHAIN_NETWORK }}
         allowCustomTokens={false}

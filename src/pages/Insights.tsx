@@ -8,7 +8,6 @@ import {
   ArrowDownRight,
   Leaf,
   MapPin,
-  Users,
   Gift,
   MoreHorizontal,
   Loader2,
@@ -324,11 +323,11 @@ export default function Insights() {
                 icon: MapPin,
               },
               {
-                label: "People Helped",
-                value: safeInsightsData.participantsHelped,
+                label: "Streaks",
+                value: streakStats?.approvedSubmissions || 0,
                 change: "",
                 up: null,
-                icon: Users,
+                icon: Flame,
               },
             ].map((metric, i) => {
               const ringColors = [
@@ -523,6 +522,23 @@ export default function Insights() {
               {isLoading ? (
                 <div className="col-span-full flex items-center justify-center py-8">
                   <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : safeInsightsData.categoryData.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-12 px-4">
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ duration: 0.4 }}
+                    className="w-16 h-16 rounded-full bg-muted/50 flex items-center justify-center mb-4"
+                  >
+                    <Leaf className="w-8 h-8 text-muted-foreground" />
+                  </motion.div>
+                  <h4 className="font-medium text-sm lg:text-base mb-2">
+                    No cleanup categories yet
+                  </h4>
+                  <p className="text-xs lg:text-sm text-muted-foreground text-center max-w-sm">
+                    Complete your first cleanup to see category distribution here
+                  </p>
                 </div>
               ) : (
                 safeInsightsData.categoryData.map((item, index) => {

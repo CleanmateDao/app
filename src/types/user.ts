@@ -14,9 +14,9 @@ export interface UserProfile {
   state?: string;
   interests?: string[];
   profileImage?: string;
-  totalRewards: number;
-  claimedRewards: number;
-  pendingRewards: number;
+  totalRewards: string;
+  claimedRewards: string;
+  pendingRewards: string;
   isEmailVerified: boolean;
   kycStatus: "not_started" | "pending" | "verified" | "rejected";
   referralCode?: string;

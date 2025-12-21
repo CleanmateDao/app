@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, Link } from "react-router-dom";
 import {
@@ -78,6 +78,8 @@ interface MediaItem {
   preview: string;
 }
 
+const DRAFT_STORAGE_KEY = "cleanmate:organize-cleanup-draft";
+
 export default function OrganizeCleanup() {
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -101,6 +103,14 @@ export default function OrganizeCleanup() {
   });
   const [media, setMedia] = useState<MediaItem[]>([]);
 
+  // Helper function to check if HTML content is empty
+  const isHtmlEmpty = (html: string): boolean => {
+    if (!html || !html.trim()) return true;
+    // Remove HTML tags and check if there's any meaningful content
+    const textContent = html.replace(/<[^>]*>/g, "").trim();
+    return !textContent;
+  };
+
   const progress = (currentStep / steps.length) * 100;
 
   const nextStep = () => {
@@ -117,11 +127,50 @@ export default function OrganizeCleanup() {
 
   const walletAddress = useWalletAddress();
   const createCleanupMutation = useCreateCleanup(() => {
-    navigate("/cleanups");
+    // Clear draft after successful submission
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+    navigate("/cleanups?tab=created");
   });
 
+  // Load draft from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedDraft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (savedDraft) {
+        const draft = JSON.parse(savedDraft);
+        if (draft.formData) {
+          setFormData(draft.formData);
+        }
+        if (draft.location) {
+          setLocation(draft.location);
+        }
+        if (draft.schedule) {
+          setSchedule(draft.schedule);
+        }
+        if (draft.currentStep) {
+          setCurrentStep(draft.currentStep);
+        }
+        toast.info("Draft loaded from previous session");
+      }
+    } catch (error) {
+      console.error("Failed to load draft:", error);
+    }
+  }, []);
+
   const handleSaveDraft = () => {
-    toast.success("Draft saved successfully");
+    try {
+      const draft = {
+        formData,
+        location,
+        schedule,
+        currentStep,
+      };
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+      toast.success("Draft saved successfully");
+    } catch (error) {
+      console.error("Failed to save draft:", error);
+      toast.error("Failed to save draft");
+    }
   };
 
   const handleSubmit = async () => {
@@ -132,7 +181,11 @@ export default function OrganizeCleanup() {
 
     try {
       // Validate required fields
-      if (!formData.title || !formData.description || !formData.category) {
+      if (
+        !formData.title ||
+        isHtmlEmpty(formData.description) ||
+        !formData.category
+      ) {
         toast.error("Please fill in all required fields");
         return;
       }
@@ -273,9 +326,9 @@ export default function OrganizeCleanup() {
 
   if (!isKycVerified) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6">
+      <div className="py-10 bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="pt-6">
             <div className="text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                 <Shield className="w-8 h-8 text-primary" />
@@ -300,17 +353,17 @@ export default function OrganizeCleanup() {
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (isKycVerified && !isOrganizer) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="max-w-md w-full">
-          <CardContent className="pt-6">
+      <div className="py-10 bg-background flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <div className="pt-6">
             <div className="text-center space-y-4">
               <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
                 <Shield className="w-8 h-8 text-primary" />
@@ -329,8 +382,8 @@ export default function OrganizeCleanup() {
                 </Button>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
@@ -363,12 +416,11 @@ export default function OrganizeCleanup() {
               </Button>
               <div>
                 <div className="flex items-center gap-2">
-                  <div className="w-1 sm:w-1.5 h-5 sm:h-6 bg-primary rounded-full" />
                   <h1 className="text-base sm:text-lg font-semibold tracking-tight">
                     Organize Cleanup
                   </h1>
                 </div>
-                <p className="text-xs text-muted-foreground ml-3 sm:ml-3.5">
+                <p className="text-xs text-muted-foreground">
                   Step {currentStep} of {steps.length}
                 </p>
               </div>

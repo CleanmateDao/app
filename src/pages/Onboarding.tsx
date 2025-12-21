@@ -37,8 +37,10 @@ import {
   useRegisterWithReferral,
   useUpdateProfile,
 } from "@/services/contracts/mutations";
-import type { UserProfileMetadata } from "@/types/user";
-import { stringifyUserProfileMetadata } from "@cleanmate/cip-sdk";
+import {
+  UserProfileMetadata,
+  stringifyUserProfileMetadata,
+} from "@cleanmate/cip-sdk";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSearchParams } from "react-router-dom";
 import { useUser } from "@/services/subgraph/queries";
@@ -48,6 +50,7 @@ import {
   type SupportedCountryCode,
 } from "@/constants/supported";
 import { INTEREST_OPTIONS } from "@/constants/interests";
+import CleanMateLogoIcon from "@/components/icons/logo-icon";
 
 export interface OnboardingData {
   fullName: string;
@@ -210,13 +213,14 @@ export default function Onboarding() {
     setIsSubmitting(true);
 
     try {
-      const userMetadata: UserProfileMetadata<true> = {
+      const userMetadata: UserProfileMetadata<SupportedCountryCode, false> = {
         name: data.fullName,
         bio: data.bio || undefined,
         location: {
           country: data.country,
           state: data.state,
-        },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
         interests: data.interests,
       };
 
@@ -290,22 +294,20 @@ export default function Onboarding() {
 
           <div className="relative max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <div className="w-10 h-10 rounded-xl bg-primary/20 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-primary" />
-              </div>
+              <CleanMateLogoIcon />
               <div>
                 <div className="flex items-center gap-2">
                   <h1 className="text-lg font-semibold tracking-tight">
                     Become a Cleanup Champion
                   </h1>
                 </div>
-                <p className="text-xs text-muted-foreground ml-3.5">
+                <p className="text-xs text-muted-foreground">
                   Step {currentStep} of {steps.length}
                 </p>
               </div>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={handleSkip}
               className="text-muted-foreground hover:text-foreground"
@@ -402,7 +404,7 @@ export default function Onboarding() {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            Join 5,000+ organizers
+                            Join 500+ organizers
                           </p>
                           <p className="text-xs text-muted-foreground">
                             Making impact across the Globe
@@ -633,19 +635,8 @@ export default function Onboarding() {
                       <Trophy className="w-12 h-12 mx-auto mb-3 opacity-90" />
                       <h3 className="text-xl font-bold">Earn B3TR Rewards</h3>
                       <p className="text-sm opacity-90 mt-1">
-                        Get tokens for every cleanup you organize and complete
+                        Get tokens for every sustainable action you take.
                       </p>
-                      <div className="flex justify-center gap-6 mt-4">
-                        <div>
-                          <p className="text-2xl font-bold">50</p>
-                          <p className="text-xs opacity-80">per cleanup</p>
-                        </div>
-                        <div className="w-px bg-primary-foreground/30" />
-                        <div>
-                          <p className="text-2xl font-bold">10</p>
-                          <p className="text-xs opacity-80">per participant</p>
-                        </div>
-                      </div>
                     </div>
                   </div>
 
@@ -665,18 +656,6 @@ export default function Onboarding() {
                           />
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="bg-primary/5 border-primary/20">
-                    <CardContent className="pt-6">
-                      <p className="text-sm text-center">
-                        <strong>You're ready to make an impact!</strong>
-                        <br />
-                        <span className="text-muted-foreground">
-                          Complete setup to organize your first cleanup
-                        </span>
-                      </p>
                     </CardContent>
                   </Card>
                 </div>
@@ -730,7 +709,7 @@ export default function Onboarding() {
                 </>
               ) : (
                 <>
-                  Start Organizing
+                  Complete Setup
                   <Sparkles className="w-4 h-4" />
                 </>
               )}

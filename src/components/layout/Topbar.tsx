@@ -17,7 +17,7 @@ import { useReadNotification } from "@/hooks/use-read-notification";
 import { useNotifications as useSubgraphNotifications } from "@/services/subgraph/queries";
 import { formatRelativeTime } from "@/lib/time";
 import temiAvatar from "@/assets/temi.png";
-import appLogo from "@/assets/logo.png";
+import CleanMateLogoIcon from "../icons/logo-icon";
 
 interface TopbarProps {
   onMenuClick?: () => void;
@@ -133,7 +133,7 @@ export function Topbar({ onMenuClick }: TopbarProps) {
           onClick={() => navigate("/dashboard")}
           className="flex items-center gap-2 hover:opacity-80 transition-opacity lg:hidden"
         >
-          <img src={appLogo} alt="CleanMate Logo" className="h-8 w-8" />
+          <CleanMateLogoIcon />
         </button>
 
         <div className="flex items-center gap-2 text-sm">
@@ -169,26 +169,28 @@ export function Topbar({ onMenuClick }: TopbarProps) {
 
       {/* Right section */}
       <div className="flex items-center gap-2">
-        {/* AI Chat Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-2 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200"
-          onClick={() => navigate("/ai-chat")}
-        >
-          <div className="relative">
-            <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent">
-              <Avatar className="h-5 w-5">
-                <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
-                <AvatarFallback>
-                  <Sparkles className="w-4 h-4" />
-                </AvatarFallback>
-              </Avatar>
-            </AvatarViewerTrigger>
-            <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
-          </div>
-          <span className="text-sm font-medium">Temi</span>
-        </Button>
+        {/* AI Chat Button - Hidden on ai-chat page */}
+        {location.pathname !== "/ai-chat" && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-2 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all duration-200"
+            onClick={() => navigate("/ai-chat")}
+          >
+            <div className="relative">
+              <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent">
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
+                  <AvatarFallback>
+                    <Sparkles className="w-4 h-4" />
+                  </AvatarFallback>
+                </Avatar>
+              </AvatarViewerTrigger>
+              <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
+            </div>
+            <span className="text-sm font-medium">Temi</span>
+          </Button>
+        )}
 
         <div className="w-px h-6 bg-border/60 mx-1" />
 

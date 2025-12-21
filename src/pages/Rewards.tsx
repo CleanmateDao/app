@@ -80,6 +80,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { toReadableB3tr } from "@/lib/utils";
+import { formatEther, parseEther } from "viem";
 
 type PaymentMethod = "wallet" | "bank";
 
@@ -265,7 +266,11 @@ export default function Rewards() {
       return;
     }
 
-    if (!userProfile || Number(claimAmount) > userProfile.pendingRewards) {
+    if (
+      !userProfile ||
+      Number(claimAmount) >
+        Number(formatEther(BigInt(userProfile.pendingRewards)))
+    ) {
       toast.error("Amount exceeds available rewards");
       return;
     }
@@ -278,7 +283,9 @@ export default function Rewards() {
 
       setIsClaiming(true);
       try {
-        await claimRewardsWallet({ amount: claimAmount });
+        await claimRewardsWallet({
+          amount: parseEther(claimAmount).toString(),
+        });
         setClaimDialogOpen(false);
         setClaimAmount("");
       } catch (error) {
@@ -520,12 +527,12 @@ export default function Rewards() {
                         <button
                           type="button"
                           onClick={() => setPaymentMethod("bank")}
-                          disabled={isClaiming}
-                          className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
+                          disabled={true}
+                          className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
                             paymentMethod === "bank"
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50"
-                          }`}
+                          } cursor-not-allowed opacity-60`}
                         >
                           <Building2 className="w-4 h-4 text-primary" />
                           <span className="text-sm font-medium">
@@ -533,44 +540,13 @@ export default function Rewards() {
                           </span>
                           <Badge
                             variant="secondary"
-                            className="text-[10px] px-1 py-0"
+                            className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
                           >
                             Soon
                           </Badge>
                         </button>
                       </div>
                     </div>
-
-                    {/* Wallet Selection */}
-                    {paymentMethod === "wallet" && (
-                      <div className="space-y-2">
-                        <Label>Wallet Address *</Label>
-                        {walletAddress ? (
-                          <div className="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                              <Wallet className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium">
-                                  Connected Wallet
-                                </p>
-                                <Badge variant="secondary" className="text-xs">
-                                  Default
-                                </Badge>
-                              </div>
-                              <p className="font-mono text-xs text-muted-foreground truncate">
-                                {truncateAddress(walletAddress)}
-                              </p>
-                            </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground text-center py-4">
-                            Please connect your wallet to claim rewards.
-                          </p>
-                        )}
-                      </div>
-                    )}
 
                     {/* Bank Account Selection */}
                     {paymentMethod === "bank" && (
@@ -810,12 +786,12 @@ export default function Rewards() {
                         <button
                           type="button"
                           onClick={() => setPaymentMethod("bank")}
-                          disabled={isClaiming}
-                          className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
+                          disabled={true}
+                          className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
                             paymentMethod === "bank"
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50"
-                          }`}
+                          } cursor-not-allowed opacity-60`}
                         >
                           <Building2 className="w-4 h-4 text-primary" />
                           <span className="text-sm font-medium">
@@ -823,7 +799,7 @@ export default function Rewards() {
                           </span>
                           <Badge
                             variant="secondary"
-                            className="text-[10px] px-1 py-0"
+                            className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
                           >
                             Soon
                           </Badge>

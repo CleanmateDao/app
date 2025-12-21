@@ -27,6 +27,23 @@ export function numberToDate(
 }
 
 /**
+ * Convert number to time string (HH:MM format)
+ */
+export function numberToTime(
+  value: number | bigint | null | undefined
+): string | null {
+  if (!value) return null;
+  try {
+    const date = new Date(Number(value) * 1000);
+    const hours = date.getUTCHours().toString().padStart(2, "0");
+    const minutes = date.getUTCMinutes().toString().padStart(2, "0");
+    return `${hours}:${minutes}`;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Convert BigInt string to date string
  */
 export function bigIntToDate(

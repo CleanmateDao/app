@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -30,6 +31,13 @@ export function RichTextEditor({ value, onChange, placeholder, className }: Rich
       },
     },
   });
+
+  // Sync editor content when value prop changes externally
+  useEffect(() => {
+    if (editor && value !== editor.getHTML()) {
+      editor.commands.setContent(value, false);
+    }
+  }, [value, editor]);
 
   if (!editor) {
     return null;
