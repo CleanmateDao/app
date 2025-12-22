@@ -94,12 +94,9 @@ export function JoinStreakDrawer({
                   <CheckCircle className="h-8 w-8 text-status-approved" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-2">Your Streaker Code</p>
-                  <p className="font-mono font-bold text-2xl text-primary">
-                    {streakStats?.streakerCode}
-                  </p>
+                  <p className="text-sm font-medium mb-2">You're all set!</p>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Show this code in your videos for validation
+                    You can now submit sustainable actions and earn rewards
                   </p>
                 </div>
               </motion.div>
@@ -111,13 +108,8 @@ export function JoinStreakDrawer({
                     <li className="flex items-start gap-2">
                       <span className="text-primary mt-0.5">•</span>
                       <span>
-                        Record short videos of your sustainable actions
-                      </span>
-                    </li>
-                    <li className="flex items-start gap-2">
-                      <span className="text-primary mt-0.5">•</span>
-                      <span>
-                        Get a unique streaker code to show in your videos
+                        Record and submit short videos of your sustainable
+                        actions
                       </span>
                     </li>
                     <li className="flex items-start gap-2">
@@ -136,15 +128,11 @@ export function JoinStreakDrawer({
                   <ul className="text-sm space-y-1">
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-status-approved" />
-                      <span>A unique streaker code</span>
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-status-approved" />
                       <span>Ability to submit sustainable actions</span>
                     </li>
                     <li className="flex items-center gap-2">
                       <CheckCircle className="h-4 w-4 text-status-approved" />
-                      <span>Earn rewards for approved submissions</span>
+                      <span>Earn B3TR tokens for approved submissions</span>
                     </li>
                   </ul>
                 </div>
@@ -240,12 +228,9 @@ export function JoinStreakDrawer({
                 <CheckCircle className="h-8 w-8 text-status-approved" />
               </div>
               <div>
-                <p className="text-sm font-medium mb-2">Your Streaker Code</p>
-                <p className="font-mono font-bold text-2xl text-primary">
-                  {streakStats?.streakerCode}
-                </p>
+                <p className="text-sm font-medium mb-2">You're all set!</p>
                 <p className="text-xs text-muted-foreground mt-2">
-                  Show this code in your videos for validation
+                  You can now submit sustainable actions and earn rewards
                 </p>
               </div>
             </motion.div>
@@ -256,12 +241,8 @@ export function JoinStreakDrawer({
                 <ul className="text-sm text-muted-foreground space-y-2">
                   <li className="flex items-start gap-2">
                     <span className="text-primary mt-0.5">•</span>
-                    <span>Record short videos of your sustainable actions</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
                     <span>
-                      Get a unique streaker code to show in your videos
+                      Record and submit short videos of your sustainable actions
                     </span>
                   </li>
                   <li className="flex items-start gap-2">
@@ -280,15 +261,11 @@ export function JoinStreakDrawer({
                 <ul className="text-sm space-y-1">
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-status-approved" />
-                    <span>A unique streaker code</span>
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-status-approved" />
                     <span>Ability to submit sustainable actions</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-status-approved" />
-                    <span>Earn rewards for approved submissions</span>
+                    <span>Earn B3TR tokens for approved submissions</span>
                   </li>
                 </ul>
               </div>

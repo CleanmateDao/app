@@ -8,17 +8,16 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  Sparkles,
+  Flame,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import CleanMateLogoIcon from "../icons/logo-icon";
 import CleanMateLogo from "../icons/logo";
 
-const navItems = [
+const baseNavItems = [
   { path: "/dashboard", label: "Insights", icon: LayoutDashboard },
   { path: "/cleanups", label: "Cleanups", icon: MapPin },
-  { path: "/organize", label: "Organize Cleanup", icon: PlusCircle },
   { path: "/rewards", label: "Rewards", icon: Gift },
   { path: "/settings", label: "Settings", icon: Settings },
 ];
@@ -30,6 +29,59 @@ interface SidebarProps {
 export function Sidebar({ onNavigate }: SidebarProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
+  const [plusButtonAction, setPlusButtonAction] = useState<"organize" | "streak">(
+    () => {
+      const saved = localStorage.getItem("plusButtonAction");
+      return (saved === "streak" ? "streak" : "organize") as "organize" | "streak";
+    }
+  );
+
+  // Listen for storage changes to update in real-time
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "plusButtonAction") {
+        const newAction = e.newValue === "streak" ? "streak" : "organize";
+        setPlusButtonAction(newAction);
+      }
+    };
+
+    // Listen for custom storage event (for same-tab updates)
+    const handleCustomStorage = () => {
+      const saved = localStorage.getItem("plusButtonAction");
+      const action = saved === "streak" ? "streak" : "organize";
+      setPlusButtonAction(action);
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    window.addEventListener("plusButtonAction-changed", handleCustomStorage);
+
+    return () => {
+      window.removeEventListener("storage", handleStorageChange);
+      window.removeEventListener("plusButtonAction-changed", handleCustomStorage);
+    };
+  }, []);
+
+  // Build nav items with dynamic plus button action
+  const plusButtonItem =
+    plusButtonAction === "streak"
+      ? {
+          path: "/streaks/submit",
+          label: "Submit Streak",
+          icon: Flame,
+        }
+      : {
+          path: "/organize",
+          label: "Organize Cleanup",
+          icon: PlusCircle,
+        };
+
+  const navItems = [
+    baseNavItems[0], // Insights
+    baseNavItems[1], // Cleanups
+    plusButtonItem, // Dynamic plus button
+    baseNavItems[2], // Rewards
+    baseNavItems[3], // Settings
+  ];
 
   return (
     <motion.aside
@@ -56,7 +108,10 @@ export function Sidebar({ onNavigate }: SidebarProps) {
             location.pathname === item.path ||
             (item.path === "/cleanups" &&
               location.pathname.startsWith("/cleanups/")) ||
-            (item.path === "/dashboard" && location.pathname === "/");
+            (item.path === "/dashboard" && location.pathname === "/") ||
+            (item.path === "/organize" && location.pathname === "/organize") ||
+            (item.path === "/streaks/submit" &&
+              location.pathname === "/streaks/submit");
           return (
             <NavLink
               key={item.path}

@@ -13,17 +13,26 @@ import {
   Video,
   Loader2,
   Sparkles,
-  Zap,
+  Lightbulb,
 } from "lucide-react";
+import { Swiper, SwiperSlide } from "swiper/react";
+import type { Swiper as SwiperType } from "swiper";
+import "swiper/css";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipArrow,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { STREAK_RULES } from "@/types/streak";
 import { useUserStreakStats } from "@/services/subgraph/queries";
 import { transformUserStreakStats } from "@/types/streak";
+import { STREAK_CATEGORIES } from "@/constants/streak-categories";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { useSubmitStreak } from "@/services/contracts/mutations";
 import { uploadFileToIPFS } from "@/services/ipfs";
@@ -32,10 +41,12 @@ import {
   stringifyStreakSubmissionMetadata,
   type StreakSubmissionMetadata,
 } from "@cleanmate/cip-sdk";
+import { StreakTipsDialog } from "@/components/StreakTipsDialog";
 
-type SubmitStep = "rules" | "record" | "preview" | "submitting" | "success";
+type SubmitStep = "record" | "preview" | "submitting" | "success";
 
 const MAX_DURATION = 5000; // 5 seconds in ms
+const MIN_DURATION = 2000; // 2 seconds in ms
 
 /**
  * Formats seconds into a human-readable string
@@ -74,11 +85,10 @@ function getDeviceType(): "ios" | "android" | "desktop" {
 export default function StreakSubmit() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const walletAddress = useWalletAddress();
   const { setIsRecording: setContextRecording } = useRecording();
 
-  // Fetch streak stats for streaker code
+  // Fetch streak stats
   const { data: streakStatsData } = useUserStreakStats(
     walletAddress || undefined
   );
@@ -95,10 +105,8 @@ export default function StreakSubmit() {
 
   // Calculate if user can submit based on last submission time
   const canSubmit = useMemo(() => {
-    if (!Number(streakStats?.lastSubmissionAt)) return true;
-    const lastSubmissionTime = new Date(
-      Number(streakStats.lastSubmissionAt) * 1000
-    ).getTime();
+    if (!streakStats?.lastSubmissionAt) return true;
+    const lastSubmissionTime = Number(streakStats.lastSubmissionAt);
     const now = Date.now();
     return now - lastSubmissionTime >= RATE_LIMIT_MS;
   }, [streakStats?.lastSubmissionAt, RATE_LIMIT_MS]);
@@ -113,9 +121,7 @@ export default function StreakSubmit() {
     }
 
     const updateCountdown = () => {
-      const lastSubmissionTime = new Date(
-        Number(streakStats.lastSubmissionAt) * 1000
-      ).getTime();
+      const lastSubmissionTime = Number(streakStats.lastSubmissionAt);
       const now = Date.now();
       const elapsed = now - lastSubmissionTime;
       const remaining = Math.max(0, RATE_LIMIT_MS - elapsed);
@@ -128,10 +134,14 @@ export default function StreakSubmit() {
     return () => clearInterval(interval);
   }, [streakStats?.lastSubmissionAt, RATE_LIMIT_MS]);
 
-  const [step, setStep] = useState<SubmitStep>("rules");
+  const [step, setStep] = useState<SubmitStep>("record");
   const [dontShowRules, setDontShowRules] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState("Waste");
+  const [showTipsDialog, setShowTipsDialog] = useState(false);
+  const [showCategoryTooltip, setShowCategoryTooltip] = useState(false);
+  const categoryTooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Support multiple media items
   const [mediaItems, setMediaItems] = useState<
     Array<{
@@ -156,6 +166,8 @@ export default function StreakSubmit() {
   const chunksRef = useRef<Blob[]>([]);
   const isVideoPlayingRef = useRef<boolean>(false);
   const currentPreviewIndexRef = useRef<number>(0);
+  const swiperRef = useRef<SwiperType | null>(null);
+  const recordButtonRef = useRef<HTMLButtonElement | null>(null);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -231,6 +243,52 @@ export default function StreakSubmit() {
       setContextRecording(false);
     }
   }, [step, setContextRecording]);
+
+  // Track previous category to detect changes
+  const previousCategoryRef = useRef<string | null>(null);
+  const isInitialMountRef = useRef(true);
+
+  // Show tooltip when category changes
+  useEffect(() => {
+    // Skip if not on record step
+    if (step !== "record") {
+      return;
+    }
+
+    // Skip on initial mount
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
+      previousCategoryRef.current = selectedCategory;
+      return;
+    }
+
+    // Check if category actually changed
+    const categoryChanged = previousCategoryRef.current !== selectedCategory;
+
+    if (categoryChanged) {
+      // Clear any existing timeout
+      if (categoryTooltipTimeoutRef.current) {
+        clearTimeout(categoryTooltipTimeoutRef.current);
+      }
+
+      // Update previous category
+      previousCategoryRef.current = selectedCategory;
+
+      // Show tooltip
+      setShowCategoryTooltip(true);
+
+      // Hide tooltip after 4 seconds
+      categoryTooltipTimeoutRef.current = setTimeout(() => {
+        setShowCategoryTooltip(false);
+      }, 4000);
+    }
+
+    return () => {
+      if (categoryTooltipTimeoutRef.current) {
+        clearTimeout(categoryTooltipTimeoutRef.current);
+      }
+    };
+  }, [selectedCategory, step]);
 
   // Play preview video when entering preview step
   useEffect(() => {
@@ -371,6 +429,21 @@ export default function StreakSubmit() {
           videoHeight: video.videoHeight,
         });
 
+        // Check minimum duration requirement
+        const durationMs = video.duration * 1000;
+        if (durationMs < MIN_DURATION) {
+          // Clean up the blob URL
+          URL.revokeObjectURL(url);
+          toast({
+            title: "Video Too Short",
+            description: `Video must be at least ${
+              MIN_DURATION / 1000
+            } seconds long. Please record again.`,
+            variant: "destructive",
+          });
+          return;
+        }
+
         // Add new media item to array
         setMediaItems((prev) => [
           ...prev,
@@ -428,6 +501,8 @@ export default function StreakSubmit() {
   }, []);
 
   const stopRecording = useCallback(() => {
+    // Allow stopping at any time (hold-release behavior)
+    // Duration validation happens in the onstop handler
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
@@ -441,6 +516,52 @@ export default function StreakSubmit() {
       cancelAnimationFrame(animationFrameRef.current);
     }
   }, [setContextRecording]);
+
+  // Set up non-passive touch event listeners for record button
+  useEffect(() => {
+    const button = recordButtonRef.current;
+    if (!button || step !== "record") return;
+
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Start recording on press/hold
+      if (!isRecording) {
+        startRecording();
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Stop recording on release
+      if (isRecording) {
+        stopRecording();
+      }
+    };
+
+    const handleTouchCancel = (e: TouchEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      // Stop recording if touch is cancelled
+      if (isRecording) {
+        stopRecording();
+      }
+    };
+
+    // Add non-passive event listeners
+    button.addEventListener("touchstart", handleTouchStart, { passive: false });
+    button.addEventListener("touchend", handleTouchEnd, { passive: false });
+    button.addEventListener("touchcancel", handleTouchCancel, {
+      passive: false,
+    });
+
+    return () => {
+      button.removeEventListener("touchstart", handleTouchStart);
+      button.removeEventListener("touchend", handleTouchEnd);
+      button.removeEventListener("touchcancel", handleTouchCancel);
+    };
+  }, [step, isRecording, startRecording, stopRecording]);
 
   const handleContinue = () => {
     // Check rate limit before allowing recording
@@ -582,7 +703,7 @@ export default function StreakSubmit() {
       const deviceType = getDeviceType();
 
       const streakSubmissionMetadata: StreakSubmissionMetadata = {
-        description: "Sustainable action submission",
+        description: `I did a sustainable action: ${selectedCategory}`,
         timestamp: new Date().toISOString(),
         streakerCode: streakStats?.streakerCode,
         mediaCount: mediaItems.length,
@@ -647,208 +768,6 @@ export default function StreakSubmit() {
     }
   };
 
-  // Show loading while detecting device
-  if (isMobile === undefined) {
-    return (
-      <div className="fixed inset-0 bg-background flex items-center justify-center">
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="text-center"
-        >
-          <Flame className="h-12 w-12 text-primary animate-pulse mx-auto mb-4" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  // Rules Screen
-  if (step === "rules") {
-    return (
-      <div className="min-h-screen bg-background">
-        {/* Gradient header */}
-        <div className="relative bg-gradient-to-br from-primary/20 via-primary/10 to-background pt-6 pb-8 px-4">
-          <div className="max-w-md mx-auto">
-            {/* Header */}
-            <div className="flex items-center gap-3 mb-6">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate("/streaks")}
-                className="bg-background/50"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-              <div className="flex items-center gap-2">
-                <motion.div
-                  animate={{ rotate: [0, -10, 10, 0] }}
-                  transition={{
-                    duration: 0.5,
-                    repeat: Infinity,
-                    repeatDelay: 2,
-                  }}
-                >
-                  <Flame className="h-6 w-6 text-primary" />
-                </motion.div>
-                <h1 className="text-xl font-bold">Record a Streak</h1>
-              </div>
-            </div>
-
-            {/* Streaker Code - Prominent */}
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.2 }}
-            >
-              <Card className="border-primary bg-gradient-to-br from-primary/10 to-primary/5 shadow-lg shadow-primary/10">
-                <CardContent className="p-4 text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Zap className="h-4 w-4 text-primary" />
-                    <span className="text-xs font-medium text-primary uppercase tracking-wider">
-                      Your Streaker Code
-                    </span>
-                  </div>
-                  <p className="font-mono font-black text-2xl text-primary tracking-wider">
-                    {streakStats?.streakerCode || "Not joined yet"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Write this on paper & show it in your video
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-
-            {/* Rate Limit Warning */}
-            {!canSubmit && timeUntilCanSubmit > 0 && (
-              <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-                className="mt-4"
-              >
-                <Card className="border-status-rejected/50 bg-status-rejected/10">
-                  <CardContent className="p-4 text-center">
-                    <div className="flex items-center justify-center gap-2 mb-2">
-                      <X className="h-4 w-4 text-status-rejected" />
-                      <span className="text-sm font-medium text-status-rejected">
-                        Rate Limit Active
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      You can submit again in{" "}
-                      <span className="font-semibold text-foreground">
-                        {formatTimeRemaining(timeUntilCanSubmit)}
-                      </span>
-                    </p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
-          </div>
-        </div>
-
-        <div className="p-4 pb-8 max-w-md mx-auto -mt-2">
-          {/* Rules */}
-          <Card className="border-border/50 mb-6">
-            <CardContent className="p-4">
-              <h2 className="font-semibold mb-4 flex items-center gap-2">
-                <Sparkles className="h-4 w-4 text-primary" />
-                How to Record
-              </h2>
-              <div className="space-y-4">
-                {STREAK_RULES.map((rule, index) => (
-                  <motion.div
-                    key={rule.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.3 + index * 0.1 }}
-                    className="flex gap-3"
-                  >
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-md shadow-primary/20">
-                      <span className="text-sm font-bold text-primary-foreground">
-                        {index + 1}
-                      </span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">{rule.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {rule.description}
-                      </p>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Example Video Placeholder */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6 }}
-          >
-            <Card className="border-border/50 bg-muted/30 mb-6 overflow-hidden">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <Video className="h-5 w-5 text-muted-foreground" />
-                  <span className="text-sm font-medium">Example Video</span>
-                </div>
-                <div className="aspect-video bg-gradient-to-br from-muted to-muted/50 rounded-lg flex items-center justify-center relative overflow-hidden">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.3)_100%)]" />
-                  <motion.div
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                    className="w-14 h-14 rounded-full bg-primary/90 flex items-center justify-center cursor-pointer shadow-lg shadow-primary/30"
-                  >
-                    <Play className="h-6 w-6 text-primary-foreground ml-1" />
-                  </motion.div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          {/* Don't show again checkbox */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.7 }}
-            className="flex items-center space-x-2 mb-6"
-          >
-            <Checkbox
-              id="dontShowRules"
-              checked={dontShowRules}
-              onCheckedChange={(checked) => setDontShowRules(checked === true)}
-            />
-            <Label
-              htmlFor="dontShowRules"
-              className="text-sm text-muted-foreground"
-            >
-              Don't show rules next time
-            </Label>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8 }}
-          >
-            <Button
-              className="w-full gap-2 h-12 text-base font-semibold shadow-lg shadow-primary/20"
-              onClick={handleContinue}
-              disabled={!canSubmit && timeUntilCanSubmit > 0}
-            >
-              {!canSubmit && timeUntilCanSubmit > 0
-                ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
-                : "Continue to Record"}
-              <Video className="h-5 w-5" />
-            </Button>
-          </motion.div>
-        </div>
-      </div>
-    );
-  }
-
   // Recording Screen
   if (step === "record") {
     const circumference = 2 * Math.PI * 52;
@@ -892,10 +811,35 @@ export default function StreakSubmit() {
               <span className="text-white text-sm font-medium">
                 {isRecording
                   ? `${((recordingProgress / 100) * 5).toFixed(1)}s`
-                  : "5 sec max"}
+                  : "2-5 sec"}
               </span>
             </motion.div>
-            <div className="w-10" />
+            <Tooltip
+              open={showCategoryTooltip && !isRecording}
+              onOpenChange={setShowCategoryTooltip}
+            >
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-white hover:bg-white/20 rounded-full"
+                  onClick={() => {
+                    setShowTipsDialog(true);
+                    setShowCategoryTooltip(false);
+                  }}
+                  disabled={isRecording}
+                >
+                  <Lightbulb className="h-6 w-6" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="max-w-xs">
+                <TooltipArrow className="fill-popover" />
+                <p className="text-sm">
+                  Click to see how to submit a valid{" "}
+                  {selectedCategory.toLowerCase()} streak
+                </p>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </motion.div>
 
@@ -938,22 +882,6 @@ export default function StreakSubmit() {
           className="absolute bottom-0 left-0 right-0 z-10 p-6 pb-10 bg-gradient-to-t from-black/80 via-black/50 to-transparent"
         >
           <div className="flex flex-col items-center">
-            {/* Streaker code reminder */}
-            <motion.div
-              animate={{
-                y: isRecording ? -10 : 0,
-                opacity: isRecording ? 0.5 : 1,
-              }}
-              className="mb-6 px-4 py-2 bg-black/60 rounded-full backdrop-blur-sm border border-white/10"
-            >
-              <span className="text-xs text-white/90">
-                Show:{" "}
-                <span className="font-mono font-bold text-primary">
-                  {streakStats?.streakerCode || "Not joined yet"}
-                </span>
-              </span>
-            </motion.div>
-
             {/* Record Button */}
             <div className="relative">
               {/* Outer glow */}
@@ -1006,6 +934,7 @@ export default function StreakSubmit() {
 
               {/* Button */}
               <motion.button
+                ref={recordButtonRef}
                 whileTap={{ scale: 0.95 }}
                 className={`relative w-[96px] h-[96px] rounded-full border-4 border-white flex items-center justify-center transition-all duration-200 select-none touch-none ${
                   isRecording ? "bg-status-rejected/20" : "bg-white/10"
@@ -1014,43 +943,25 @@ export default function StreakSubmit() {
                   userSelect: "none",
                   WebkitUserSelect: "none",
                   WebkitTouchCallout: "none",
-                  touchAction: "manipulation",
-                }}
-                onTouchStart={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!isRecording) {
-                    startRecording();
-                  }
-                }}
-                onTouchEnd={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (isRecording) {
-                    stopRecording();
-                  }
-                }}
-                onTouchCancel={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (isRecording) {
-                    stopRecording();
-                  }
+                  touchAction: "none",
                 }}
                 onMouseDown={(e) => {
                   e.preventDefault();
+                  // Start recording on press/hold
                   if (!isRecording) {
                     startRecording();
                   }
                 }}
                 onMouseUp={(e) => {
                   e.preventDefault();
+                  // Stop recording on release
                   if (isRecording) {
                     stopRecording();
                   }
                 }}
                 onMouseLeave={(e) => {
                   e.preventDefault();
+                  // Stop recording if mouse leaves button while holding
                   if (isRecording) {
                     stopRecording();
                   }
@@ -1078,14 +989,62 @@ export default function StreakSubmit() {
               </motion.button>
             </div>
 
-            <motion.p
-              animate={{ opacity: isRecording ? 0.5 : 1 }}
-              className="mt-6 text-white/80 text-sm font-medium"
-            >
-              {isRecording ? "Release to stop" : "Hold to record"}
-            </motion.p>
+            {/* Category Swiper */}
+            <div className="mt-6 w-full max-w-md mx-auto overflow-hidden">
+              <Swiper
+                onSwiper={(swiper) => {
+                  swiperRef.current = swiper;
+                }}
+                slidesPerView="auto"
+                spaceBetween={16}
+                centeredSlides
+                initialSlide={0}
+                className="category-swiper"
+                onSlideChange={(swiper) => {
+                  const activeIndex = swiper.activeIndex;
+                  if (STREAK_CATEGORIES[activeIndex]) {
+                    setSelectedCategory(STREAK_CATEGORIES[activeIndex]);
+                  }
+                }}
+              >
+                {STREAK_CATEGORIES.map((category, index) => (
+                  <SwiperSlide key={category} style={{ width: "auto" }}>
+                    <motion.button
+                      onClick={() => {
+                        setSelectedCategory(category);
+                        if (swiperRef.current) {
+                          swiperRef.current.slideTo(index, 300);
+                        }
+                      }}
+                      animate={{
+                        scale: selectedCategory === category ? 1.15 : 1,
+                      }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 300,
+                        damping: 20,
+                      }}
+                      className={`px-6 py-2 rounded-full text-sm font-medium transition-all whitespace-nowrap ${
+                        selectedCategory === category
+                          ? "text-white font-semibold"
+                          : "text-white/60"
+                      }`}
+                    >
+                      {category}
+                    </motion.button>
+                  </SwiperSlide>
+                ))}
+              </Swiper>
+            </div>
           </div>
         </motion.div>
+
+        {/* Tips Dialog */}
+        <StreakTipsDialog
+          open={showTipsDialog}
+          onOpenChange={setShowTipsDialog}
+          category={selectedCategory as (typeof STREAK_CATEGORIES)[number]}
+        />
       </div>
     );
   }
@@ -1276,58 +1235,6 @@ export default function StreakSubmit() {
             <div className="text-center">
               <Video className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No media recorded</p>
-            </div>
-          </div>
-        )}
-
-        {/* Media Items List */}
-        {mediaItems.length > 0 && (
-          <div className="absolute top-20 left-0 right-0 z-10 px-4">
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {mediaItems.map((item, index) => (
-                <div
-                  key={item.id}
-                  className={`relative flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 ${
-                    index === currentPreviewIndexRef.current
-                      ? "border-primary"
-                      : "border-white/30"
-                  }`}
-                >
-                  {item.mimeType.startsWith("video/") ? (
-                    <video
-                      src={item.url}
-                      className="w-full h-full object-cover"
-                      muted
-                    />
-                  ) : (
-                    <img
-                      src={item.url}
-                      alt={`Media ${index + 1}`}
-                      className="w-full h-full object-cover"
-                    />
-                  )}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemoveMedia(item.id);
-                    }}
-                    className="absolute top-1 right-1 w-5 h-5 rounded-full bg-status-rejected/90 hover:bg-status-rejected flex items-center justify-center transition-colors"
-                  >
-                    <X className="h-3 w-3 text-white" />
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      currentPreviewIndexRef.current = index;
-                      if (previewVideoRef.current) {
-                        previewVideoRef.current.src = item.url;
-                        previewVideoRef.current.load();
-                      }
-                    }}
-                    className="absolute inset-0"
-                  />
-                </div>
-              ))}
             </div>
           </div>
         )}

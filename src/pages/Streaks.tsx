@@ -32,7 +32,6 @@ import {
   transformUserStreakStats,
 } from "@/types/streak";
 import type { SubgraphStreakSubmission } from "@/services/subgraph/types";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import {
   useInfiniteStreakSubmissions,
@@ -43,7 +42,6 @@ import {
   startOfWeek,
   endOfWeek,
   isWithinInterval,
-  parseISO,
   subWeeks,
 } from "date-fns";
 import africanPattern from "@/assets/african-pattern.jpg";
@@ -89,7 +87,8 @@ function groupStreaksByWeek(streaks: StreakSubmission[]) {
     else weekLabel = `Week of ${format(weekStart, "MMM d")}`;
 
     const weekStreaks = streaks.filter((streak) => {
-      const submittedDate = parseISO(streak.submittedAt);
+      // submittedAt is in milliseconds (converted by transformer from seconds)
+      const submittedDate = new Date(Number(streak.submittedAt));
       return isWithinInterval(submittedDate, {
         start: weekStart,
         end: weekEnd,
@@ -222,7 +221,7 @@ function StreakCard({
             </Tooltip>
           )}
           <p className="text-[10px] text-white/60">
-            {format(parseISO(streak.submittedAt), "MMM d · h:mm a")}
+            {format(new Date(Number(streak.submittedAt)), "MMM d · h:mm a")}
           </p>
         </div>
       </div>
@@ -232,7 +231,6 @@ function StreakCard({
 
 export default function Streaks() {
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const walletAddress = useWalletAddress();
 
   // Media viewer state
@@ -262,16 +260,15 @@ export default function Streaks() {
   const RATE_LIMIT_MINUTES = 30;
   const RATE_LIMIT_MS = useMemo(() => RATE_LIMIT_MINUTES * 60 * 1000, []);
 
+  // Calculate time remaining until can submit
+  const [timeUntilCanSubmit, setTimeUntilCanSubmit] = useState(0);
+
   // Calculate if user can submit based on last submission time
   const canSubmit = useMemo(() => {
     if (!stats.lastSubmissionAt) return true;
-    const lastSubmissionTime = new Date(stats.lastSubmissionAt).getTime();
-    const now = Date.now();
-    return now - lastSubmissionTime >= RATE_LIMIT_MS;
-  }, [stats.lastSubmissionAt, RATE_LIMIT_MS]);
-
-  // Calculate time remaining until can submit
-  const [timeUntilCanSubmit, setTimeUntilCanSubmit] = useState(0);
+    // Use timeUntilCanSubmit to ensure button becomes clickable when countdown reaches zero
+    return timeUntilCanSubmit === 0;
+  }, [stats.lastSubmissionAt, timeUntilCanSubmit]);
 
   useEffect(() => {
     if (!stats.lastSubmissionAt) {
@@ -280,7 +277,7 @@ export default function Streaks() {
     }
 
     const updateCountdown = () => {
-      const lastSubmissionTime = new Date(stats.lastSubmissionAt!).getTime();
+      const lastSubmissionTime = Number(stats.lastSubmissionAt);
       const now = Date.now();
       const elapsed = now - lastSubmissionTime;
       const remaining = Math.max(0, RATE_LIMIT_MS - elapsed);
@@ -333,7 +330,7 @@ export default function Streaks() {
           url: hash,
           type: isVideo ? "video" : "image",
           caption: `Streak submission from ${format(
-            parseISO(streak.submittedAt),
+            new Date(Number(streak.submittedAt)),
             "MMM d, yyyy"
           )}`,
         };
@@ -400,19 +397,17 @@ export default function Streaks() {
           <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/80 to-background/60" />
         </div>
         <div className="relative p-5 sm:p-6">
-          {/* Back button - mobile only */}
-          {isMobile === true && (
-            <div className="mb-4">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => navigate(-1)}
-                className="bg-background/50 hover:bg-background/80"
-              >
-                <ArrowLeft className="h-5 w-5" />
-              </Button>
-            </div>
-          )}
+          {/* Back button */}
+          <div className="mb-4">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => navigate("/dashboard")}
+              className="bg-background/50 hover:bg-background/80"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+          </div>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -426,18 +421,16 @@ export default function Streaks() {
               </p>
             </div>
 
-            {isMobile === true && (
-              <Button
-                onClick={() => navigate("/streaks/submit")}
-                className="w-full sm:w-auto gap-2"
-                disabled={!canSubmit}
-              >
-                <Plus className="h-4 w-4" />
-                {!canSubmit && timeUntilCanSubmit > 0
-                  ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
-                  : "New Streak"}
-              </Button>
-            )}
+            <Button
+              onClick={() => navigate("/streaks/submit")}
+              className="w-full sm:w-auto gap-2"
+              disabled={!canSubmit}
+            >
+              <Plus className="h-4 w-4" />
+              {!canSubmit && timeUntilCanSubmit > 0
+                ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
+                : "New Streak"}
+            </Button>
           </div>
         </div>
       </div>
@@ -447,7 +440,7 @@ export default function Streaks() {
         <motion.div {...fadeIn}>
           {/* Main B3TR Card with glow effect */}
           {isLoading ? (
-            <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent mb-4">
+            <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent mb-6">
               <CardContent className="relative p-5 sm:p-6">
                 <div className="flex items-center justify-center h-24">
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
@@ -460,12 +453,12 @@ export default function Streaks() {
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.1 }}
             >
-              <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent mb-4">
+              <Card className="relative overflow-hidden border-primary/30 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent mb-6">
                 {/* Animated glow */}
                 <div className="absolute -top-20 -right-20 w-40 h-40 bg-primary/20 rounded-full blur-3xl animate-pulse" />
                 <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-primary/10 rounded-full blur-2xl" />
 
-                <CardContent className="relative p-5 sm:p-6">
+                <CardContent className="relative p-5 sm:p-6 flex items-center justify-between">
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-2">
@@ -473,7 +466,7 @@ export default function Streaks() {
                           <Trophy className="h-5 w-5 text-primary" />
                         </div>
                         <span className="text-sm text-muted-foreground font-medium">
-                          Total Earned
+                          Earned
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2">
@@ -490,137 +483,75 @@ export default function Streaks() {
                         </span>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Mini chart visualization */}
-                    <div className="hidden sm:flex items-end gap-1 h-16">
-                      {[40, 65, 45, 80, 60, 90, 75].map((height, i) => (
-                        <motion.div
-                          key={i}
-                          className="w-2 bg-primary/30 rounded-full"
-                          initial={{ height: 0 }}
-                          animate={{ height: `${height}%` }}
-                          transition={{ delay: 0.2 + i * 0.05, duration: 0.4 }}
-                        />
-                      ))}
-                    </div>
+                  <div className="flex items-end justify-center gap-2 sm:gap-3 h-24">
+                    {(() => {
+                      const maxValue = Math.max(
+                        stats.approvedSubmissions,
+                        stats.pendingSubmissions,
+                        stats.totalSubmissions,
+                        1 // Prevent division by zero
+                      );
+                      const statBars = [
+                        {
+                          value: stats.approvedSubmissions,
+                          label: "Approved",
+                          color: "bg-status-approved",
+                          icon: CheckCircle,
+                        },
+                        {
+                          value: stats.pendingSubmissions,
+                          label: "Pending",
+                          color: "bg-status-pending",
+                          icon: Clock,
+                        },
+                        {
+                          value: stats.totalSubmissions,
+                          label: "Total",
+                          color: "bg-primary",
+                          icon: Flame,
+                        },
+                      ];
+                      return statBars.map((stat, i) => {
+                        const heightPercent = (stat.value / maxValue) * 100;
+                        const StatIcon = stat.icon;
+                        return (
+                          <motion.div
+                            key={i}
+                            className="flex flex-col items-center gap-2"
+                            initial={{ y: 10, opacity: 0 }}
+                            animate={{ y: 0, opacity: 1 }}
+                            transition={{ delay: 0.2 + i * 0.05 }}
+                          >
+                            <p className="text-sm sm:text-base font-bold">
+                              {stat.value}
+                            </p>
+                            <div className="w-6 sm:w-8 h-12 bg-muted/30 rounded-full relative overflow-hidden flex flex-col justify-end">
+                              <motion.div
+                                className={`w-full ${stat.color} rounded-full`}
+                                initial={{ height: 0 }}
+                                animate={{ height: `${heightPercent}%` }}
+                                transition={{
+                                  delay: 0.2 + i * 0.05,
+                                  duration: 0.4,
+                                }}
+                              />
+                            </div>
+                            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                              <StatIcon className="h-3 w-3" />
+                              <span className="text-xs">{stat.label}</span>
+                            </div>
+                          </motion.div>
+                        );
+                      });
+                    })()}
                   </div>
                 </CardContent>
               </Card>
             </motion.div>
           )}
-
-          {/* Stat Pills */}
-          {isLoading ? (
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Card key={i} className="border-border/50 bg-card/50">
-                  <CardContent className="p-3 sm:p-4">
-                    <div className="h-20 flex items-center justify-center">
-                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-3 gap-2 sm:gap-3">
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.2 }}
-              >
-                <Card className="border-status-approved/30 bg-status-approved/5 hover:bg-status-approved/10 transition-colors">
-                  <CardContent className="p-3 sm:p-4 text-center">
-                    <div className="w-8 h-8 rounded-full bg-status-approved/20 flex items-center justify-center mx-auto mb-2">
-                      <CheckCircle className="h-4 w-4 text-status-approved" />
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-status-approved">
-                      {stats.approvedSubmissions}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Approved</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.25 }}
-              >
-                <Card className="border-status-pending/30 bg-status-pending/5 hover:bg-status-pending/10 transition-colors">
-                  <CardContent className="p-3 sm:p-4 text-center">
-                    <div className="w-8 h-8 rounded-full bg-status-pending/20 flex items-center justify-center mx-auto mb-2">
-                      <Clock className="h-4 w-4 text-status-pending" />
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold text-status-pending">
-                      {stats.pendingSubmissions}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Pending</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-
-              <motion.div
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                transition={{ delay: 0.3 }}
-              >
-                <Card className="border-border/50 bg-card/50 hover:bg-card/80 transition-colors">
-                  <CardContent className="p-3 sm:p-4 text-center">
-                    <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center mx-auto mb-2">
-                      <Flame className="h-4 w-4 text-foreground" />
-                    </div>
-                    <p className="text-2xl sm:text-3xl font-bold">
-                      {stats.totalSubmissions}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Total</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            </div>
-          )}
         </motion.div>
-
-        {/* Streaker Code Card */}
-        <motion.div
-          initial={{ y: 10, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.35 }}
-        >
-          <Card className="relative overflow-hidden border-primary/20 bg-gradient-to-r from-primary/5 to-transparent mb-6 mt-4">
-            <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-primary/10 to-transparent" />
-            <CardContent className="relative p-4 sm:p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-1 uppercase tracking-wide">
-                    Your Streaker Code
-                  </p>
-                  <p className="font-mono font-bold text-xl sm:text-2xl text-primary tracking-wider">
-                    {stats.streakerCode || "Not joined yet"}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Show this code in your videos
-                  </p>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-                  <span className="text-2xl">🏷️</span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Desktop message */}
-        {isMobile === false && (
-          <Card className="border-border/50 bg-muted/50">
-            <CardContent className="p-4 text-center">
-              <Flame className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">
-                Switch to mobile to record and submit new streaks
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Grouped Streaks */}
         <AnimatePresence mode="wait">
@@ -679,11 +610,9 @@ export default function Streaks() {
               <p className="text-sm text-muted-foreground mb-4">
                 Start your sustainable action journey today!
               </p>
-              {isMobile === true && (
-                <Button onClick={() => navigate("/streaks/submit")}>
-                  Record Your First Streak
-                </Button>
-              )}
+              <Button onClick={() => navigate("/streaks/submit")}>
+                Record Your First Streak
+              </Button>
             </motion.div>
           ) : null}
         </AnimatePresence>

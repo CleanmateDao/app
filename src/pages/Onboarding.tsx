@@ -404,10 +404,10 @@ export default function Onboarding() {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            Join 500+ organizers
+                            Join 500+ changemakers
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Making impact across the Globe
+                            Making a difference across the globe
                           </p>
                         </div>
                       </div>

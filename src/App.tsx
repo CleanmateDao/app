@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider, useTheme } from "@/components/ThemeProvider";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import Insights from "./pages/Insights";
 import Cleanups from "./pages/Cleanups";
 import CleanupDetail from "./pages/CleanupDetail";
@@ -24,6 +25,7 @@ import Streaks from "./pages/Streaks";
 import StreakSubmit from "./pages/StreakSubmit";
 import { useWalletAddress } from "./hooks/use-wallet-address";
 import { RecordingProvider } from "./contexts/RecordingContext";
+import { useUser } from "./services/subgraph/queries";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -43,6 +45,28 @@ const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
 
   if (!walletAddress && !skipOnboarding) {
     return <Navigate to="/onboarding" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// Prevent registered users from accessing onboarding
+const PreventRegisteredUsers = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
+  const walletAddress = useWalletAddress();
+  const { data: existingUser, isLoading } = useUser(walletAddress);
+
+  // If user is registered, redirect to dashboard
+  if (walletAddress && existingUser) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  // Show loading state while checking user registration
+  if (walletAddress && isLoading) {
+    return null; // or a loading spinner
   }
 
   return <>{children}</>;
@@ -110,12 +134,20 @@ const AppInner = () => {
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <ScrollToTop />
               <Routes>
                 <Route
                   path="/"
                   element={<Navigate to="/onboarding" replace />}
                 />
-                <Route path="/onboarding" element={<Onboarding />} />
+                <Route
+                  path="/onboarding"
+                  element={
+                    <PreventRegisteredUsers>
+                      <Onboarding />
+                    </PreventRegisteredUsers>
+                  }
+                />
                 <Route
                   path="/dashboard"
                   element={

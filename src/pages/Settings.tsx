@@ -77,7 +77,7 @@ import {
 } from "@/services/subgraph/queries";
 import { transformUserToProfile } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
-import { useWallet } from "@vechain/vechain-kit";
+import { useWallet, WalletButton } from "@vechain/vechain-kit";
 import { useQueryClient } from "@tanstack/react-query";
 import { useSubmitKYCToAPI } from "@/services/api/kyc";
 import {
@@ -115,6 +115,16 @@ export default function Settings() {
   const walletAddress = useWalletAddress();
   const { disconnect } = useWallet();
   const queryClient = useQueryClient();
+
+  // Plus button action preference
+  const [plusButtonAction, setPlusButtonAction] = useState<
+    "organize" | "streak"
+  >(() => {
+    const saved = localStorage.getItem("plusButtonAction");
+    return (saved === "streak" ? "streak" : "organize") as
+      | "organize"
+      | "streak";
+  });
 
   // Fetch user data
   const { data: userData } = useUser(walletAddress);
@@ -371,16 +381,18 @@ export default function Settings() {
         );
       }
 
-      const profileMetadata: UserProfileMetadata<true> = {
-        name: profile.name,
-        bio: profile.bio || undefined,
-        photo: photoUrl,
-        location: {
-          country: profile.country,
-          state: profile.state,
-        },
-        interests: profile.interests,
-      };
+      const profileMetadata: UserProfileMetadata<SupportedCountryCode, false> =
+        {
+          name: profile.name,
+          bio: profile.bio || undefined,
+          photo: photoUrl,
+          location: {
+            country: profile.country,
+            state: profile.state,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+          interests: profile.interests,
+        };
 
       toast.info("Updating profile on blockchain...");
       await updateProfileMutation.sendTransaction(
@@ -628,7 +640,7 @@ export default function Settings() {
                     id="email"
                     type="email"
                     value={profile.email}
-                    disabled={!!profile.email}
+                    disabled={profile?.email?.length > 0}
                   />
                 </div>
               </div>
@@ -1313,7 +1325,7 @@ export default function Settings() {
           </div>
 
           {/* Email Verification Warning */}
-          {userProfile && !userProfile.isEmailVerified && (
+          {userProfile?.email?.length > 0 && !userProfile.isEmailVerified && (
             <Card className="border-l-4 border-l-primary">
               <CardContent className="pt-6">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
@@ -1623,7 +1635,7 @@ export default function Settings() {
                               <p className="text-xs text-muted-foreground mt-2">
                                 Added{" "}
                                 {format(
-                                  new Date(parseInt(member.addedAt) * 1000),
+                                  new Date(member.addedAt * 1000),
                                   "MMM d, yyyy"
                                 )}
                               </p>
@@ -1771,29 +1783,135 @@ export default function Settings() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Plus Button Action */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base font-medium flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Plus Button Action
+              </CardTitle>
+              <CardDescription>
+                Choose what the plus button does when tapped
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-3">
+                <label
+                  className={cn(
+                    "flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all",
+                    plusButtonAction === "organize"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="plusButtonAction"
+                    value="organize"
+                    checked={plusButtonAction === "organize"}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setPlusButtonAction("organize");
+                        localStorage.setItem("plusButtonAction", "organize");
+                        // Dispatch custom event for real-time updates
+                        window.dispatchEvent(
+                          new Event("plusButtonAction-changed")
+                        );
+                        toast.success("Plus button set to Organize a Cleanup");
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Organize a Cleanup</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Opens the organize cleanup page (default)
+                    </p>
+                  </div>
+                </label>
+                <label
+                  className={cn(
+                    "flex items-start gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all",
+                    plusButtonAction === "streak"
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-muted/50"
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="plusButtonAction"
+                    value="streak"
+                    checked={plusButtonAction === "streak"}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setPlusButtonAction("streak");
+                        localStorage.setItem("plusButtonAction", "streak");
+                        // Dispatch custom event for real-time updates
+                        window.dispatchEvent(
+                          new Event("plusButtonAction-changed")
+                        );
+                        toast.success("Plus button set to Submit a new streak");
+                      }
+                    }}
+                    className="mt-1"
+                  />
+                  <div className="flex-1">
+                    <p className="font-medium text-sm">Submit a new streak</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Opens the streak submission page
+                    </p>
+                  </div>
+                </label>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* Account Tab */}
         <TabsContent value="account" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base font-medium flex items-center gap-2">
-                <LogOut className="w-4 h-4" />
-                Session
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Sign Out</p>
-                  <p className="text-sm text-muted-foreground">
-                    Sign out of your account on this device
+          {!walletAddress && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  Connect Wallet
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col items-center justify-center gap-4 py-4">
+                  <p className="text-sm text-muted-foreground text-center">
+                    Connect your wallet to access all settings and features
                   </p>
+                  <WalletButton
+                    mobileVariant="iconAndDomain"
+                    desktopVariant="iconAndDomain"
+                  />
                 </div>
-                <SignOutAlertDialog onSignOut={handleSignOut} />
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
+          {walletAddress && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base font-medium flex items-center gap-2">
+                  <LogOut className="w-4 h-4" />
+                  Session
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-sm">Sign Out</p>
+                    <p className="text-sm text-muted-foreground">
+                      Sign out of your account on this device
+                    </p>
+                  </div>
+                  <SignOutAlertDialog onSignOut={handleSignOut} />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 

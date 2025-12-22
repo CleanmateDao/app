@@ -1,4 +1,7 @@
-import type { SubgraphStreakSubmission, SubgraphUserStreakStats } from "@/services/subgraph/types";
+import type {
+  SubgraphStreakSubmission,
+  SubgraphUserStreakStats,
+} from "@/services/subgraph/types";
 import { bigIntToNumber, bigIntToDate } from "@/services/subgraph/utils";
 
 export interface StreakRule {
@@ -10,23 +13,20 @@ export interface StreakRule {
 export const STREAK_RULES: StreakRule[] = [
   {
     id: "1",
-    title: "Show your streaker code",
-    description: "Write your unique streaker code on paper and show it clearly in the video",
+    title: "Record your action",
+    description:
+      "Film yourself performing a sustainable action (recycling, planting, cleaning, etc.)",
   },
   {
     id: "2",
-    title: "Record your action",
-    description: "Film yourself performing a sustainable action (recycling, planting, cleaning, etc.)",
-  },
-  {
-    id: "3",
     title: "Keep it short",
     description: "Record for up to 5 seconds - make it clear and concise",
   },
   {
-    id: "4",
+    id: "3",
     title: "Be authentic",
-    description: "Show real actions that contribute to environmental sustainability",
+    description:
+      "Show real actions that contribute to environmental sustainability",
   },
 ];
 
@@ -70,11 +70,16 @@ export function transformStreakSubmission(
     submissionId: submission.submissionId,
     metadata: submission.metadata,
     status: statusMap[submission.status] || "pending",
-    submittedAt: bigIntToDate(submission.submittedAt) || "",
-    reviewedAt: submission.reviewedAt ? bigIntToDate(submission.reviewedAt) || null : null,
-    amount: (submission.rewardAmount ?? submission.amount)
-      ? bigIntToNumber((submission.rewardAmount ?? submission.amount) as string)
+    submittedAt: (Number(submission.submittedAt) * 1000).toString(),
+    reviewedAt: submission.reviewedAt
+      ? (Number(submission.reviewedAt) * 1000).toString()
       : null,
+    amount:
+      submission.rewardAmount ?? submission.amount
+        ? bigIntToNumber(
+            (submission.rewardAmount ?? submission.amount) as string
+          )
+        : null,
     rejectionReason: submission.rejectionReason,
     ipfsHashes: submission.ipfsHashes,
     mimetypes: submission.mimetypes,
@@ -95,8 +100,9 @@ export function transformUserStreakStats(
     rejectedSubmissions: bigIntToNumber(stats.rejectedSubmissions),
     pendingSubmissions: bigIntToNumber(stats.pendingSubmissions),
     totalAmount: bigIntToNumber(stats.totalAmount),
-    lastSubmissionAt: stats.lastSubmissionAt ? bigIntToDate(stats.lastSubmissionAt) || null : null,
+    lastSubmissionAt: stats.lastSubmissionAt
+      ? (Number(stats.lastSubmissionAt) * 1000).toString()
+      : null,
     streakerCode: stats.streakerCode || null,
   };
 }
-

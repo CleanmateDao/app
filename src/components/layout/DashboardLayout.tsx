@@ -24,7 +24,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     location.pathname === "/ai-chat";
 
   // Hide topbar when recording video for streak or in map view
-  const hideTopbar = isRecording || isMapView;
+  const hideTopbar =
+    isRecording || isMapView || location.pathname === "/streaks/submit";
 
   // Check if we're in map view and update reactively
   useEffect(() => {

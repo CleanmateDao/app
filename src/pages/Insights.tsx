@@ -241,7 +241,7 @@ export default function Insights() {
         <Card
           className="border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
           onClick={() => {
-            if (!streakStats?.streakerCode) {
+            if (!streakStats) {
               setJoinStreakOpen(true);
             } else {
               navigate("/streaks");
