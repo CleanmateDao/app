@@ -72,6 +72,11 @@ const AppInner = () => {
             loginMessage: "Login to CleanMate",
           },
         }}
+        theme={{
+          modal: {
+            useBottomSheetOnMobile: true,
+          },
+        }}
         dappKit={{
           allowedWallets: ["veworld", "sync2", "wallet-connect"],
           walletConnectOptions: {
@@ -85,7 +90,6 @@ const AppInner = () => {
           },
           usePersistence: true,
           useFirstDetectedSource: false,
-          modalParent: document.body,
         }}
         loginMethods={[
           { method: "vechain", gridColumn: 4 },
@@ -95,7 +99,7 @@ const AppInner = () => {
         loginModalUI={{
           description:
             "Choose between social login through VeChain or by connecting your wallet.",
-          logo: "/logo.png",
+          // logo: "/logo.png",
         }}
         network={{ type: import.meta.env.VITE_VECHAIN_NETWORK }}
         allowCustomTokens={false}
