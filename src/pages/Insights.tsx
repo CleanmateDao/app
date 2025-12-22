@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -164,11 +164,11 @@ export default function Insights() {
     "Summarize my activity",
   ];
 
-  const handleAskQuestion = (question: string) => {
+  const handleAskQuestion = useCallback((question: string) => {
     if (question.trim()) {
       navigate("/ai-chat", { state: { initialQuery: question } });
     }
-  };
+  }, [navigate]);
 
   return (
     <div className="p-4 lg:p-6 space-y-6 lg:space-y-8 max-w-5xl mx-auto">
@@ -537,7 +537,8 @@ export default function Insights() {
                     No cleanup categories yet
                   </h4>
                   <p className="text-xs lg:text-sm text-muted-foreground text-center max-w-sm">
-                    Complete your first cleanup to see category distribution here
+                    Complete your first cleanup to see category distribution
+                    here
                   </p>
                 </div>
               ) : (
@@ -587,7 +588,7 @@ export default function Insights() {
                         </div>
 
                         {/* Category name */}
-                        <p className="text-sm text-muted-foreground mb-3">
+                        <p className="text-sm text-muted-foreground mb-3 capitalize">
                           {item.name}
                         </p>
 

@@ -441,7 +441,7 @@ export default function Settings() {
   };
 
   const handleSignOut = () => {
-    queryClient.invalidateQueries();
+    queryClient.clear();
     disconnect();
     toast.info("Signed out successfully");
   };

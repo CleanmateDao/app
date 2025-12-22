@@ -26,7 +26,7 @@ import type {
   SubmitStreakParams,
 } from "@/types/params";
 
-const SUBGRAPH_REFRESH_DELAY = 2_000;
+const SUBGRAPH_REFRESH_DELAY = 400;
 
 // Helper to create a clause for a contract function call
 function createClause(

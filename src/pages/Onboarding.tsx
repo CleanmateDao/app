@@ -197,7 +197,6 @@ export default function Onboarding() {
   };
 
   const handleComplete = async () => {
-    console.log({ walletAddress });
 
     if (!walletAddress) {
       toast.error("Wallet not connected");

@@ -30,10 +30,12 @@ import { useUser } from "./services/subgraph/queries";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 1000 * 60 * 5, // 5 minutes
-      gcTime: 1000 * 60 * 30, // 30 minutes (formerly cacheTime)
+      staleTime: 0, // Always consider data stale - fetch fresh data every time
+      gcTime: 1000 * 60 * 30, // 30 minutes - cache garbage collection
       retry: 2,
-      refetchOnWindowFocus: false,
+      refetchOnMount: true, // Always refetch on mount for fresh data
+      refetchOnWindowFocus: true, // Always refetch on window focus for fresh data
+      refetchOnReconnect: true, // Refetch on reconnect to sync with server
     },
   },
 });
@@ -66,7 +68,14 @@ const PreventRegisteredUsers = ({
 
   // Show loading state while checking user registration
   if (walletAddress && isLoading) {
-    return null; // or a loading spinner
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   return <>{children}</>;

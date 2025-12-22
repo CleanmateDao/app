@@ -32,7 +32,7 @@ function getPinataClient(): PinataSDK {
  * @returns IPFS URL (e.g., "https://gateway.pinata.cloud/ipfs/QmHash...")
  */
 export async function uploadJSONToIPFS(
-  data: any,
+  data: unknown,
   name?: string
 ): Promise<string> {
   try {

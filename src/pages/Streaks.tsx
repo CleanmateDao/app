@@ -1,6 +1,7 @@
 import { useMemo, useEffect, useRef, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import {
   Flame,
   Plus,
@@ -313,6 +314,32 @@ export default function Streaks() {
     const allSubmissions = pages.flat();
     return allSubmissions.map(transformStreakSubmission);
   }, [submissionsData]);
+
+  // Track which rejected streaks we've already notified about
+  const notifiedRejectionsRef = useRef<Set<string>>(new Set());
+
+  // Show toast notification when a streak is rejected
+  useEffect(() => {
+    if (isLoadingSubmissions || submissions.length === 0) return;
+
+    submissions.forEach((streak) => {
+      // Check if this is a rejected streak with a rejection reason
+      if (
+        streak.status === "rejected" &&
+        streak.rejectionReason &&
+        !notifiedRejectionsRef.current.has(streak.id)
+      ) {
+        // Mark this rejection as notified
+        notifiedRejectionsRef.current.add(streak.id);
+
+        // Show toast notification with rejection reason
+        toast.error("Streak Rejected", {
+          description: streak.rejectionReason,
+          duration: 10000, // Show for 10 seconds to give user time to read
+        });
+      }
+    });
+  }, [submissions, isLoadingSubmissions]);
 
   const groupedStreaks = useMemo(() => {
     return groupStreaksByWeek(submissions);

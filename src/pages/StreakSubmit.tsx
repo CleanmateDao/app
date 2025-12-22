@@ -398,14 +398,8 @@ export default function StreakSubmit() {
 
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: "video/webm" });
-      console.log("Recording stopped, blob created:", {
-        size: blob.size,
-        type: blob.type,
-        chunks: chunksRef.current.length,
-      });
 
       if (blob.size === 0) {
-        console.error("Empty blob created!");
         toast({
           title: "Recording Error",
           description: "The recorded video is empty. Please try again.",
@@ -423,12 +417,6 @@ export default function StreakSubmit() {
       video.preload = "metadata";
       video.src = url;
       video.onloadedmetadata = () => {
-        console.log("Video metadata loaded in onstop:", {
-          duration: video.duration,
-          videoWidth: video.videoWidth,
-          videoHeight: video.videoHeight,
-        });
-
         // Check minimum duration requirement
         const durationMs = video.duration * 1000;
         if (durationMs < MIN_DURATION) {
@@ -564,6 +552,16 @@ export default function StreakSubmit() {
   }, [step, isRecording, startRecording, stopRecording]);
 
   const handleContinue = () => {
+    // Check if user has joined streak (has streakerCode)
+    if (!streakStats?.streakerCode) {
+      toast({
+        title: "Join Streak Required",
+        description: "You must join the streak program before submitting. Please join first.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // Check rate limit before allowing recording
     if (!canSubmit && timeUntilCanSubmit > 0) {
       toast({
@@ -644,6 +642,17 @@ export default function StreakSubmit() {
         description: "No media recorded",
         variant: "destructive",
       });
+      return;
+    }
+
+    // Check if user has joined streak (has streakerCode)
+    if (!streakStats?.streakerCode) {
+      toast({
+        title: "Join Streak Required",
+        description: "You must join the streak program before submitting. Please join first.",
+        variant: "destructive",
+      });
+      setStep("preview");
       return;
     }
 
@@ -1257,9 +1266,14 @@ export default function StreakSubmit() {
             <Button
               className="flex-1 gap-2 h-12 text-base font-semibold shadow-lg shadow-primary/30"
               onClick={handleSubmit}
+              disabled={!streakStats?.streakerCode || !canSubmit}
             >
               <Send className="h-5 w-5" />
-              Submit
+              {!streakStats?.streakerCode
+                ? "Join Streak First"
+                : !canSubmit
+                  ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
+                  : "Submit"}
             </Button>
           </div>
         </motion.div>

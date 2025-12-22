@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -32,7 +32,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
-import { RatingDialog } from "@/components/RatingDialog";
 import { SubmitProofDialog } from "@/components/SubmitProofDialog";
 import { AcceptParticipantAlertDialog } from "@/components/AcceptParticipantAlertDialog";
 import { RejectParticipantAlertDialog } from "@/components/RejectParticipantAlertDialog";
@@ -57,12 +56,10 @@ import { toast } from "sonner";
 import {
   useCleanup,
   useUser,
-  useCleanupUpdates,
 } from "@/services/subgraph/queries";
 import {
   transformCleanup,
   transformUserToProfile,
-  transformCleanupUpdate,
 } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import {
@@ -267,11 +264,17 @@ export default function CleanupDetail() {
         !isOrganizer
     );
 
-  const filteredParticipants = acceptedParticipants.filter(
-    (p) =>
-      p.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-      p.email.toLowerCase().includes(participantSearch.toLowerCase())
-  );
+  const filteredParticipants = useMemo(() => {
+    if (!participantSearch.trim()) {
+      return acceptedParticipants;
+    }
+    const searchLower = participantSearch.toLowerCase();
+    return acceptedParticipants.filter(
+      (p) =>
+        p.name.toLowerCase().includes(searchLower) ||
+        p.email.toLowerCase().includes(searchLower)
+    );
+  }, [acceptedParticipants, participantSearch]);
 
   const displayedParticipants = filteredParticipants.slice(
     0,
@@ -1360,16 +1363,6 @@ export default function CleanupDetail() {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Rating Dialog */}
-      <RatingDialog
-        open={ratingDialogOpen}
-        onOpenChange={setRatingDialogOpen}
-        participantName={selectedParticipant?.name}
-        rating={rating}
-        onRatingChange={setRating}
-        onSubmit={handleRateParticipant}
-      />
 
       {/* Submit for Review Dialog */}
       <SubmitProofDialog

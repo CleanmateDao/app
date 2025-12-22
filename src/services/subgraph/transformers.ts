@@ -368,7 +368,6 @@ export function transformCleanupUpdate(
   // Parse cleanup update metadata (same format as cleanup metadata)
   const metadata = parseCleanupUpdateMetadata(update.metadata);
 
-  console.log({ update });
 
   // Transform media if present
   const media = metadata.media?.map((item, index) => ({

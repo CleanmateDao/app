@@ -232,7 +232,8 @@ export function CleanupMap({ cleanups, className }: CleanupMapProps) {
           });
         },
         (err) => {
-          console.log("Geolocation error:", err.message);
+          // Geolocation error - user may have denied permission or location unavailable
+          // Silently handle - map will use default location
         }
       );
     }
