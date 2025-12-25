@@ -37,6 +37,7 @@ export interface StreakSubmission {
   status: "pending" | "approved" | "rejected";
   submittedAt: string;
   reviewedAt: string | null;
+  /** Amount in wei (as number). Convert to ether using toB3tr() before currency conversion. */
   amount: number | null;
   rejectionReason: string | null;
   ipfsHashes: string[];
@@ -48,6 +49,7 @@ export interface UserStreakStats {
   approvedSubmissions: number;
   rejectedSubmissions: number;
   pendingSubmissions: number;
+  /** Total amount in wei (as number). Convert to ether using toB3tr() before currency conversion. */
   totalAmount: number;
   lastSubmissionAt: string | null;
   streakerCode: string | null;

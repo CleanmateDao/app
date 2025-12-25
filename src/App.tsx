@@ -25,6 +25,7 @@ import Streaks from "./pages/Streaks";
 import StreakSubmit from "./pages/StreakSubmit";
 import { useWalletAddress } from "./hooks/use-wallet-address";
 import { RecordingProvider } from "./contexts/RecordingContext";
+import { ExchangeRateProvider } from "./contexts/ExchangeRateContext";
 import { useUser } from "./services/subgraph/queries";
 
 const queryClient = new QueryClient({
@@ -40,15 +41,9 @@ const queryClient = new QueryClient({
   },
 });
 
-// Check if user has completed onboarding
+// Wrapper component for dashboard routes
+// Users can access dashboard first and navigate to onboarding if needed
 const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
-  const walletAddress = useWalletAddress();
-  const skipOnboarding = localStorage.getItem("skipOnboarding") === "true";
-
-  if (!walletAddress && !skipOnboarding) {
-    return <Navigate to="/onboarding" replace />;
-  }
-
   return <>{children}</>;
 };
 
@@ -138,140 +133,142 @@ const AppInner = () => {
         allowCustomTokens={false}
         darkMode={isDarkMode}
       >
-        <TransactionModalProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <ScrollToTop />
-              <Routes>
-                <Route
-                  path="/"
-                  element={<Navigate to="/onboarding" replace />}
-                />
-                <Route
-                  path="/onboarding"
-                  element={
-                    <PreventRegisteredUsers>
-                      <Onboarding />
-                    </PreventRegisteredUsers>
-                  }
-                />
-                <Route
-                  path="/dashboard"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <Insights />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/cleanups"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <Cleanups />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/cleanups/:id"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <CleanupDetail />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/cleanups/:id/submit-proof"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <SubmitProofOfWork />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/organize"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <OrganizeCleanup />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/rewards"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <Rewards />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/ai-chat"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <AIChat />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/notifications"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <Notifications />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/settings"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <Settings />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/streaks"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <Streaks />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route
-                  path="/streaks/submit"
-                  element={
-                    <RequireOnboarding>
-                      <DashboardLayout>
-                        <StreakSubmit />
-                      </DashboardLayout>
-                    </RequireOnboarding>
-                  }
-                />
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </TooltipProvider>
-        </TransactionModalProvider>
+        <ExchangeRateProvider>
+          <TransactionModalProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <ScrollToTop />
+                <Routes>
+                  <Route
+                    path="/"
+                    element={<Navigate to="/dashboard" replace />}
+                  />
+                  <Route
+                    path="/onboarding"
+                    element={
+                      <PreventRegisteredUsers>
+                        <Onboarding />
+                      </PreventRegisteredUsers>
+                    }
+                  />
+                  <Route
+                    path="/dashboard"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <Insights />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/cleanups"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <Cleanups />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/cleanups/:id"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <CleanupDetail />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/cleanups/:id/submit-proof"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <SubmitProofOfWork />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/organize"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <OrganizeCleanup />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/rewards"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <Rewards />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/ai-chat"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <AIChat />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/notifications"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <Notifications />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <Settings />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/streaks"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <Streaks />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route
+                    path="/streaks/submit"
+                    element={
+                      <RequireOnboarding>
+                        <DashboardLayout>
+                          <StreakSubmit />
+                        </DashboardLayout>
+                      </RequireOnboarding>
+                    }
+                  />
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </TooltipProvider>
+          </TransactionModalProvider>
+        </ExchangeRateProvider>
       </VeChainKitProvider>
     </QueryClientProvider>
   );

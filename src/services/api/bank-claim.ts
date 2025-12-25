@@ -11,8 +11,8 @@ export interface ClaimWithPermitRequest {
   permit: {
     deadline: number;
     v: number;
-    r: string;
-    s: string;
+    r: `0x${string}`;
+    s: `0x${string}`;
   };
 }
 
@@ -35,7 +35,7 @@ async function claimWithPermit(
 ): Promise<ClaimWithPermitResponse["data"]> {
   try {
     const response = await bankClient.post<ClaimWithPermitResponse>(
-      `/banks/claim`,
+      `/api/banks/claim`,
       data
     );
 

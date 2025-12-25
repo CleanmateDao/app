@@ -26,7 +26,7 @@ export interface CurrencyRatesResponse {
 async function getCurrencyRates(): Promise<CurrencyRate[]> {
   try {
     const response = await bankClient.get<CurrencyRatesResponse>(
-      `/currency-rates`
+      `/api/currency-rates`
     );
 
     if (response.data.success && response.data.data) {

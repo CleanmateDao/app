@@ -46,7 +46,6 @@ import { useSearchParams } from "react-router-dom";
 import { useUser } from "@/services/subgraph/queries";
 import {
   SUPPORTED_COUNTRIES,
-  getStatesForCountry,
   type SupportedCountryCode,
 } from "@/constants/supported";
 import { INTEREST_OPTIONS } from "@/constants/interests";
@@ -582,36 +581,15 @@ export default function Onboarding() {
                         </Select>
                       </div>
 
-                      {(() => {
-                        const states = getStatesForCountry(data.country);
-                        if (states.length === 0) return null;
-
-                        return (
-                          <div className="space-y-2">
-                            <Label htmlFor="state">State *</Label>
-                            <Select
-                              value={data.state}
-                              onValueChange={(value) =>
-                                updateData({ state: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select state" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {states.map((state) => (
-                                  <SelectItem
-                                    key={state.code}
-                                    value={state.name}
-                                  >
-                                    {state.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        );
-                      })()}
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State/Province *</Label>
+                        <Input
+                          id="state"
+                          placeholder="Enter state or province"
+                          value={data.state}
+                          onChange={(e) => updateData({ state: e.target.value })}
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 </div>

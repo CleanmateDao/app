@@ -4,8 +4,6 @@ import {
   Gift,
   ArrowUpRight,
   ArrowDownLeft,
-  ExternalLink,
-  Copy,
   Download,
   Loader2,
   Coins,
@@ -40,17 +38,19 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
   SUPPORTED_CURRENCIES,
-  type SupportedCurrencyCode,
+  type SupportedCountryCode,
+  isBankSupported,
 } from "@/constants/supported";
 import { useBanks } from "@/services/api/banks";
 import { useCurrencyRates } from "@/services/api/currency-rates";
 import { useClaimRewardsWithPermit } from "@/services/api/bank-claim";
+import { usePermitAddress } from "@/services/api/permit-address";
+import { getNonce } from "@/services/api/nonce";
 import { toast } from "sonner";
-import { Wallet, Check } from "lucide-react";
+import { Wallet } from "lucide-react";
 import { useInfiniteTransactions, useUser } from "@/services/subgraph/queries";
 import { useClaimRewards } from "@/services/contracts/mutations";
-import { useDAppKitWallet } from "@vechain/vechain-kit";
-import { ethers } from "ethers";
+import { useSignTypedData } from "@vechain/vechain-kit";
 import {
   transformTransaction,
   transformUserToProfile,
@@ -79,14 +79,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { toReadableB3tr } from "@/lib/utils";
-import { formatEther, parseEther } from "viem";
+import { toReadableB3tr, toB3tr, formatAddress } from "@/lib/utils";
+import { formatEther, parseEther, parseSignature } from "viem";
+import { useExchangeRate } from "@/contexts/ExchangeRateContext";
 
 type PaymentMethod = "wallet" | "bank";
 
 export default function Rewards() {
   const isMobile = useIsMobile();
   const walletAddress = useWalletAddress();
+  const { formatCurrencyEquivalent, convertB3TRToCurrency } = useExchangeRate();
 
   // Fetch user data
   const { data: userData } = useUser(walletAddress);
@@ -97,6 +99,14 @@ export default function Rewards() {
         : null,
     [userData, walletAddress]
   );
+
+  // Check if user's country supports banks
+  const userCountry = userProfile?.country?.toUpperCase() as
+    | SupportedCountryCode
+    | undefined;
+  const isBankSupportedForUser = userCountry
+    ? isBankSupported(userCountry)
+    : false;
 
   // Fetch cleanups to get cleanup metadata for rewards
   const { data: cleanupsData } = useCleanups({
@@ -180,8 +190,6 @@ export default function Rewards() {
   const [claimDialogOpen, setClaimDialogOpen] = useState(false);
   const [claimAmount, setClaimAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("wallet");
-  // For wallet payment, use connected wallet address
-  const [selectedWalletId, setSelectedWalletId] = useState<string>("");
   // For bank payment, fetch from API
   const { data: bankAccounts = [] } = useBanks(walletAddress);
   const { data: currencyRates = [] } = useCurrencyRates();
@@ -204,7 +212,7 @@ export default function Rewards() {
   );
 
   // Hooks for claiming
-  const { account, requestTypedData } = useDAppKitWallet();
+  const { signTypedData } = useSignTypedData();
   const {
     sendTransaction: claimRewardsWallet,
     isTransactionPending: isClaimingWallet,
@@ -212,16 +220,9 @@ export default function Rewards() {
   const { mutate: claimRewardsBank, isPending: isClaimingBank } =
     useClaimRewardsWithPermit();
 
-  // Use connected wallet address for wallet payment
-  const selectedWallet = walletAddress
-    ? {
-        id: "connected",
-        name: "Connected Wallet",
-        address: walletAddress,
-        type: "vechain" as const,
-        isDefault: true,
-      }
-    : null;
+  // Fetch permit address info for domain separator
+  const { data: permitAddressInfo } = usePermitAddress();
+
   // For bank accounts, use API data
   const selectedBank = bankAccounts.find((b) => b.id === selectedBankId);
   const selectedCurrencyData = currencyRates.find(
@@ -244,7 +245,8 @@ export default function Rewards() {
     }
   }, [currencyRates, selectedCurrency]);
 
-  const convertB3TRToCurrency = (b3trAmount: number): string => {
+  // Helper for claim dialog currency conversion (uses selected currency, not user's country currency)
+  const convertB3TRToSelectedCurrency = (b3trAmount: number): string => {
     const converted = b3trAmount * selectedCurrencyData.rateToB3TR;
     return `${selectedCurrencyData.symbol}${converted.toLocaleString(
       undefined,
@@ -252,13 +254,11 @@ export default function Rewards() {
     )}`;
   };
 
-  const truncateAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
-  };
-
   const maskAccountNumber = (accountNumber: string) => {
     return `****${accountNumber.slice(-4)}`;
   };
+
+  const MIN_B3TR_AMOUNT = 20; // Minimum B3TR amount for bank claims
 
   const handleClaimRewards = async () => {
     if (!claimAmount || Number(claimAmount) <= 0) {
@@ -297,8 +297,16 @@ export default function Rewards() {
     }
 
     // Bank payment method - use permit signature
+    // Check minimum B3TR amount for bank claims
+    if (Number(claimAmount) < MIN_B3TR_AMOUNT) {
+      toast.error(
+        `Minimum claim amount is ${MIN_B3TR_AMOUNT} B3TR. You attempted to claim ${claimAmount} B3TR.`
+      );
+      return;
+    }
+
     const bankIdToUse = selectedBankId || defaultBank?.id;
-    if (!bankIdToUse || !walletAddress || !account || !requestTypedData) {
+    if (!bankIdToUse || !walletAddress) {
       toast.error("Please connect your wallet and add a bank account");
       return;
     }
@@ -310,8 +318,38 @@ export default function Rewards() {
 
     setIsClaiming(true);
     try {
-      // Get nonce from contract (need to create a provider for this)
-      // For now, we'll use a simple approach - the backend can handle nonce retrieval
+      // Fetch current nonce from backend (must be fresh to prevent replay attacks)
+      if (!walletAddress) {
+        toast.error("Wallet address is required");
+        setIsClaiming(false);
+        return;
+      }
+
+      const nonceString = await getNonce(walletAddress);
+
+      if (!nonceString) {
+        toast.error("Failed to get valid nonce from server");
+        setIsClaiming(false);
+        return;
+      }
+
+      // Get permit address info from backend (contains chainId and contract address)
+      if (!permitAddressInfo) {
+        toast.error("Failed to load permit address information");
+        setIsClaiming(false);
+        return;
+      }
+
+      // Validate permit address info has all required fields
+      if (
+        !permitAddressInfo.chainId ||
+        !permitAddressInfo.rewardsManagerAddress
+      ) {
+        toast.error("Invalid permit.");
+        setIsClaiming(false);
+        return;
+      }
+
       // Set deadline (1 hour from now)
       const deadline = Math.floor(Date.now() / 1000) + 3600;
 
@@ -319,8 +357,8 @@ export default function Rewards() {
       const domain = {
         name: "RewardsManager",
         version: "1",
-        chainId: 100010, // VeChain testnet
-        verifyingContract: import.meta.env.VITE_REWARDS_MANAGER_ADDRESS || "",
+        chainId: Number(permitAddressInfo.chainId),
+        verifyingContract: permitAddressInfo.rewardsManagerAddress,
       };
 
       const types = {
@@ -332,29 +370,34 @@ export default function Rewards() {
         ],
       };
 
-      // We need to get the nonce - for now, use 0 and let backend handle it
-      // In production, you'd fetch this from the contract
-      const nonce = 0;
+      // Convert claimAmount from B3TR to wei for the permit signature and API
+      const amountInWei = parseEther(claimAmount).toString();
+
+      const nonce = BigInt(nonceString);
 
       const message = {
         owner: walletAddress,
-        amount: claimAmount,
+        amount: amountInWei,
         deadline: deadline,
-        nonce: nonce,
+        nonce: nonce.toString(),
       };
 
-      const signature = await requestTypedData(domain, types, message);
+      const signature = await signTypedData({
+        primaryType: "Permit",
+        domain,
+        types,
+        message,
+      });
 
-      // Parse signature (VeChain returns it in a specific format)
-      // VeChain signatures are typically 65 bytes: r (32) + s (32) + v (1)
-      const sigBytes = ethers.getBytes(signature);
-      const r = ethers.hexlify(sigBytes.slice(0, 32));
-      const s = ethers.hexlify(sigBytes.slice(32, 64));
-      const v = sigBytes[64];
+      // Parse signature using viem
+      const signatureHex = signature.startsWith("0x")
+        ? signature
+        : `0x${signature}`;
+      const { r, s, v } = parseSignature(signatureHex as `0x${string}`);
 
       const permit = {
-        deadline,
-        v,
+        deadline: deadline,
+        v: Number(v),
         r,
         s,
       };
@@ -364,7 +407,7 @@ export default function Rewards() {
         {
           userId: walletAddress, // Using wallet address as userId
           walletAddress,
-          amount: claimAmount,
+          amount: amountInWei,
           bankId: bankIdToUse,
           permit,
         },
@@ -395,11 +438,6 @@ export default function Rewards() {
     if (typeFilter === "all") return true;
     return tx.type === typeFilter;
   });
-
-  const copyAddress = (address: string) => {
-    navigator.clipboard.writeText(address);
-    toast.success("Address copied to clipboard");
-  };
 
   const exportToCSV = () => {
     const headers = ["Date", "Type", "Amount", "Cleanup", "Status", "TX Hash"];
@@ -489,6 +527,15 @@ export default function Rewards() {
               {toReadableB3tr(userProfile?.pendingRewards || 0)}{" "}
               <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
+            {formatCurrencyEquivalent(
+              toB3tr((userProfile?.pendingRewards || 0).toString())
+            ) && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {formatCurrencyEquivalent(
+                  toB3tr((userProfile?.pendingRewards || 0).toString())
+                )}
+              </p>
+            )}
             {isMobile ? (
               <Drawer open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
                 <DrawerTrigger asChild>
@@ -527,23 +574,29 @@ export default function Rewards() {
                         <button
                           type="button"
                           onClick={() => setPaymentMethod("bank")}
-                          disabled={true}
+                          disabled={!isBankSupportedForUser}
                           className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
                             paymentMethod === "bank"
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50"
-                          } cursor-not-allowed opacity-60`}
+                          } ${
+                            !isBankSupportedForUser
+                              ? "cursor-not-allowed opacity-60"
+                              : ""
+                          }`}
                         >
                           <Building2 className="w-4 h-4 text-primary" />
                           <span className="text-sm font-medium">
                             Bank Account
                           </span>
-                          <Badge
-                            variant="secondary"
-                            className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
-                          >
-                            Soon
-                          </Badge>
+                          {!isBankSupportedForUser && (
+                            <Badge
+                              variant="secondary"
+                              className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
+                            >
+                              Soon
+                            </Badge>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -687,7 +740,9 @@ export default function Rewards() {
                               Converted Amount
                             </span>
                             <span className="font-medium text-primary">
-                              {convertB3TRToCurrency(Number(claimAmount))}
+                              {convertB3TRToSelectedCurrency(
+                                Number(claimAmount)
+                              )}
                             </span>
                           </div>
                         )}
@@ -705,7 +760,7 @@ export default function Rewards() {
                           </span>
                           <span className="text-xs truncate max-w-[150px]">
                             {paymentMethod === "wallet"
-                              ? truncateAddress(walletAddress || "")
+                              ? formatAddress(walletAddress || "")
                               : `${selectedBank?.bankName} (${maskAccountNumber(
                                   selectedBank?.accountNumber || ""
                                 )})`}
@@ -724,7 +779,7 @@ export default function Rewards() {
                         !claimAmount ||
                         (paymentMethod === "wallet"
                           ? !walletAddress
-                          : !selectedBankId || !account)
+                          : !selectedBankId)
                       }
                       className="w-full"
                     >
@@ -786,23 +841,29 @@ export default function Rewards() {
                         <button
                           type="button"
                           onClick={() => setPaymentMethod("bank")}
-                          disabled={true}
+                          disabled={!isBankSupportedForUser}
                           className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
                             paymentMethod === "bank"
                               ? "border-primary bg-primary/5"
                               : "border-border hover:border-primary/50"
-                          } cursor-not-allowed opacity-60`}
+                          } ${
+                            !isBankSupportedForUser
+                              ? "cursor-not-allowed opacity-60"
+                              : ""
+                          }`}
                         >
                           <Building2 className="w-4 h-4 text-primary" />
                           <span className="text-sm font-medium">
                             Bank Account
                           </span>
-                          <Badge
-                            variant="secondary"
-                            className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
-                          >
-                            Soon
-                          </Badge>
+                          {!isBankSupportedForUser && (
+                            <Badge
+                              variant="secondary"
+                              className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
+                            >
+                              Soon
+                            </Badge>
+                          )}
                         </button>
                       </div>
                     </div>
@@ -826,7 +887,7 @@ export default function Rewards() {
                                 </Badge>
                               </div>
                               <p className="font-mono text-xs text-muted-foreground truncate">
-                                {truncateAddress(walletAddress)}
+                                {formatAddress(walletAddress)}
                               </p>
                             </div>
                           </div>
@@ -974,7 +1035,9 @@ export default function Rewards() {
                               Converted Amount
                             </span>
                             <span className="font-medium text-primary">
-                              {convertB3TRToCurrency(Number(claimAmount))}
+                              {convertB3TRToSelectedCurrency(
+                                Number(claimAmount)
+                              )}
                             </span>
                           </div>
                         )}
@@ -992,7 +1055,7 @@ export default function Rewards() {
                           </span>
                           <span className="font-mono text-xs">
                             {paymentMethod === "wallet"
-                              ? truncateAddress(walletAddress || "")
+                              ? formatAddress(walletAddress || "")
                               : `${selectedBank?.bankName} (${maskAccountNumber(
                                   selectedBank?.accountNumber || ""
                                 )})`}
@@ -1018,7 +1081,7 @@ export default function Rewards() {
                         !claimAmount ||
                         (paymentMethod === "wallet"
                           ? !walletAddress
-                          : !selectedBankId || !account)
+                          : !selectedBankId)
                       }
                     >
                       {isClaiming || isClaimingWallet || isClaimingBank ? (
@@ -1055,6 +1118,15 @@ export default function Rewards() {
               {toReadableB3tr(userProfile?.totalRewards || 0)}{" "}
               <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
+            {formatCurrencyEquivalent(
+              toB3tr((userProfile?.totalRewards || 0).toString())
+            ) && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {formatCurrencyEquivalent(
+                  toB3tr((userProfile?.totalRewards || 0).toString())
+                )}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -1076,6 +1148,15 @@ export default function Rewards() {
               {toReadableB3tr(userProfile?.claimedRewards || 0)}{" "}
               <span className="text-lg text-muted-foreground">B3TR</span>
             </p>
+            {formatCurrencyEquivalent(
+              toB3tr((userProfile?.claimedRewards || 0).toString())
+            ) && (
+              <p className="text-sm text-muted-foreground mt-1">
+                {formatCurrencyEquivalent(
+                  toB3tr((userProfile?.claimedRewards || 0).toString())
+                )}
+              </p>
+            )}
           </CardContent>
         </Card>
       </motion.div>
@@ -1171,15 +1252,30 @@ export default function Rewards() {
                           </span>
                         </TableCell>
                         <TableCell>
-                          <span
-                            className={`font-medium ${
-                              tx.type === "earned" ? "text-status-approved" : ""
-                            }`}
-                          >
-                            {tx.type === "earned" ? "+" : "-"}
-                            {toReadableB3tr(tx.amount)}{" "}
-                            <span className="text-muted-foreground">B3TR</span>
-                          </span>
+                          <div className="flex flex-col">
+                            <span
+                              className={`font-medium ${
+                                tx.type === "earned"
+                                  ? "text-status-approved"
+                                  : ""
+                              }`}
+                            >
+                              {tx.type === "earned" ? "+" : "-"}
+                              {toReadableB3tr(tx.amount)}{" "}
+                              <span className="text-muted-foreground">
+                                B3TR
+                              </span>
+                            </span>
+                            {formatCurrencyEquivalent(
+                              toB3tr(tx.amount.toString())
+                            ) && (
+                              <span className="text-xs text-muted-foreground mt-0.5">
+                                {formatCurrencyEquivalent(
+                                  toB3tr(tx.amount.toString())
+                                )}
+                              </span>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge

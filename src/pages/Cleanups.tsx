@@ -3,11 +3,8 @@ import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
-  Search,
   MoreHorizontal,
   Eye,
-  Trash2,
-  Download,
   MapPin,
   Calendar,
   Users,
@@ -113,8 +110,6 @@ export default function Cleanups() {
   const [activeTab, setActiveTab] = useState<
     CleanupStatusUI | "all" | "created"
   >(isValidTab(tabFromUrl) ? tabFromUrl : "all");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [cleanupToDelete, setCleanupToDelete] = useState<Cleanup | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">(() => {
     const saved = localStorage.getItem("cleanups-view-mode");
     return saved === "list" || saved === "map" ? saved : "map";
@@ -218,14 +213,6 @@ export default function Cleanups() {
     // Dispatch custom event to notify DashboardLayout of view mode change
     window.dispatchEvent(new Event("cleanups-view-mode-changed"));
   }, [viewMode]);
-
-  const handleDeleteCleanup = () => {
-    // Note: This would need to call a contract function to delete
-    // For now, we'll just show a toast
-    toast.success("Cleanup deletion requires contract interaction");
-    setDeleteDialogOpen(false);
-    setCleanupToDelete(null);
-  };
 
   // Full screen map mode
   if (viewMode === "map") {

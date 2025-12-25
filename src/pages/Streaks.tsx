@@ -46,7 +46,8 @@ import {
   subWeeks,
 } from "date-fns";
 import africanPattern from "@/assets/african-pattern.jpg";
-import { toReadableB3tr } from "@/lib/utils";
+import { toReadableB3tr, toB3tr } from "@/lib/utils";
+import { useExchangeRate } from "@/contexts/ExchangeRateContext";
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -111,6 +112,7 @@ function StreakCard({
   streak: StreakSubmission;
   onClick: () => void;
 }) {
+  const { formatCurrencyEquivalent } = useExchangeRate();
   const statusConfig = {
     pending: {
       icon: Clock,
@@ -199,11 +201,22 @@ function StreakCard({
         {/* Bottom overlay info */}
         <div className="absolute bottom-0 left-0 right-0 p-2.5 z-10">
           {streak.status === "approved" && streak.amount && (
-            <div className="flex items-center gap-1 mb-1">
-              <span className="text-sm font-bold text-white">
-                +{toReadableB3tr(streak.amount)}
-              </span>
-              <span className="text-xs text-white/70">B3TR</span>
+            <div className="flex flex-col gap-0.5 mb-1">
+              <div className="flex items-center gap-1">
+                <span className="text-sm font-bold text-white">
+                  +{toReadableB3tr(streak.amount)}
+                </span>
+                <span className="text-xs text-white/70">B3TR</span>
+              </div>
+              {formatCurrencyEquivalent(
+                toB3tr(streak.amount.toString())
+              ) && (
+                <span className="text-[10px] text-white/60">
+                  {formatCurrencyEquivalent(
+                    toB3tr(streak.amount.toString())
+                  )}
+                </span>
+              )}
             </div>
           )}
           {streak.status === "rejected" && streak.rejectionReason && (
@@ -231,6 +244,7 @@ function StreakCard({
 }
 
 export default function Streaks() {
+  const { formatCurrencyEquivalent } = useExchangeRate();
   const navigate = useNavigate();
   const walletAddress = useWalletAddress();
 
@@ -497,17 +511,30 @@ export default function Streaks() {
                         </span>
                       </div>
                       <div className="flex items-baseline gap-2">
-                        <motion.span
-                          className="text-4xl sm:text-5xl font-bold text-primary"
-                          initial={{ scale: 1.2 }}
-                          animate={{ scale: 1 }}
-                          transition={{ type: "spring", stiffness: 300 }}
-                        >
-                          {toReadableB3tr(stats.totalAmount)}
-                        </motion.span>
-                        <span className="text-lg font-semibold text-primary/70">
-                          B3TR
-                        </span>
+                        <div className="flex flex-col items-center">
+                          <div className="flex items-baseline gap-2">
+                            <motion.span
+                              className="text-4xl sm:text-5xl font-bold text-primary"
+                              initial={{ scale: 1.2 }}
+                              animate={{ scale: 1 }}
+                              transition={{ type: "spring", stiffness: 300 }}
+                            >
+                              {toReadableB3tr(stats.totalAmount)}
+                            </motion.span>
+                            <span className="text-lg font-semibold text-primary/70">
+                              B3TR
+                            </span>
+                          </div>
+                          {formatCurrencyEquivalent(
+                            toB3tr(stats.totalAmount.toString())
+                          ) && (
+                            <span className="text-sm text-muted-foreground mt-1">
+                              {formatCurrencyEquivalent(
+                                toB3tr(stats.totalAmount.toString())
+                              )}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </div>
