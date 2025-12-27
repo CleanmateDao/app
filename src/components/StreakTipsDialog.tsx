@@ -127,7 +127,7 @@ export function StreakTipsDialog({
               {tipsData.images.map((image, index) => (
                 <CarouselItem
                   key={index}
-                  className="pl-2 md:pl-4 basis-[71.43%]"
+                  className="pl-2 md:pl-4 basis-1/2 sm:basis-1/3 md:basis-1/4"
                 >
                   <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg border bg-muted">
                     <img

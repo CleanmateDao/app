@@ -42,14 +42,28 @@ export async function initCamera(
             advanced: [{ zoom: zoomValue } as unknown as MediaTrackConstraints],
           });
         } catch (zoomError) {
-          console.warn(`Could not set zoom to ${config.zoom ?? DEFAULT_ZOOM}x:`, zoomError);
+          console.warn(
+            `Could not set zoom to ${config.zoom ?? DEFAULT_ZOOM}x:`,
+            zoomError
+          );
         }
       }
     }
 
     if (videoElement) {
       videoElement.srcObject = stream;
-      await videoElement.play();
+      // Ensure video is set to play
+      videoElement.muted = true;
+      videoElement.playsInline = true;
+      try {
+        await videoElement.play();
+      } catch (playError) {
+        console.warn("Video play error:", playError);
+        // Try to play again after a short delay
+        setTimeout(() => {
+          videoElement.play().catch(console.error);
+        }, 100);
+      }
     }
 
     return stream;
@@ -67,4 +81,3 @@ export function stopCamera(stream: MediaStream | null): void {
     stream.getTracks().forEach((track) => track.stop());
   }
 }
-

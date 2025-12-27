@@ -137,11 +137,24 @@ export default function StreakSubmit() {
 
   const handleInitCamera = useCallback(async () => {
     try {
-      const stream = await initCamera(videoRef.current, { zoom: 1.0 });
+      // Ensure old stream is stopped before starting new one
+      if (streamRef.current) {
+        stopCamera(streamRef.current);
+        streamRef.current = null;
+      }
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
+
+      const stream = await initCamera(videoRef.current, {
+        zoom: 0.5,
+      });
       if (stream) {
         streamRef.current = stream;
       }
     } catch (error) {
+      console.error("Camera initialization error:", error);
       toast({
         title: "Camera Error",
         description: "Unable to access camera. Please grant permissions.",
@@ -343,12 +356,16 @@ export default function StreakSubmit() {
         const errorMessage =
           error instanceof Error ? error.message : "Recording failed";
         toast({
-          title: errorMessage.includes("Too Short")
-            ? "Video Too Short"
-            : "Recording Error",
+          title:
+            errorMessage.includes("at least") ||
+            errorMessage.includes("Too Short")
+              ? "Video Too Short"
+              : "Recording Error",
           description: errorMessage,
           variant: "destructive",
         });
+        // Don't go to preview if recording is too short
+        // Stay on record step
       }
     };
 
@@ -357,8 +374,16 @@ export default function StreakSubmit() {
     setIsRecording(true);
     setContextRecording(true);
 
-    // Animate progress
+    // Animate progress smoothly with requestAnimationFrame
     const updateProgress = () => {
+      // Check if recording is still active by checking mediaRecorder state
+      if (
+        !mediaRecorderRef.current ||
+        mediaRecorderRef.current.state === "inactive"
+      ) {
+        return;
+      }
+
       const elapsed = Date.now() - recordingStartRef.current;
       const progress = Math.min((elapsed / MAX_DURATION) * 100, 100);
       setRecordingProgress(progress);
@@ -394,9 +419,12 @@ export default function StreakSubmit() {
     const button = recordButtonRef.current;
     if (!button || step !== "record") return;
 
+    let touchStarted = false;
+
     const handleTouchStart = (e: TouchEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      touchStarted = true;
       // Start recording on press/hold
       if (!isRecording) {
         startRecording();
@@ -406,15 +434,19 @@ export default function StreakSubmit() {
     const handleTouchEnd = (e: TouchEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      // Stop recording on release
-      if (isRecording) {
-        stopRecording();
+      if (touchStarted) {
+        touchStarted = false;
+        // Stop recording on release
+        if (isRecording) {
+          stopRecording();
+        }
       }
     };
 
     const handleTouchCancel = (e: TouchEvent) => {
       e.preventDefault();
       e.stopPropagation();
+      touchStarted = false;
       // Stop recording if touch is cancelled
       if (isRecording) {
         stopRecording();
@@ -649,7 +681,7 @@ export default function StreakSubmit() {
 
   // Recording Screen
   if (step === "record") {
-    const circumference = 2 * Math.PI * 52;
+    const circumference = 2 * Math.PI * 40; // Adjusted for smaller button
     // Calculate strokeDashoffset: at 0% progress, offset = circumference (no stroke visible)
     // At 100% progress, offset = 0 (full stroke visible)
     const strokeDashoffset =
@@ -731,6 +763,7 @@ export default function StreakSubmit() {
           playsInline
           muted
           className="flex-1 object-cover w-full h-full"
+          style={{ transform: "scaleX(1)" }}
         />
 
         {/* Recording overlay effect */}
@@ -777,37 +810,38 @@ export default function StreakSubmit() {
 
               {/* Progress ring */}
               <svg
-                className="absolute -inset-3 w-[120px] h-[120px]"
-                viewBox="0 0 120 120"
+                className="absolute -inset-2 w-[88px] h-[88px] pointer-events-none"
+                viewBox="0 0 88 88"
+                style={{ willChange: "auto" }}
               >
                 {/* Background circle */}
                 <circle
-                  cx="60"
-                  cy="60"
-                  r="52"
+                  cx="44"
+                  cy="44"
+                  r="40"
                   fill="none"
                   stroke="rgba(255,255,255,0.15)"
-                  strokeWidth="6"
+                  strokeWidth="4"
                 />
                 {/* Progress circle */}
                 <circle
-                  cx="60"
-                  cy="60"
-                  r="52"
+                  cx="44"
+                  cy="44"
+                  r="40"
                   fill="none"
                   stroke={
                     isRecording
                       ? "hsl(var(--status-rejected))"
                       : "hsl(var(--primary))"
                   }
-                  strokeWidth="6"
+                  strokeWidth="4"
                   strokeLinecap="round"
                   strokeDasharray={circumference}
                   strokeDashoffset={strokeDashoffset}
-                  transform="rotate(-90 60 60)"
+                  transform="rotate(-90 44 44)"
                   style={{
                     transition: isRecording
-                      ? "stroke-dashoffset 0.1s linear"
+                      ? "none"
                       : "stroke-dashoffset 0.3s ease-out",
                     opacity: isRecording ? 1 : 0.3,
                   }}
@@ -818,7 +852,7 @@ export default function StreakSubmit() {
               <motion.button
                 ref={recordButtonRef}
                 whileTap={{ scale: 0.95 }}
-                className={`relative w-[96px] h-[96px] rounded-full border-4 border-white flex items-center justify-center transition-all duration-200 select-none touch-none ${
+                className={`relative w-[72px] h-[72px] rounded-full border-2 border-white flex items-center justify-center transition-all duration-200 select-none touch-none ${
                   isRecording ? "bg-status-rejected/20" : "bg-white/10"
                 }`}
                 style={{
@@ -856,7 +890,7 @@ export default function StreakSubmit() {
                       initial={{ scale: 0, rotate: 180 }}
                       animate={{ scale: 1, rotate: 0 }}
                       exit={{ scale: 0 }}
-                      className="w-8 h-8 bg-white rounded-md"
+                      className="w-6 h-6 bg-white rounded-md"
                     />
                   ) : (
                     <motion.div
@@ -864,7 +898,7 @@ export default function StreakSubmit() {
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       exit={{ scale: 0 }}
-                      className="w-16 h-16 bg-status-rejected rounded-full shadow-lg shadow-status-rejected/50"
+                      className="w-12 h-12 bg-status-rejected rounded-full shadow-lg shadow-status-rejected/50"
                     />
                   )}
                 </AnimatePresence>
