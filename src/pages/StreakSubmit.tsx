@@ -100,7 +100,6 @@ export default function StreakSubmit() {
   }, [streakStats]);
 
   const [step, setStep] = useState<SubmitStep>("record");
-  const [dontShowRules, setDontShowRules] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState("Waste");
@@ -458,11 +457,8 @@ export default function StreakSubmit() {
       return;
     }
 
-    if (dontShowRules) {
-      localStorage.setItem("skipStreakRules", "true");
-    }
     setStep("record");
-  }, [streakStats, canSubmit, timeUntilCanSubmit, dontShowRules, toast]);
+  }, [streakStats, canSubmit, timeUntilCanSubmit, toast]);
 
   const handleRetake = useCallback(() => {
     cleanupMediaItems(mediaItems);
