@@ -1,7 +1,6 @@
 import { useMemo, useEffect, useRef, useCallback, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { toast } from "sonner";
 import {
   Flame,
   Plus,
@@ -19,14 +18,26 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   MediaViewerDialog,
   type MediaItem,
 } from "@/components/MediaViewerDialog";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   StreakSubmission,
   transformStreakSubmission,
@@ -108,9 +119,11 @@ function groupStreaksByWeek(streaks: StreakSubmission[]) {
 function StreakCard({
   streak,
   onClick,
+  onRejectionClick,
 }: {
   streak: StreakSubmission;
   onClick: () => void;
+  onRejectionClick?: (reason: string) => void;
 }) {
   const { formatCurrencyEquivalent } = useExchangeRate();
   const statusConfig = {
@@ -159,15 +172,11 @@ function StreakCard({
         {videoUrl ? (
           <video
             src={videoUrl}
+            poster={videoUrl}
             className="absolute inset-0 w-full h-full object-cover"
             preload="metadata"
             muted
             playsInline
-            onLoadedMetadata={(e) => {
-              // Seek to first frame for thumbnail
-              const video = e.currentTarget;
-              video.currentTime = 0.1;
-            }}
           />
         ) : (
           <div className="absolute inset-0 bg-gradient-to-br from-muted-foreground/20 to-muted flex items-center justify-center">
@@ -208,31 +217,24 @@ function StreakCard({
                 </span>
                 <span className="text-xs text-white/70">B3TR</span>
               </div>
-              {formatCurrencyEquivalent(
-                toB3tr(streak.amount.toString())
-              ) && (
+              {formatCurrencyEquivalent(toB3tr(streak.amount.toString())) && (
                 <span className="text-[10px] text-white/60">
-                  {formatCurrencyEquivalent(
-                    toB3tr(streak.amount.toString())
-                  )}
+                  {formatCurrencyEquivalent(toB3tr(streak.amount.toString()))}
                 </span>
               )}
             </div>
           )}
           {streak.status === "rejected" && streak.rejectionReason && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex items-center gap-1 mb-1 cursor-help">
-                  <Info className="h-3 w-3 text-status-rejected" />
-                  <span className="text-xs text-white/70 truncate">
-                    See reason
-                  </span>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent className="max-w-xs">
-                <p className="text-sm">{streak.rejectionReason}</p>
-              </TooltipContent>
-            </Tooltip>
+            <div
+              className="flex items-center gap-1 mb-1 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRejectionClick?.(streak.rejectionReason!);
+              }}
+            >
+              <Info className="h-3 w-3 text-status-rejected" />
+              <span className="text-xs text-white/70 truncate">See reason</span>
+            </div>
           )}
           <p className="text-[10px] text-white/60">
             {format(new Date(Number(streak.submittedAt)), "MMM d · h:mm a")}
@@ -253,9 +255,16 @@ export default function Streaks() {
   const [viewerMedia, setViewerMedia] = useState<MediaItem[]>([]);
   const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
 
+  // Rejection reason drawer/dialog state
+  const [rejectionDrawerOpen, setRejectionDrawerOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState<string | null>(null);
+
+  const isMobile = useIsMobile();
+
   // Fetch streak stats
   const { data: streakStatsData, isLoading: isLoadingStats } =
-    useUserStreakStats(walletAddress || undefined);
+    useUserStreakStats(walletAddress);
+
   const stats = useMemo(() => {
     const transformed = transformUserStreakStats(streakStatsData || null);
     return (
@@ -281,7 +290,6 @@ export default function Streaks() {
   // Calculate if user can submit based on last submission time
   const canSubmit = useMemo(() => {
     if (!stats.lastSubmissionAt) return true;
-    // Use timeUntilCanSubmit to ensure button becomes clickable when countdown reaches zero
     return timeUntilCanSubmit === 0;
   }, [stats.lastSubmissionAt, timeUntilCanSubmit]);
 
@@ -329,31 +337,11 @@ export default function Streaks() {
     return allSubmissions.map(transformStreakSubmission);
   }, [submissionsData]);
 
-  // Track which rejected streaks we've already notified about
-  const notifiedRejectionsRef = useRef<Set<string>>(new Set());
-
-  // Show toast notification when a streak is rejected
-  useEffect(() => {
-    if (isLoadingSubmissions || submissions.length === 0) return;
-
-    submissions.forEach((streak) => {
-      // Check if this is a rejected streak with a rejection reason
-      if (
-        streak.status === "rejected" &&
-        streak.rejectionReason &&
-        !notifiedRejectionsRef.current.has(streak.id)
-      ) {
-        // Mark this rejection as notified
-        notifiedRejectionsRef.current.add(streak.id);
-
-        // Show toast notification with rejection reason
-        toast.error("Streak Rejected", {
-          description: streak.rejectionReason,
-          duration: 10000, // Show for 10 seconds to give user time to read
-        });
-      }
-    });
-  }, [submissions, isLoadingSubmissions]);
+  // Handle opening rejection reason drawer/dialog
+  const handleRejectionClick = useCallback((reason: string) => {
+    setRejectionReason(reason);
+    setRejectionDrawerOpen(true);
+  }, []);
 
   const groupedStreaks = useMemo(() => {
     return groupStreaksByWeek(submissions);
@@ -634,6 +622,7 @@ export default function Streaks() {
                         key={streak.id}
                         streak={streak}
                         onClick={() => handleOpenMediaViewer(streak)}
+                        onRejectionClick={handleRejectionClick}
                       />
                     ))}
                   </div>
@@ -679,6 +668,77 @@ export default function Streaks() {
         media={viewerMedia}
         initialIndex={viewerInitialIndex}
       />
+
+      {/* Rejection Reason Drawer/Dialog */}
+      {isMobile ? (
+        <Drawer
+          open={rejectionDrawerOpen}
+          onOpenChange={setRejectionDrawerOpen}
+        >
+          <DrawerContent className="max-h-[90vh]">
+            <DrawerHeader className="text-center">
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <XCircle className="h-6 w-6 text-status-rejected" />
+                <DrawerTitle className="text-xl font-bold">
+                  Streak Rejected
+                </DrawerTitle>
+              </div>
+              <DrawerDescription className="text-sm text-muted-foreground">
+                Your streak submission was rejected. See the reason below.
+              </DrawerDescription>
+            </DrawerHeader>
+
+            <div className="px-4 pb-4 overflow-y-auto">
+              <div className="bg-status-rejected/10 rounded-lg p-4 border border-status-rejected/20">
+                <p className="text-sm whitespace-pre-wrap">{rejectionReason}</p>
+              </div>
+            </div>
+
+            <DrawerFooter>
+              <Button
+                onClick={() => setRejectionDrawerOpen(false)}
+                className="w-full"
+              >
+                Close
+              </Button>
+            </DrawerFooter>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Dialog
+          open={rejectionDrawerOpen}
+          onOpenChange={setRejectionDrawerOpen}
+        >
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <div className="flex items-center justify-center gap-2 mb-2">
+                <XCircle className="h-6 w-6 text-status-rejected" />
+                <DialogTitle className="text-xl font-bold">
+                  Streak Rejected
+                </DialogTitle>
+              </div>
+              <DialogDescription className="text-sm text-muted-foreground text-center">
+                Your streak submission was rejected. See the reason below.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="py-4">
+              <div className="bg-status-rejected/10 rounded-lg p-4 border border-status-rejected/20">
+                <p className="text-sm whitespace-pre-wrap">{rejectionReason}</p>
+              </div>
+            </div>
+
+            <DialogFooter>
+              <Button
+                onClick={() => setRejectionDrawerOpen(false)}
+                className="w-full sm:w-auto"
+              >
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

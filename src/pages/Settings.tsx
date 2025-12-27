@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
+import { useSearchParams } from "react-router-dom";
 import {
   User,
   Mail,
@@ -109,12 +110,43 @@ import {
   getCurrencyForCountry,
 } from "@/constants/supported";
 import { INTEREST_OPTIONS } from "@/constants/interests";
+import { useExchangeRate } from "@/contexts/ExchangeRateContext";
+
+const VALID_TABS = [
+  "profile",
+  "kyc",
+  "referral",
+  "team",
+  "banks",
+  "preferences",
+  "account",
+] as const;
+
+type TabValue = (typeof VALID_TABS)[number];
 
 export default function Settings() {
   const { theme, setTheme } = useTheme();
   const walletAddress = useWalletAddress();
   const { disconnect } = useWallet();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Handle tab change - update query params
+  const handleTabChange = (value: string) => {
+    const newTab = VALID_TABS.includes(value as TabValue)
+      ? (value as TabValue)
+      : "profile";
+    setSearchParams((prev) => {
+      const newParams = new URLSearchParams(prev);
+      if (newTab === "profile") {
+        // Remove tab param if it's the default
+        newParams.delete("tab");
+      } else {
+        newParams.set("tab", newTab);
+      }
+      return newParams;
+    });
+  };
 
   // Plus button action preference
   const [plusButtonAction, setPlusButtonAction] = useState<
@@ -136,7 +168,7 @@ export default function Settings() {
     [userData, walletAddress]
   );
   const isEmailVerified = !!userProfile?.isEmailVerified;
-  const canApplyForKyc = isEmailVerified;
+  const canApplyForKyc = userData?.email?.length > 0 && isEmailVerified;
 
   const [profile, setProfile] = useState<Partial<UserProfile>>({
     name: "",
@@ -222,6 +254,50 @@ export default function Settings() {
   const [selectedTeamMember, setSelectedTeamMember] = useState<
     (typeof teamMembers)[0] | null
   >(null);
+
+  const { formatCurrencyEquivalent } = useExchangeRate();
+
+  // Get tab from query params or default to "profile"
+  // Validate that the tab is valid and accessible
+  const currentTab = useMemo(() => {
+    const tabFromUrl = searchParams.get("tab") as TabValue | null;
+
+    // If no tab in URL, default to profile
+    if (!tabFromUrl) {
+      return "profile";
+    }
+
+    // Validate that the tab is in the valid list
+    if (!VALID_TABS.includes(tabFromUrl)) {
+      return "profile";
+    }
+
+    // If user is trying to access "team" tab but is not an organizer, default to profile
+    if (tabFromUrl === "team" && !isOrganizer) {
+      return "profile";
+    }
+
+    return tabFromUrl;
+  }, [searchParams, isOrganizer]);
+
+  // Clean up invalid tab query params
+  useEffect(() => {
+    const tabFromUrl = searchParams.get("tab") as TabValue | null;
+    if (tabFromUrl) {
+      const isValidTab = VALID_TABS.includes(tabFromUrl);
+      const isAccessibleTab =
+        tabFromUrl !== "team" || (tabFromUrl === "team" && isOrganizer);
+
+      if (!isValidTab || !isAccessibleTab) {
+        // Remove invalid or inaccessible tab param
+        setSearchParams((prev) => {
+          const newParams = new URLSearchParams(prev);
+          newParams.delete("tab");
+          return newParams;
+        });
+      }
+    }
+  }, [searchParams, isOrganizer, setSearchParams]);
 
   // Load profile metadata from contract if available
   useEffect(() => {
@@ -412,7 +488,11 @@ export default function Settings() {
         </p>
       </motion.div>
 
-      <Tabs defaultValue="profile" className="space-y-6">
+      <Tabs
+        value={currentTab}
+        onValueChange={handleTabChange}
+        className="space-y-6"
+      >
         <div className="overflow-x-auto -mx-4 px-4 lg:mx-0 lg:px-0">
           <TabsList className="bg-muted/50 p-1 inline-flex min-w-max">
             <TabsTrigger value="profile" className="text-xs sm:text-sm">
@@ -456,7 +536,7 @@ export default function Settings() {
         {/* Profile Tab */}
         <TabsContent value="profile" className="space-y-6">
           {/* Email Verification Status */}
-          {walletAddress && (
+          {walletAddress && userData?.email?.length > 0 && (
             <Card
               className={cn(
                 "border-l-4",
@@ -598,7 +678,10 @@ export default function Settings() {
                     id="email"
                     type="email"
                     value={profile.email}
-                    disabled={profile?.email?.length > 0}
+                    onChange={(e) => {
+                      setProfile({ ...profile, email: e.target.value });
+                    }}
+                    disabled={userData?.email?.length > 0}
                   />
                 </div>
               </div>
@@ -652,7 +735,7 @@ export default function Settings() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="state">State/Province</Label>
+                  <Label htmlFor="state">State/Province/City</Label>
                   <Input
                     id="state"
                     placeholder="Enter state or province"
@@ -915,7 +998,12 @@ export default function Settings() {
                   Invite Friends, Earn Rewards
                 </h2>
                 <p className="text-sm opacity-90">
-                  Get 10 B3TR for every friend who joins
+                  Get 5 B3TR for every friend who joins
+                  {formatCurrencyEquivalent(5) && (
+                    <span className="block mt-0.5">
+                      {formatCurrencyEquivalent(5)}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
@@ -1013,18 +1101,6 @@ export default function Settings() {
                             {userProfile.referralCode}
                           </p>
                         </div>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            navigator.clipboard.writeText(
-                              userProfile.referralCode || ""
-                            );
-                            toast.success("Referral code copied to clipboard!");
-                          }}
-                        >
-                          <Copy className="w-4 h-4" />
-                        </Button>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
@@ -1114,8 +1190,13 @@ export default function Settings() {
                   <div>
                     <p className="font-medium">Both Earn Rewards</p>
                     <p className="text-sm text-muted-foreground">
-                      You both receive 10 B3TR tokens when they complete their
-                      first cleanup
+                      You both receive 5 B3TR tokens when they complete their
+                      first streak or cleanup.
+                      {formatCurrencyEquivalent(5) && (
+                        <span className="block mt-0.5">
+                          {formatCurrencyEquivalent(5)}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>

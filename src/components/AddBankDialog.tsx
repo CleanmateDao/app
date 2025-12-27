@@ -175,7 +175,7 @@ export function AddBankDialog({
           Add Account
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[90%] max-w-md">
+      <DialogContent className="sm:w-[90%] max-w-md">
         <DialogHeader>
           <DialogTitle>Add Bank Account</DialogTitle>
           <DialogDescription>

@@ -22,7 +22,7 @@ export function ConnectWalletDialog({ onConnect }: ConnectWalletDialogProps) {
           Connect Wallet
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[90%] max-w-md">
+      <DialogContent className="sm:w-[90%] max-w-md">
         <DialogHeader>
           <DialogTitle>Connect Wallet</DialogTitle>
           <DialogDescription>

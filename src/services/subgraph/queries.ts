@@ -501,7 +501,7 @@ export function useUserStreakStats(
       const response = await subgraphClient.getUserStreakStats(userAddress);
       return response.userStreakStats;
     },
-    enabled: !!userAddress,
+    enabled: !!userAddress && userAddress.length > 0,
     ...options,
   });
 }

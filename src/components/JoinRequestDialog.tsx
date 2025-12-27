@@ -42,7 +42,7 @@ export function JoinRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md w-[90%]">
+      <DialogContent className="sm:max-w-md sm:w-[90%]">
         <DialogHeader>
           <DialogTitle>Request to Join</DialogTitle>
           <DialogDescription>

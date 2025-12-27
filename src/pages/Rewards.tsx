@@ -60,16 +60,6 @@ import { useInfiniteScroll } from "@/hooks/use-infinite-scroll";
 import { useCleanups } from "@/services/subgraph/queries";
 import { transformCleanup } from "@/services/subgraph/transformers";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useIsMobile } from "@/hooks/use-mobile";
-import {
-  Drawer,
-  DrawerContent,
-  DrawerDescription,
-  DrawerFooter,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerTrigger,
-} from "@/components/ui/drawer";
 import {
   Dialog,
   DialogContent,
@@ -86,7 +76,6 @@ import { useExchangeRate } from "@/contexts/ExchangeRateContext";
 type PaymentMethod = "wallet" | "bank";
 
 export default function Rewards() {
-  const isMobile = useIsMobile();
   const walletAddress = useWalletAddress();
   const { formatCurrencyEquivalent, convertB3TRToCurrency } = useExchangeRate();
 
@@ -536,567 +525,291 @@ export default function Rewards() {
                 )}
               </p>
             )}
-            {isMobile ? (
-              <Drawer open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
-                <DrawerTrigger asChild>
-                  <Button size="sm" className="gap-2 mt-4 w-full">
-                    <Coins className="w-4 h-4" />
-                    Claim Rewards
-                  </Button>
-                </DrawerTrigger>
-                <DrawerContent>
-                  <DrawerHeader>
-                    <DrawerTitle>Claim Rewards</DrawerTitle>
-                    <DrawerDescription>
-                      Choose how you want to receive your B3TR tokens.
-                    </DrawerDescription>
-                  </DrawerHeader>
-                  <div className="px-4 pb-4 space-y-4 max-h-[60vh] overflow-y-auto">
-                    {/* Payment Method Selection */}
-                    <div className="space-y-2">
-                      <Label>Payment Method *</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod("wallet")}
-                          disabled={isClaiming}
-                          className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === "wallet"
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          }`}
-                        >
-                          <Wallet className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">
-                            Web3 Wallet
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod("bank")}
-                          disabled={!isBankSupportedForUser}
-                          className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === "bank"
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          } ${
-                            !isBankSupportedForUser
-                              ? "cursor-not-allowed opacity-60"
-                              : ""
-                          }`}
-                        >
-                          <Building2 className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">
-                            Bank Account
-                          </span>
-                          {!isBankSupportedForUser && (
-                            <Badge
-                              variant="secondary"
-                              className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
-                            >
-                              Soon
-                            </Badge>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Bank Account Selection */}
-                    {paymentMethod === "bank" && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label>Select Bank Account *</Label>
-                          <RadioGroup
-                            value={selectedBankId}
-                            onValueChange={setSelectedBankId}
-                            className="space-y-2"
-                            disabled={isClaiming}
-                          >
-                            {bankAccounts.map((bank) => (
-                              <label
-                                key={bank.id}
-                                htmlFor={`mobile-${bank.id}`}
-                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                  selectedBankId === bank.id
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/50"
-                                }`}
-                              >
-                                <RadioGroupItem
-                                  value={bank.id}
-                                  id={`mobile-${bank.id}`}
-                                />
-                                <div className="p-2 bg-primary/10 rounded-lg">
-                                  <Building2 className="w-4 h-4 text-primary" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">
-                                      {bank.bankName}
-                                    </p>
-                                    {bank.isDefault && (
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs"
-                                      >
-                                        Default
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {bank.accountName} •{" "}
-                                    {maskAccountNumber(bank.accountNumber)}
-                                  </p>
-                                </div>
-                              </label>
-                            ))}
-                          </RadioGroup>
-                          {bankAccounts.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No bank accounts configured. Add a bank account in
-                              Settings.
-                            </p>
-                          )}
-                        </div>
-
-                        {/* Currency Selection */}
-                        <div className="space-y-2">
-                          <Label>Currency for Conversion</Label>
-                          <Select
-                            value={selectedCurrency}
-                            onValueChange={setSelectedCurrency}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select currency" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {currencyRates.map((currency) => (
-                                <SelectItem
-                                  key={currency.code}
-                                  value={currency.code}
-                                >
-                                  {currency.symbol} {currency.name} (
-                                  {currency.code})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Rate: 1 B3TR = {selectedCurrencyData.symbol}
-                            {selectedCurrencyData.rateToB3TR.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Amount Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="mobile-amount">Amount (B3TR) *</Label>
-                      <Input
-                        id="mobile-amount"
-                        type="number"
-                        placeholder="Enter amount"
-                        value={claimAmount}
-                        onChange={(e) => setClaimAmount(e.target.value)}
+            <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-2 mt-4 w-full">
+                  <Coins className="w-4 h-4" />
+                  Claim Rewards
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="!left-[50%] !translate-x-[-50%] !bottom-auto !top-[50%] !translate-y-[-50%] sm:w-[90%] max-w-md max-h-[90vh] overflow-y-auto !rounded-lg !rounded-t-lg data-[state=closed]:!slide-out-to-left-1/2 data-[state=closed]:!slide-out-to-top-[48%] data-[state=open]:!slide-in-from-left-1/2 data-[state=open]:!slide-in-from-top-[48%] data-[state=closed]:!zoom-out-95 data-[state=open]:!zoom-in-95 [&>div.mx-auto.mt-2]:hidden">
+                <DialogHeader>
+                  <DialogTitle>Claim Rewards</DialogTitle>
+                  <DialogDescription>
+                    Choose how you want to receive your B3TR tokens.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  {/* Payment Method Selection */}
+                  <div className="space-y-2">
+                    <Label>Payment Method *</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("wallet")}
                         disabled={isClaiming}
-                      />
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">
-                          Available:{" "}
-                          {toReadableB3tr(userProfile?.pendingRewards || 0)}{" "}
-                          B3TR
-                        </p>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-auto py-1"
-                          onClick={() =>
-                            setClaimAmount(
-                              toReadableB3tr(
-                                userProfile?.pendingRewards || 0
-                              ).toString()
-                            )
-                          }
-                          disabled={isClaiming}
-                        >
-                          Max
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Summary */}
-                    {claimAmount && Number(claimAmount) > 0 && (
-                      <div className="p-3 bg-secondary rounded-lg space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Amount</span>
-                          <span className="font-medium">
-                            {claimAmount} B3TR
-                          </span>
-                        </div>
-                        {paymentMethod === "bank" && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">
-                              Converted Amount
-                            </span>
-                            <span className="font-medium text-primary">
-                              {convertB3TRToSelectedCurrency(
-                                Number(claimAmount)
-                              )}
-                            </span>
-                          </div>
+                        className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
+                          paymentMethod === "wallet"
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        }`}
+                      >
+                        <Wallet className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium">Web3 Wallet</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod("bank")}
+                        disabled={!isBankSupportedForUser}
+                        className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
+                          paymentMethod === "bank"
+                            ? "border-primary bg-primary/5"
+                            : "border-border hover:border-primary/50"
+                        } ${
+                          !isBankSupportedForUser
+                            ? "cursor-not-allowed opacity-60"
+                            : ""
+                        }`}
+                      >
+                        <Building2 className="w-4 h-4 text-primary" />
+                        <span className="text-sm font-medium">
+                          Bank Account
+                        </span>
+                        {!isBankSupportedForUser && (
+                          <Badge
+                            variant="secondary"
+                            className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
+                          >
+                            Soon
+                          </Badge>
                         )}
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Method</span>
-                          <span className="font-medium">
-                            {paymentMethod === "wallet"
-                              ? "Web3 Wallet"
-                              : "Bank Account"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Destination
-                          </span>
-                          <span className="text-xs truncate max-w-[150px]">
-                            {paymentMethod === "wallet"
-                              ? formatAddress(walletAddress || "")
-                              : `${selectedBank?.bankName} (${maskAccountNumber(
-                                  selectedBank?.accountNumber || ""
-                                )})`}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <DrawerFooter>
-                    <Button
-                      onClick={handleClaimRewards}
-                      disabled={
-                        isClaiming ||
-                        isClaimingWallet ||
-                        isClaimingBank ||
-                        !claimAmount ||
-                        (paymentMethod === "wallet"
-                          ? !walletAddress
-                          : !selectedBankId)
-                      }
-                      className="w-full"
-                    >
-                      {isClaiming || isClaimingWallet || isClaimingBank ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Claiming...
-                        </>
-                      ) : (
-                        "Claim Tokens"
-                      )}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => setClaimDialogOpen(false)}
-                      disabled={isClaiming}
-                      className="w-full"
-                    >
-                      Cancel
-                    </Button>
-                  </DrawerFooter>
-                </DrawerContent>
-              </Drawer>
-            ) : (
-              <Dialog open={claimDialogOpen} onOpenChange={setClaimDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2 mt-4 w-full">
-                    <Coins className="w-4 h-4" />
-                    Claim Rewards
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
-                  <DialogHeader>
-                    <DialogTitle>Claim Rewards</DialogTitle>
-                    <DialogDescription>
-                      Choose how you want to receive your B3TR tokens.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <div className="space-y-4 py-4">
-                    {/* Payment Method Selection */}
-                    <div className="space-y-2">
-                      <Label>Payment Method *</Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod("wallet")}
-                          disabled={isClaiming}
-                          className={`flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === "wallet"
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          }`}
-                        >
-                          <Wallet className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">
-                            Web3 Wallet
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentMethod("bank")}
-                          disabled={!isBankSupportedForUser}
-                          className={`relative flex items-center gap-2 p-3 rounded-lg border transition-colors ${
-                            paymentMethod === "bank"
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          } ${
-                            !isBankSupportedForUser
-                              ? "cursor-not-allowed opacity-60"
-                              : ""
-                          }`}
-                        >
-                          <Building2 className="w-4 h-4 text-primary" />
-                          <span className="text-sm font-medium">
-                            Bank Account
-                          </span>
-                          {!isBankSupportedForUser && (
-                            <Badge
-                              variant="secondary"
-                              className="absolute -top-2 -right-2 text-[10px] px-1 py-0"
-                            >
-                              Soon
-                            </Badge>
-                          )}
-                        </button>
-                      </div>
+                      </button>
                     </div>
+                  </div>
 
-                    {/* Wallet Selection */}
-                    {paymentMethod === "wallet" && (
-                      <div className="space-y-2">
-                        <Label>Wallet Address *</Label>
-                        {walletAddress ? (
-                          <div className="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5">
-                            <div className="p-2 bg-primary/10 rounded-lg">
-                              <Wallet className="w-4 h-4 text-primary" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium">
-                                  Connected Wallet
-                                </p>
-                                <Badge variant="secondary" className="text-xs">
-                                  Default
-                                </Badge>
-                              </div>
-                              <p className="font-mono text-xs text-muted-foreground truncate">
-                                {formatAddress(walletAddress)}
+                  {/* Wallet Selection */}
+                  {paymentMethod === "wallet" && (
+                    <div className="space-y-2">
+                      <Label>Wallet Address *</Label>
+                      {walletAddress ? (
+                        <div className="flex items-center gap-3 p-3 rounded-lg border border-primary bg-primary/5">
+                          <div className="p-2 bg-primary/10 rounded-lg">
+                            <Wallet className="w-4 h-4 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">
+                                Connected Wallet
                               </p>
+                              <Badge variant="secondary" className="text-xs">
+                                Default
+                              </Badge>
                             </div>
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground text-center py-4">
-                            Please connect your wallet to claim rewards.
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Bank Account Selection */}
-                    {paymentMethod === "bank" && (
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label>Select Bank Account *</Label>
-                          <RadioGroup
-                            value={selectedBankId}
-                            onValueChange={setSelectedBankId}
-                            className="space-y-2"
-                            disabled={isClaiming}
-                          >
-                            {bankAccounts.map((bank) => (
-                              <label
-                                key={bank.id}
-                                htmlFor={bank.id}
-                                className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                                  selectedBankId === bank.id
-                                    ? "border-primary bg-primary/5"
-                                    : "border-border hover:border-primary/50"
-                                }`}
-                              >
-                                <RadioGroupItem value={bank.id} id={bank.id} />
-                                <div className="p-2 bg-primary/10 rounded-lg">
-                                  <Building2 className="w-4 h-4 text-primary" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="text-sm font-medium">
-                                      {bank.bankName}
-                                    </p>
-                                    {bank.isDefault && (
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs"
-                                      >
-                                        Default
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground">
-                                    {bank.accountName} •{" "}
-                                    {maskAccountNumber(bank.accountNumber)}
-                                  </p>
-                                </div>
-                              </label>
-                            ))}
-                          </RadioGroup>
-                          {bankAccounts.length === 0 && (
-                            <p className="text-sm text-muted-foreground text-center py-4">
-                              No bank accounts configured. Add a bank account in
-                              Settings.
+                            <p className="font-mono text-xs text-muted-foreground truncate">
+                              {formatAddress(walletAddress)}
                             </p>
-                          )}
+                          </div>
                         </div>
-
-                        {/* Currency Selection */}
-                        <div className="space-y-2">
-                          <Label>Currency for Conversion</Label>
-                          <Select
-                            value={selectedCurrency}
-                            onValueChange={setSelectedCurrency}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select currency" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {currencyRates.map((currency) => (
-                                <SelectItem
-                                  key={currency.code}
-                                  value={currency.code}
-                                >
-                                  {currency.symbol} {currency.name} (
-                                  {currency.code})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <p className="text-xs text-muted-foreground">
-                            Rate: 1 B3TR = {selectedCurrencyData.symbol}
-                            {selectedCurrencyData.rateToB3TR.toLocaleString()}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Amount Input */}
-                    <div className="space-y-2">
-                      <Label htmlFor="amount">Amount (B3TR) *</Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        placeholder="Enter amount"
-                        value={claimAmount}
-                        onChange={(e) => setClaimAmount(e.target.value)}
-                        disabled={isClaiming}
-                      />
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-muted-foreground">
-                          Available:{" "}
-                          {toReadableB3tr(userProfile?.pendingRewards || 0)}{" "}
-                          B3TR
+                      ) : (
+                        <p className="text-sm text-muted-foreground text-center py-4">
+                          Please connect your wallet to claim rewards.
                         </p>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-xs h-auto py-1"
-                          onClick={() =>
-                            setClaimAmount(
-                              toReadableB3tr(
-                                userProfile?.pendingRewards || 0
-                              ).toString()
-                            )
-                          }
+                      )}
+                    </div>
+                  )}
+
+                  {/* Bank Account Selection */}
+                  {paymentMethod === "bank" && (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <Label>Select Bank Account *</Label>
+                        <RadioGroup
+                          value={selectedBankId}
+                          onValueChange={setSelectedBankId}
+                          className="space-y-2"
                           disabled={isClaiming}
                         >
-                          Max
-                        </Button>
+                          {bankAccounts.map((bank) => (
+                            <label
+                              key={bank.id}
+                              htmlFor={bank.id}
+                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
+                                selectedBankId === bank.id
+                                  ? "border-primary bg-primary/5"
+                                  : "border-border hover:border-primary/50"
+                              }`}
+                            >
+                              <RadioGroupItem value={bank.id} id={bank.id} />
+                              <div className="p-2 bg-primary/10 rounded-lg">
+                                <Building2 className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium">
+                                    {bank.bankName}
+                                  </p>
+                                  {bank.isDefault && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      Default
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                  {bank.accountName} •{" "}
+                                  {maskAccountNumber(bank.accountNumber)}
+                                </p>
+                              </div>
+                            </label>
+                          ))}
+                        </RadioGroup>
+                        {bankAccounts.length === 0 && (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            No bank accounts configured. Add a bank account in
+                            Settings.
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Currency Selection */}
+                      <div className="space-y-2">
+                        <Label>Currency for Conversion</Label>
+                        <Select
+                          value={selectedCurrency}
+                          onValueChange={setSelectedCurrency}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select currency" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {currencyRates.map((currency) => (
+                              <SelectItem
+                                key={currency.code}
+                                value={currency.code}
+                              >
+                                {currency.symbol} {currency.name} (
+                                {currency.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          Rate: 1 B3TR = {selectedCurrencyData.symbol}
+                          {selectedCurrencyData.rateToB3TR.toLocaleString()}
+                        </p>
                       </div>
                     </div>
+                  )}
 
-                    {/* Summary */}
-                    {claimAmount && Number(claimAmount) > 0 && (
-                      <div className="p-3 bg-secondary rounded-lg space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Amount</span>
-                          <span className="font-medium">
-                            {claimAmount} B3TR
-                          </span>
-                        </div>
-                        {paymentMethod === "bank" && (
-                          <div className="flex justify-between text-sm">
-                            <span className="text-muted-foreground">
-                              Converted Amount
-                            </span>
-                            <span className="font-medium text-primary">
-                              {convertB3TRToSelectedCurrency(
-                                Number(claimAmount)
-                              )}
-                            </span>
-                          </div>
-                        )}
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Method</span>
-                          <span className="font-medium">
-                            {paymentMethod === "wallet"
-                              ? "Web3 Wallet"
-                              : "Bank Account"}
-                          </span>
-                        </div>
+                  {/* Amount Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">Amount (B3TR) *</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      placeholder="Enter amount"
+                      value={claimAmount}
+                      onChange={(e) => setClaimAmount(e.target.value)}
+                      disabled={isClaiming}
+                    />
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Available:{" "}
+                        {toReadableB3tr(userProfile?.pendingRewards || 0)} B3TR
+                      </p>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs h-auto py-1"
+                        onClick={() =>
+                          setClaimAmount(
+                            toReadableB3tr(
+                              userProfile?.pendingRewards || 0
+                            ).toString()
+                          )
+                        }
+                        disabled={isClaiming}
+                      >
+                        Max
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Summary */}
+                  {claimAmount && Number(claimAmount) > 0 && (
+                    <div className="p-3 bg-secondary rounded-lg space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Amount</span>
+                        <span className="font-medium">{claimAmount} B3TR</span>
+                      </div>
+                      {paymentMethod === "bank" && (
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Destination
+                            Converted Amount
                           </span>
-                          <span className="font-mono text-xs">
-                            {paymentMethod === "wallet"
-                              ? formatAddress(walletAddress || "")
-                              : `${selectedBank?.bankName} (${maskAccountNumber(
-                                  selectedBank?.accountNumber || ""
-                                )})`}
+                          <span className="font-medium text-primary">
+                            {convertB3TRToSelectedCurrency(Number(claimAmount))}
                           </span>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                  <DialogFooter className="flex-col sm:flex-row gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setClaimDialogOpen(false)}
-                      disabled={isClaiming}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleClaimRewards}
-                      disabled={
-                        isClaiming ||
-                        isClaimingWallet ||
-                        isClaimingBank ||
-                        !claimAmount ||
-                        (paymentMethod === "wallet"
-                          ? !walletAddress
-                          : !selectedBankId)
-                      }
-                    >
-                      {isClaiming || isClaimingWallet || isClaimingBank ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Claiming...
-                        </>
-                      ) : (
-                        "Claim Tokens"
                       )}
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Method</span>
+                        <span className="font-medium">
+                          {paymentMethod === "wallet"
+                            ? "Web3 Wallet"
+                            : "Bank Account"}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Destination
+                        </span>
+                        <span className="font-mono text-xs">
+                          {paymentMethod === "wallet"
+                            ? formatAddress(walletAddress || "")
+                            : `${selectedBank?.bankName} (${maskAccountNumber(
+                                selectedBank?.accountNumber || ""
+                              )})`}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <DialogFooter className="flex-col sm:flex-row gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => setClaimDialogOpen(false)}
+                    disabled={isClaiming}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleClaimRewards}
+                    disabled={
+                      isClaiming ||
+                      isClaimingWallet ||
+                      isClaimingBank ||
+                      !claimAmount ||
+                      (paymentMethod === "wallet"
+                        ? !walletAddress
+                        : !selectedBankId)
+                    }
+                  >
+                    {isClaiming || isClaimingWallet || isClaimingBank ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Claiming...
+                      </>
+                    ) : (
+                      "Claim Tokens"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
 

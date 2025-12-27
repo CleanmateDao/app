@@ -27,7 +27,7 @@ export function DeleteBankAlertDialog({
 }: DeleteBankAlertDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="w-[90%] max-w-md">
+      <AlertDialogContent className="sm:w-[90%] max-w-md">
         <AlertDialogHeader>
           <AlertDialogTitle>Remove bank account?</AlertDialogTitle>
           <AlertDialogDescription>

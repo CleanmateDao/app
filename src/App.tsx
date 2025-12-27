@@ -27,6 +27,7 @@ import { useWalletAddress } from "./hooks/use-wallet-address";
 import { RecordingProvider } from "./contexts/RecordingContext";
 import { ExchangeRateProvider } from "./contexts/ExchangeRateContext";
 import { useUser } from "./services/subgraph/queries";
+import { useEffect } from "react";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,10 +42,15 @@ const queryClient = new QueryClient({
   },
 });
 
-// Wrapper component for dashboard routes
-// Users can access dashboard first and navigate to onboarding if needed
-const RequireOnboarding = ({ children }: { children: React.ReactNode }) => {
-  return <>{children}</>;
+// Route guard for first-time users
+const FirstTimeRedirect = () => {
+  const hasSeenOnboarding = localStorage.getItem("hasSeenOnboarding");
+
+  if (!hasSeenOnboarding) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
 };
 
 // Prevent registered users from accessing onboarding
@@ -57,7 +63,7 @@ const PreventRegisteredUsers = ({
   const { data: existingUser, isLoading } = useUser(walletAddress);
 
   // If user is registered, redirect to dashboard
-  if (walletAddress && existingUser) {
+  if (walletAddress && existingUser?.registeredAt > 0) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -85,7 +91,7 @@ const AppInner = () => {
       <VeChainKitProvider
         feeDelegation={{
           delegatorUrl: import.meta.env.VITE_DELEGATOR_URL!,
-          delegateAllTransactions: true,
+          delegateAllTransactions: false,
           b3trTransfers: { minAmountInEther: 1 },
         }}
         privy={{
@@ -141,10 +147,7 @@ const AppInner = () => {
               <BrowserRouter>
                 <ScrollToTop />
                 <Routes>
-                  <Route
-                    path="/"
-                    element={<Navigate to="/dashboard" replace />}
-                  />
+                  <Route path="/" element={<FirstTimeRedirect />} />
                   <Route
                     path="/onboarding"
                     element={
@@ -156,111 +159,89 @@ const AppInner = () => {
                   <Route
                     path="/dashboard"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <Insights />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <Insights />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/cleanups"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <Cleanups />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <Cleanups />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/cleanups/:id"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <CleanupDetail />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <CleanupDetail />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/cleanups/:id/submit-proof"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <SubmitProofOfWork />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <SubmitProofOfWork />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/organize"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <OrganizeCleanup />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <OrganizeCleanup />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/rewards"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <Rewards />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <Rewards />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/ai-chat"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <AIChat />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <AIChat />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/notifications"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <Notifications />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <Notifications />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/settings"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <Settings />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <Settings />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/streaks"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <Streaks />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <Streaks />
+                      </DashboardLayout>
                     }
                   />
                   <Route
                     path="/streaks/submit"
                     element={
-                      <RequireOnboarding>
-                        <DashboardLayout>
-                          <StreakSubmit />
-                        </DashboardLayout>
-                      </RequireOnboarding>
+                      <DashboardLayout>
+                        <StreakSubmit />
+                      </DashboardLayout>
                     }
                   />
                   <Route path="*" element={<NotFound />} />

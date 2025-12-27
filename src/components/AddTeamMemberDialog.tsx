@@ -66,7 +66,7 @@ export function AddTeamMemberDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="w-5 h-5" />

@@ -66,47 +66,45 @@ export function MediaViewerDialog({
     return null;
   }
 
-  const currentMedia = media[current];
-
   const carouselContent = (
-    <div className="flex-1 flex flex-col overflow-hidden px-6 pb-6 min-h-0">
+    <div className="flex flex-col px-4 sm:px-6 pb-4 sm:pb-6 pt-2">
       <Carousel
         setApi={setApi}
-        className="w-full flex-1 min-h-0"
+        className="w-full"
         opts={{
           align: "start",
           loop: true,
         }}
       >
-        <CarouselContent className="h-full -ml-0">
+        <CarouselContent className="-ml-0">
           {media.map((item, index) => (
-            <CarouselItem key={index} className="pl-0 h-full">
-              <div className="flex flex-col items-center justify-center h-full w-full gap-4">
-                <div className="flex-1 w-full flex items-center justify-center overflow-hidden min-h-0">
+            <CarouselItem key={index} className="pl-0">
+              <div className="flex flex-col items-center justify-center w-full gap-4">
+                <div className="w-full flex items-center justify-center">
                   {item.type === "video" ? (
-                    <div className="w-full h-full flex items-center justify-center bg-secondary rounded-lg p-4">
+                    <div className="w-full flex items-center justify-center bg-secondary/30 dark:bg-secondary/50 rounded-xl p-3 sm:p-4">
                       <video
                         src={item.url}
                         controls
-                        className="max-w-full max-h-full rounded-lg"
+                        className="max-w-full max-h-[calc(90vh-180px)] w-auto h-auto rounded-lg shadow-md"
                         autoPlay
                       >
                         Your browser does not support the video tag.
                       </video>
                     </div>
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center overflow-hidden p-4">
+                    <div className="w-full flex items-center justify-center p-3 sm:p-4">
                       <img
                         src={item.url}
                         alt={item.caption || `Image ${index + 1}`}
-                        className="max-w-full max-h-full object-contain rounded-lg"
+                        className="max-w-full max-h-[calc(90vh-180px)] w-auto h-auto object-contain rounded-lg shadow-md"
                       />
                     </div>
                   )}
                 </div>
                 {item.caption && (
-                  <div className="w-full text-center px-4 flex-shrink-0">
-                    <p className="text-sm text-muted-foreground">
+                  <div className="w-full text-center px-2 flex-shrink-0 pb-2">
+                    <p className="text-sm text-muted-foreground leading-relaxed">
                       {item.caption}
                     </p>
                   </div>
@@ -117,8 +115,8 @@ export function MediaViewerDialog({
         </CarouselContent>
         {media.length > 1 && (
           <>
-            <CarouselPrevious className="left-4" />
-            <CarouselNext className="right-4" />
+            <CarouselPrevious className="left-2 sm:left-4 bg-background/80 backdrop-blur-sm hover:bg-background border-2" />
+            <CarouselNext className="right-2 sm:right-4 bg-background/80 backdrop-blur-sm hover:bg-background border-2" />
           </>
         )}
       </Carousel>
@@ -129,15 +127,17 @@ export function MediaViewerDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[90vh]">
-          <DrawerHeader className="px-6 pt-6 pb-4 flex-shrink-0">
-            <DrawerTitle className="text-lg">
+        <DrawerContent className="max-h-[90vh] flex flex-col">
+          <DrawerHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-background">
+            <DrawerTitle className="text-lg font-semibold">
               {media.length > 1
                 ? `Media ${current + 1} of ${media.length}`
                 : "Media Viewer"}
             </DrawerTitle>
           </DrawerHeader>
-          {carouselContent}
+          <div className="overflow-y-auto flex-1 min-h-0">
+            {carouselContent}
+          </div>
         </DrawerContent>
       </Drawer>
     );
@@ -146,15 +146,17 @@ export function MediaViewerDialog({
   // Desktop: Use dialog
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl w-[95vw] h-[95vh] p-0 gap-0 flex flex-col">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
-          <DialogTitle className="text-lg">
+      <DialogContent className="max-w-6xl w-[95vw] max-h-[90vh] p-0 gap-0 flex flex-col overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-background">
+          <DialogTitle className="text-lg font-semibold">
             {media.length > 1
               ? `Media ${current + 1} of ${media.length}`
               : "Media Viewer"}
           </DialogTitle>
         </DialogHeader>
-        {carouselContent}
+        <div className="overflow-y-auto flex-1 min-h-0 py-2">
+          {carouselContent}
+        </div>
       </DialogContent>
     </Dialog>
   );

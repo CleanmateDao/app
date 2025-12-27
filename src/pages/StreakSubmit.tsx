@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  ArrowLeft,
   Flame,
   Play,
   Pause,
@@ -11,17 +10,12 @@ import {
   RefreshCw,
   Send,
   Video,
-  Loader2,
-  Sparkles,
   Lightbulb,
 } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperType } from "swiper";
 import "swiper/css";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import {
   Tooltip,
   TooltipArrow,
@@ -29,7 +23,6 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { STREAK_RULES } from "@/types/streak";
 import { useUserStreakStats } from "@/services/subgraph/queries";
 import { transformUserStreakStats } from "@/types/streak";
 import { STREAK_CATEGORIES } from "@/constants/streak-categories";
@@ -42,45 +35,31 @@ import {
   type StreakSubmissionMetadata,
 } from "@cleanmate/cip-sdk";
 import { StreakTipsDialog } from "@/components/StreakTipsDialog";
+import { initCamera, stopCamera } from "@/lib/streak-camera";
+import {
+  startRecording as startRecordingHelper,
+  processRecording,
+  type MediaItem,
+} from "@/lib/streak-recording";
+import {
+  cleanupMediaItems,
+  removeMediaItem as removeMediaItemHelper,
+  calculateTotalSize,
+  calculateTotalDuration,
+} from "@/lib/streak-media";
+import {
+  canSubmit as canSubmitHelper,
+  getTimeUntilCanSubmit,
+  hasJoinedStreak,
+  formatTimeRemaining,
+} from "@/lib/streak-validation";
+import { getDeviceType } from "@/lib/streak-device";
 
 type SubmitStep = "record" | "preview" | "submitting" | "success";
 
 const MAX_DURATION = 5000; // 5 seconds in ms
 const MIN_DURATION = 2000; // 2 seconds in ms
-
-/**
- * Formats seconds into a human-readable string
- */
-function formatTimeRemaining(seconds: number): string {
-  if (seconds <= 0) return "now";
-  const minutes = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  if (minutes > 0) {
-    return secs > 0 ? `${minutes}m ${secs}s` : `${minutes}m`;
-  }
-  return `${secs}s`;
-}
-
-/**
- * Detects the device type from the user agent
- * @returns "ios" | "android" | "desktop"
- */
-function getDeviceType(): "ios" | "android" | "desktop" {
-  const userAgent = navigator.userAgent.toLowerCase();
-
-  // Check for iOS devices
-  if (/iphone|ipad|ipod/.test(userAgent)) {
-    return "ios";
-  }
-
-  // Check for Android devices
-  if (/android/.test(userAgent)) {
-    return "android";
-  }
-
-  // Default to desktop
-  return "desktop";
-}
+const RATE_LIMIT_MINUTES = 30;
 
 export default function StreakSubmit() {
   const navigate = useNavigate();
@@ -99,40 +78,26 @@ export default function StreakSubmit() {
   // Submit streak mutation
   const submitStreakMutation = useSubmitStreak();
 
-  // Rate limit: 30 minutes from last submission
-  const RATE_LIMIT_MINUTES = 30;
-  const RATE_LIMIT_MS = useMemo(() => RATE_LIMIT_MINUTES * 60 * 1000, []);
-
   // Calculate if user can submit based on last submission time
-  const canSubmit = useMemo(() => {
-    if (!streakStats?.lastSubmissionAt) return true;
-    const lastSubmissionTime = Number(streakStats.lastSubmissionAt);
-    const now = Date.now();
-    return now - lastSubmissionTime >= RATE_LIMIT_MS;
-  }, [streakStats?.lastSubmissionAt, RATE_LIMIT_MS]);
+  const canSubmit = useMemo(
+    () => canSubmitHelper(streakStats, RATE_LIMIT_MINUTES),
+    [streakStats]
+  );
 
   // Calculate time remaining until can submit
   const [timeUntilCanSubmit, setTimeUntilCanSubmit] = useState(0);
 
   useEffect(() => {
-    if (!streakStats?.lastSubmissionAt) {
-      setTimeUntilCanSubmit(0);
-      return;
-    }
-
     const updateCountdown = () => {
-      const lastSubmissionTime = Number(streakStats.lastSubmissionAt);
-      const now = Date.now();
-      const elapsed = now - lastSubmissionTime;
-      const remaining = Math.max(0, RATE_LIMIT_MS - elapsed);
-      setTimeUntilCanSubmit(Math.floor(remaining / 1000)); // Convert to seconds
+      const remaining = getTimeUntilCanSubmit(streakStats, RATE_LIMIT_MINUTES);
+      setTimeUntilCanSubmit(remaining);
     };
 
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(interval);
-  }, [streakStats?.lastSubmissionAt, RATE_LIMIT_MS]);
+  }, [streakStats]);
 
   const [step, setStep] = useState<SubmitStep>("record");
   const [dontShowRules, setDontShowRules] = useState(false);
@@ -140,18 +105,10 @@ export default function StreakSubmit() {
   const [recordingProgress, setRecordingProgress] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState("Waste");
   const [showTipsDialog, setShowTipsDialog] = useState(false);
-  const [showCategoryTooltip, setShowCategoryTooltip] = useState(false);
+  const [showCategoryTooltip, setShowCategoryTooltip] = useState(true);
   const categoryTooltipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Support multiple media items
-  const [mediaItems, setMediaItems] = useState<
-    Array<{
-      id: string;
-      blob: Blob;
-      url: string;
-      mimeType: string;
-      duration?: number;
-    }>
-  >([]);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [pulseAnimation, setPulseAnimation] = useState(false);
   const [videoDuration, setVideoDuration] = useState<number>(0);
   const [isVideoPlaying, setIsVideoPlaying] = useState(true);
@@ -169,9 +126,9 @@ export default function StreakSubmit() {
   const swiperRef = useRef<SwiperType | null>(null);
   const recordButtonRef = useRef<HTMLButtonElement | null>(null);
 
-  const stopCamera = useCallback(() => {
+  const handleStopCamera = useCallback(() => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+      stopCamera(streamRef.current);
       streamRef.current = null;
     }
     if (animationFrameRef.current) {
@@ -179,22 +136,11 @@ export default function StreakSubmit() {
     }
   }, []);
 
-  const initCamera = useCallback(async () => {
+  const handleInitCamera = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "environment",
-          width: { ideal: 1080 },
-          height: { ideal: 1920 },
-        },
-        audio: true,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play().catch((err) => {
-          console.error("Error playing video:", err);
-        });
+      const stream = await initCamera(videoRef.current, { zoom: 0.5 });
+      if (stream) {
+        streamRef.current = stream;
       }
     } catch (error) {
       toast({
@@ -213,29 +159,17 @@ export default function StreakSubmit() {
     }
   }, []);
 
-  // Redirect non-mobile users (wait for proper detection)
-  // useEffect(() => {
-  //   if (isMobile === false) {
-  //     toast({
-  //       title: "Mobile Only",
-  //       description: "Streak submission is only available on mobile devices.",
-  //       variant: "destructive",
-  //     });
-  //     navigate("/streaks");
-  //   }
-  // }, [isMobile, navigate, toast]);
-
   // Initialize camera when entering record step
   useEffect(() => {
     if (step === "record") {
-      initCamera();
+      handleInitCamera();
     }
     return () => {
       if (step === "record") {
-        stopCamera();
+        handleStopCamera();
       }
     };
-  }, [initCamera, step, stopCamera]);
+  }, [handleInitCamera, step, handleStopCamera]);
 
   // Reset recording state when leaving record step
   useEffect(() => {
@@ -385,90 +319,42 @@ export default function StreakSubmit() {
   const startRecording = useCallback(() => {
     if (!streamRef.current) return;
 
-    chunksRef.current = [];
-    const mediaRecorder = new MediaRecorder(streamRef.current, {
-      mimeType: "video/webm;codecs=vp8,opus",
+    const { mediaRecorder, chunks } = startRecordingHelper(streamRef.current, {
+      maxDuration: MAX_DURATION,
+      minDuration: MIN_DURATION,
     });
 
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        chunksRef.current.push(e.data);
-      }
-    };
+    chunksRef.current = chunks;
+    mediaRecorderRef.current = mediaRecorder;
 
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: "video/webm" });
+    mediaRecorder.onstop = async () => {
+      try {
+        const mediaItem = await processRecording(chunks, MIN_DURATION);
 
-      if (blob.size === 0) {
+        setMediaItems((prev) => {
+          const newItems = [...prev, mediaItem];
+          if (prev.length === 0) {
+            setVideoDuration(mediaItem.duration || 0);
+          }
+          return newItems;
+        });
+
+        setStep("preview");
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Recording failed";
         toast({
-          title: "Recording Error",
-          description: "The recorded video is empty. Please try again.",
+          title: errorMessage.includes("Too Short")
+            ? "Video Too Short"
+            : "Recording Error",
+          description: errorMessage,
           variant: "destructive",
         });
-        return;
       }
-
-      const url = URL.createObjectURL(blob);
-      const mimeType = blob.type || "video/webm";
-      const mediaId = `media-${Date.now()}-${Math.random()}`;
-
-      // Calculate video duration
-      const video = document.createElement("video");
-      video.preload = "metadata";
-      video.src = url;
-      video.onloadedmetadata = () => {
-        // Check minimum duration requirement
-        const durationMs = video.duration * 1000;
-        if (durationMs < MIN_DURATION) {
-          // Clean up the blob URL
-          URL.revokeObjectURL(url);
-          toast({
-            title: "Video Too Short",
-            description: `Video must be at least ${
-              MIN_DURATION / 1000
-            } seconds long. Please record again.`,
-            variant: "destructive",
-          });
-          return;
-        }
-
-        // Add new media item to array
-        setMediaItems((prev) => [
-          ...prev,
-          {
-            id: mediaId,
-            blob,
-            url,
-            mimeType,
-            duration: video.duration,
-          },
-        ]);
-
-        // Set first item as preview if it's the first one
-        if (mediaItems.length === 0) {
-          setVideoDuration(video.duration);
-        }
-      };
-      video.onerror = (e) => {
-        console.error("Error loading video metadata:", video.error);
-        // Still add the media item even if duration can't be calculated
-        setMediaItems((prev) => [
-          ...prev,
-          {
-            id: mediaId,
-            blob,
-            url,
-            mimeType,
-          },
-        ]);
-      };
-
-      setStep("preview");
     };
 
-    mediaRecorderRef.current = mediaRecorder;
-    mediaRecorder.start(100);
     recordingStartRef.current = Date.now();
+    setRecordingProgress(0);
     setIsRecording(true);
     setContextRecording(true);
 
@@ -485,8 +371,7 @@ export default function StreakSubmit() {
       }
     };
     animationFrameRef.current = requestAnimationFrame(updateProgress);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [toast, setContextRecording]);
 
   const stopRecording = useCallback(() => {
     // Allow stopping at any time (hold-release behavior)
@@ -551,18 +436,17 @@ export default function StreakSubmit() {
     };
   }, [step, isRecording, startRecording, stopRecording]);
 
-  const handleContinue = () => {
-    // Check if user has joined streak (has streakerCode)
-    if (!streakStats?.streakerCode) {
+  const handleContinue = useCallback(() => {
+    if (!hasJoinedStreak(streakStats)) {
       toast({
         title: "Join Streak Required",
-        description: "You must join the streak program before submitting. Please join first.",
+        description:
+          "You must join the streak program before submitting. Please join first.",
         variant: "destructive",
       });
       return;
     }
 
-    // Check rate limit before allowing recording
     if (!canSubmit && timeUntilCanSubmit > 0) {
       toast({
         title: "Rate Limit Exceeded",
@@ -578,44 +462,39 @@ export default function StreakSubmit() {
       localStorage.setItem("skipStreakRules", "true");
     }
     setStep("record");
-  };
+  }, [streakStats, canSubmit, timeUntilCanSubmit, dontShowRules, toast]);
 
-  const handleRetake = () => {
-    // Clear all media items
-    mediaItems.forEach((item) => {
-      URL.revokeObjectURL(item.url);
-    });
+  const handleRetake = useCallback(() => {
+    cleanupMediaItems(mediaItems);
     setMediaItems([]);
     setStep("record");
-  };
+  }, [mediaItems]);
 
-  const handleRemoveMedia = (mediaId: string) => {
-    setMediaItems((prev) => {
-      const itemToRemove = prev.find((item) => item.id === mediaId);
-      if (itemToRemove) {
-        URL.revokeObjectURL(itemToRemove.url);
-      }
-      const filtered = prev.filter((item) => item.id !== mediaId);
+  const handleRemoveMedia = useCallback(
+    (mediaId: string) => {
+      setMediaItems((prev) => {
+        const filtered = removeMediaItemHelper(prev, mediaId);
 
-      // If we removed the currently previewed item, update preview
-      if (
-        filtered.length > 0 &&
-        currentPreviewIndexRef.current >= filtered.length
-      ) {
-        currentPreviewIndexRef.current = filtered.length - 1;
-      } else if (filtered.length === 0) {
-        currentPreviewIndexRef.current = 0;
-        setStep("record");
-      }
+        if (
+          filtered.length > 0 &&
+          currentPreviewIndexRef.current >= filtered.length
+        ) {
+          currentPreviewIndexRef.current = filtered.length - 1;
+        } else if (filtered.length === 0) {
+          currentPreviewIndexRef.current = 0;
+          setStep("record");
+        }
 
-      return filtered;
-    });
+        return filtered;
+      });
 
-    toast({
-      title: "Media Removed",
-      description: "Media item has been removed from your submission.",
-    });
-  };
+      toast({
+        title: "Media Removed",
+        description: "Media item has been removed from your submission.",
+      });
+    },
+    [toast]
+  );
 
   const toggleVideoPlayback = useCallback(async () => {
     if (!previewVideoRef.current) return;
@@ -635,7 +514,7 @@ export default function StreakSubmit() {
     }
   }, []);
 
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (mediaItems.length === 0) {
       toast({
         title: "Error",
@@ -645,18 +524,17 @@ export default function StreakSubmit() {
       return;
     }
 
-    // Check if user has joined streak (has streakerCode)
-    if (!streakStats?.streakerCode) {
+    if (!hasJoinedStreak(streakStats)) {
       toast({
         title: "Join Streak Required",
-        description: "You must join the streak program before submitting. Please join first.",
+        description:
+          "You must join the streak program before submitting. Please join first.",
         variant: "destructive",
       });
       setStep("preview");
       return;
     }
 
-    // Check rate limit before submitting
     if (!canSubmit) {
       toast({
         title: "Rate Limit Exceeded",
@@ -672,7 +550,6 @@ export default function StreakSubmit() {
     setStep("submitting");
 
     try {
-      // Step 1: Upload all media files to IPFS
       toast({
         title: "Uploading media...",
         description: `Please wait while we upload ${mediaItems.length} media file(s) to IPFS`,
@@ -680,14 +557,8 @@ export default function StreakSubmit() {
 
       const ipfsHashes: string[] = [];
       const mimetypes: string[] = [];
-      const totalSize = mediaItems.reduce(
-        (sum, item) => sum + item.blob.size,
-        0
-      );
-      const totalDuration = mediaItems.reduce(
-        (sum, item) => sum + (item.duration || 0),
-        0
-      );
+      const totalSize = calculateTotalSize(mediaItems);
+      const totalDuration = calculateTotalDuration(mediaItems);
 
       // Upload each media item
       for (let i = 0; i < mediaItems.length; i++) {
@@ -708,7 +579,6 @@ export default function StreakSubmit() {
         mimetypes.push(item.mimeType);
       }
 
-      // Step 2: Submit streak with IPFS URLs
       const deviceType = getDeviceType();
 
       const streakSubmissionMetadata: StreakSubmissionMetadata = {
@@ -729,13 +599,9 @@ export default function StreakSubmit() {
 
       setStep("success");
 
-      // Clean up media URLs
-      mediaItems.forEach((item) => {
-        URL.revokeObjectURL(item.url);
-      });
+      cleanupMediaItems(mediaItems);
       setMediaItems([]);
 
-      // Navigate after showing success
       setTimeout(() => {
         toast({
           title: "Streak Submitted! 🔥",
@@ -747,7 +613,6 @@ export default function StreakSubmit() {
       console.error("Failed to submit streak:", error);
       setStep("preview");
 
-      // Provide more specific error messages
       let errorMessage = "Failed to submit streak";
       if (error instanceof Error) {
         if (
@@ -775,11 +640,22 @@ export default function StreakSubmit() {
         variant: "destructive",
       });
     }
-  };
+  }, [
+    mediaItems,
+    streakStats,
+    canSubmit,
+    timeUntilCanSubmit,
+    selectedCategory,
+    submitStreakMutation,
+    toast,
+    navigate,
+  ]);
 
   // Recording Screen
   if (step === "record") {
     const circumference = 2 * Math.PI * 52;
+    // Calculate strokeDashoffset: at 0% progress, offset = circumference (no stroke visible)
+    // At 100% progress, offset = 0 (full stroke visible)
     const strokeDashoffset =
       circumference - (recordingProgress / 100) * circumference;
 
@@ -935,7 +811,9 @@ export default function StreakSubmit() {
                   strokeDashoffset={strokeDashoffset}
                   transform="rotate(-90 60 60)"
                   style={{
-                    transition: "stroke-dashoffset 0.05s linear",
+                    transition: isRecording
+                      ? "stroke-dashoffset 0.1s linear"
+                      : "stroke-dashoffset 0.3s ease-out",
                     opacity: isRecording ? 1 : 0.3,
                   }}
                 />
@@ -1266,14 +1144,14 @@ export default function StreakSubmit() {
             <Button
               className="flex-1 gap-2 h-12 text-base font-semibold shadow-lg shadow-primary/30"
               onClick={handleSubmit}
-              disabled={!streakStats?.streakerCode || !canSubmit}
+              disabled={!hasJoinedStreak(streakStats) || !canSubmit}
             >
               <Send className="h-5 w-5" />
-              {!streakStats?.streakerCode
+              {!hasJoinedStreak(streakStats)
                 ? "Join Streak First"
                 : !canSubmit
-                  ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
-                  : "Submit"}
+                ? `Wait ${formatTimeRemaining(timeUntilCanSubmit)}`
+                : "Submit"}
             </Button>
           </div>
         </motion.div>
