@@ -137,7 +137,7 @@ export default function StreakSubmit() {
 
   const handleInitCamera = useCallback(async () => {
     try {
-      const stream = await initCamera(videoRef.current, { zoom: 0.5 });
+      const stream = await initCamera(videoRef.current, { zoom: 1.0 });
       if (stream) {
         streamRef.current = stream;
       }
@@ -731,7 +731,6 @@ export default function StreakSubmit() {
           playsInline
           muted
           className="flex-1 object-cover w-full h-full"
-          style={{ transform: "scaleX(-1)" }} // Mirror the video for selfie view
         />
 
         {/* Recording overlay effect */}
