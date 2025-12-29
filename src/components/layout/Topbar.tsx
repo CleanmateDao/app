@@ -2,7 +2,6 @@ import { Bell, Sparkles, Menu, Moon, Sun } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { WalletButton } from "@vechain/vechain-kit";
 import {
   Popover,
@@ -178,14 +177,12 @@ export function Topbar({ onMenuClick }: TopbarProps) {
             onClick={() => navigate("/ai-chat")}
           >
             <div className="relative">
-              <AvatarViewerTrigger src={temiAvatar} alt="Temi AI Agent">
-                <Avatar className="h-5 w-5">
-                  <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
-                  <AvatarFallback>
-                    <Sparkles className="w-4 h-4" />
-                  </AvatarFallback>
-                </Avatar>
-              </AvatarViewerTrigger>
+              <Avatar className="h-5 w-5">
+                <AvatarImage src={temiAvatar} alt="Temi AI Agent" />
+                <AvatarFallback>
+                  <Sparkles className="w-4 h-4" />
+                </AvatarFallback>
+              </Avatar>
               <div className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-primary rounded-full animate-pulse" />
             </div>
             <span className="text-sm font-medium">Temi</span>

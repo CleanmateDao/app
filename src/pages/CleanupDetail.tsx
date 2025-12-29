@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -32,7 +32,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
-import { RatingDialog } from "@/components/RatingDialog";
 import { SubmitProofDialog } from "@/components/SubmitProofDialog";
 import { AcceptParticipantAlertDialog } from "@/components/AcceptParticipantAlertDialog";
 import { RejectParticipantAlertDialog } from "@/components/RejectParticipantAlertDialog";
@@ -54,15 +53,10 @@ import {
   CleanupMedia,
 } from "@/types/cleanup";
 import { toast } from "sonner";
-import {
-  useCleanup,
-  useUser,
-  useCleanupUpdates,
-} from "@/services/subgraph/queries";
+import { useCleanup, useUser } from "@/services/subgraph/queries";
 import {
   transformCleanup,
   transformUserToProfile,
-  transformCleanupUpdate,
 } from "@/services/subgraph/transformers";
 import { useWalletAddress } from "@/hooks/use-wallet-address";
 import {
@@ -76,7 +70,7 @@ import {
 import { useTeamMember } from "@/services/subgraph/queries";
 import { stringifyCleanupUpdateMetadata } from "@cleanmate/cip-sdk";
 import { uploadFilesToIPFS } from "@/services/ipfs";
-import { formatAddress } from "@/lib/utils";
+import { formatAddress, maskSensitiveInfo } from "@/lib/utils";
 const statusConfig: Record<
   CleanupStatusUI,
   { label: string; className: string }
@@ -267,11 +261,17 @@ export default function CleanupDetail() {
         !isOrganizer
     );
 
-  const filteredParticipants = acceptedParticipants.filter(
-    (p) =>
-      p.name.toLowerCase().includes(participantSearch.toLowerCase()) ||
-      p.email.toLowerCase().includes(participantSearch.toLowerCase())
-  );
+  const filteredParticipants = useMemo(() => {
+    if (!participantSearch.trim()) {
+      return acceptedParticipants;
+    }
+    const searchLower = participantSearch.toLowerCase();
+    return acceptedParticipants.filter(
+      (p) =>
+        p.name.toLowerCase().includes(searchLower) ||
+        p.email.toLowerCase().includes(searchLower)
+    );
+  }, [acceptedParticipants, participantSearch]);
 
   const displayedParticipants = filteredParticipants.slice(
     0,
@@ -908,7 +908,7 @@ export default function CleanupDetail() {
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="font-medium text-sm">
-                          {participant.name}
+                          {maskSensitiveInfo(participant.name)}
                         </p>
                         {participant.isOrganizer && (
                           <Badge
@@ -1046,7 +1046,7 @@ export default function CleanupDetail() {
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-sm">
-                            {participant.name}
+                            {maskSensitiveInfo(participant.name)}
                           </p>
                           {participant.isOrganizer && (
                             <Badge
@@ -1062,7 +1062,6 @@ export default function CleanupDetail() {
                               className="h-5 px-1.5 gap-0.5 text-xs bg-status-approved/10 text-status-approved border-status-approved/20"
                             >
                               <ShieldCheck className="w-3 h-3" />
-                              KYC
                             </Badge>
                           )}
                           {participant.emailVerified && (
@@ -1073,7 +1072,6 @@ export default function CleanupDetail() {
                               <Mail className="w-3 h-3" />
                             </Badge>
                           )}
-                          <Info className="w-3 h-3 text-muted-foreground" />
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {participant.country}
@@ -1360,16 +1358,6 @@ export default function CleanupDetail() {
           </CardContent>
         </Card>
       </motion.div>
-
-      {/* Rating Dialog */}
-      <RatingDialog
-        open={ratingDialogOpen}
-        onOpenChange={setRatingDialogOpen}
-        participantName={selectedParticipant?.name}
-        rating={rating}
-        onRatingChange={setRating}
-        onSubmit={handleRateParticipant}
-      />
 
       {/* Submit for Review Dialog */}
       <SubmitProofDialog

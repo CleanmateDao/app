@@ -97,7 +97,9 @@ export default function AIChat() {
         const response = await temiChatMutation.mutateAsync({
           message: JSON.stringify({
             message: messageText,
-            walletAddress: walletAddress,
+            walletAddress: walletAddress
+              ? walletAddress
+              : `No wallet address or account connected.`,
           }),
           history: chatHistory.length > 0 ? chatHistory : undefined,
         });

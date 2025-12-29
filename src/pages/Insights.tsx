@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import {
@@ -35,7 +35,8 @@ import { useWalletAddress } from "@/hooks/use-wallet-address";
 import { transformUserStreakStats } from "@/types/streak";
 import { JoinStreakDrawer } from "@/components/JoinStreakDrawer";
 import { AreaChart, Area, XAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { toReadableB3tr } from "@/lib/utils";
+import { toReadableB3tr, toB3tr } from "@/lib/utils";
+import { useExchangeRate } from "@/contexts/ExchangeRateContext";
 
 const fadeIn = {
   initial: { opacity: 0, y: 20 },
@@ -56,6 +57,7 @@ export default function Insights() {
   const [joinStreakOpen, setJoinStreakOpen] = useState(false);
   const navigate = useNavigate();
   const walletAddress = useWalletAddress();
+  const { formatCurrencyEquivalent } = useExchangeRate();
 
   // Fetch user data
   const { data: userData } = useUser(walletAddress);
@@ -164,11 +166,14 @@ export default function Insights() {
     "Summarize my activity",
   ];
 
-  const handleAskQuestion = (question: string) => {
-    if (question.trim()) {
-      navigate("/ai-chat", { state: { initialQuery: question } });
-    }
-  };
+  const handleAskQuestion = useCallback(
+    (question: string) => {
+      if (question.trim()) {
+        navigate("/ai-chat", { state: { initialQuery: question } });
+      }
+    },
+    [navigate]
+  );
 
   return (
     <div className="p-4 lg:p-6 space-y-6 lg:space-y-8 max-w-5xl mx-auto">
@@ -241,7 +246,7 @@ export default function Insights() {
         <Card
           className="border-primary/30 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent cursor-pointer hover:border-primary/50 transition-colors overflow-hidden group"
           onClick={() => {
-            if (!streakStats?.streakerCode) {
+            if (!streakStats) {
               setJoinStreakOpen(true);
             } else {
               navigate("/streaks");
@@ -265,9 +270,22 @@ export default function Insights() {
                     {streakStats ? (
                       <>
                         <span>{streakStats.approvedSubmissions} approved</span>
-                        <span className="text-primary font-medium">
-                          +{toReadableB3tr(streakStats.totalAmount)} B3TR
-                        </span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-primary font-medium">
+                            +{toReadableB3tr(streakStats.totalAmount)} B3TR
+                          </span>
+                          {formatCurrencyEquivalent(
+                            toB3tr(streakStats.totalAmount.toString())
+                          ) && (
+                            <span className="text-[10px] text-muted-foreground mt-0.5">
+                              (
+                              {formatCurrencyEquivalent(
+                                toB3tr(streakStats.totalAmount.toString())
+                              )}
+                              )
+                            </span>
+                          )}
+                        </div>
                       </>
                     ) : (
                       <span className="text-muted-foreground">
@@ -303,7 +321,22 @@ export default function Insights() {
           : [
               {
                 label: "Total Rewards",
-                value: `${safeInsightsData.totalRewards} B3TR`,
+                value: (
+                  <span>
+                    {safeInsightsData.totalRewards} B3TR
+                    {formatCurrencyEquivalent(
+                      Number(safeInsightsData.totalRewards)
+                    ) && (
+                      <span className="text-[10px] sm:text-xs text-muted-foreground ml-1">
+                        (
+                        {formatCurrencyEquivalent(
+                          Number(safeInsightsData.totalRewards)
+                        )}
+                        )
+                      </span>
+                    )}
+                  </span>
+                ),
                 change: "",
                 up: null,
                 icon: Gift,
@@ -537,7 +570,8 @@ export default function Insights() {
                     No cleanup categories yet
                   </h4>
                   <p className="text-xs lg:text-sm text-muted-foreground text-center max-w-sm">
-                    Complete your first cleanup to see category distribution here
+                    Complete your first cleanup to see category distribution
+                    here
                   </p>
                 </div>
               ) : (
@@ -587,7 +621,7 @@ export default function Insights() {
                         </div>
 
                         {/* Category name */}
-                        <p className="text-sm text-muted-foreground mb-3">
+                        <p className="text-sm text-muted-foreground mb-3 capitalize">
                           {item.name}
                         </p>
 

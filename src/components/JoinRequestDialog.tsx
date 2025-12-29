@@ -14,6 +14,7 @@ import { AvatarViewerTrigger } from "@/components/ui/avatar-viewer";
 import { Calendar, MapPin, Users, Send, Loader2 } from "lucide-react";
 import type { Cleanup } from "@/types/cleanup";
 import type { UserProfile } from "@/types/user";
+import fred from "@/assets/fred.png";
 
 interface JoinRequestDialogProps {
   open: boolean;
@@ -42,13 +43,18 @@ export function JoinRequestDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md w-[90%]">
+      <DialogContent className="sm:max-w-md sm:w-[90%]">
         <DialogHeader>
-          <DialogTitle>Request to Join</DialogTitle>
-          <DialogDescription>
-            Submit your request to participate in "{cleanup.title}". The
-            organizer will review and approve your request.
-          </DialogDescription>
+            <div className="flex flex-col items-center gap-3 mb-4">
+              <img src={fred} className="w-14 h-14" />
+            <div className="text-center space-y-1">
+              <DialogTitle>Request to Join</DialogTitle>
+              <DialogDescription>
+                Submit your request to participate in "{cleanup.title}". The
+                organizer will review and approve your request.
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
         <div className="space-y-4 py-4">
           {/* Cleanup Summary */}

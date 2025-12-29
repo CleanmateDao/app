@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Loader2, Plus } from "lucide-react";
 import { SUPPORTED_CURRENCIES, type SupportedCurrencyCode } from "@/constants/supported";
-import type { PaystackBank } from "@/services/api/banks";
+import { usePreviewBankAccount, type Bank } from "@/services/api/banks";
 
 interface AddBankDialogProps {
   open: boolean;
@@ -38,8 +39,8 @@ interface AddBankDialogProps {
     accountName: string;
     currency: SupportedCurrencyCode;
   }) => void;
-  paystackBanks: PaystackBank[];
-  isLoadingPaystackBanks: boolean;
+  banks: Bank[];
+  isLoadingBanks: boolean;
   onSubmit: () => void;
   isPending: boolean;
 }
@@ -49,20 +50,132 @@ export function AddBankDialog({
   onOpenChange,
   bankAccount,
   onBankAccountChange,
-  paystackBanks,
-  isLoadingPaystackBanks,
+  banks,
+  isLoadingBanks,
   onSubmit,
   isPending,
 }: AddBankDialogProps) {
+  const [isPreviewing, setIsPreviewing] = useState(false);
+  const [previewedAccountName, setPreviewedAccountName] = useState<string | null>(null);
+  const previewMutation = usePreviewBankAccount();
+  const previewTriggeredRef = useRef<string>(""); // Track what we've already previewed
+
+  // Check if account number is exactly 10 digits
+  const accountNumberDigits = bankAccount.accountNumber.replace(/\D/g, "");
+  const canPreview = accountNumberDigits.length === 10 && bankAccount.bankCode && bankAccount.currency;
+  
+  // Create a unique key for the preview request
+  const previewKey = `${accountNumberDigits}-${bankAccount.bankCode}-${bankAccount.currency}`;
+
+  // Memoized preview handler
+  const handlePreview = useCallback(async () => {
+    if (!canPreview || previewKey === previewTriggeredRef.current) {
+      return;
+    }
+
+    // Mark as triggered to prevent duplicate calls
+    previewTriggeredRef.current = previewKey;
+    setIsPreviewing(true);
+    
+    try {
+      const result = await previewMutation.mutateAsync({
+        accountNumber: accountNumberDigits,
+        currency: bankAccount.currency,
+        bankCode: bankAccount.bankCode,
+      });
+      
+      setPreviewedAccountName(result.accountName);
+      onBankAccountChange({
+        ...bankAccount,
+        accountName: result.accountName,
+      });
+    } catch (error) {
+      // Error is already handled by the mutation
+      setPreviewedAccountName(null);
+      onBankAccountChange({
+        ...bankAccount,
+        accountName: "",
+      });
+      // Reset trigger on error so user can retry
+      previewTriggeredRef.current = "";
+    } finally {
+      setIsPreviewing(false);
+    }
+  }, [canPreview, previewKey, accountNumberDigits, bankAccount, previewMutation, onBankAccountChange]);
+
+  // Auto-preview when account number reaches 10 digits
+  useEffect(() => {
+    if (canPreview && !previewedAccountName && !isPreviewing && !previewMutation.isPending && previewKey !== previewTriggeredRef.current) {
+      handlePreview();
+    }
+  }, [canPreview, previewedAccountName, isPreviewing, previewMutation.isPending, previewKey, handlePreview]);
+
+  // Reset previewed name when account number or bank changes
+  useEffect(() => {
+    if (accountNumberDigits.length !== 10 || !bankAccount.bankCode) {
+      setPreviewedAccountName(null);
+      previewTriggeredRef.current = ""; // Reset trigger
+      onBankAccountChange({
+        ...bankAccount,
+        accountName: "",
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accountNumberDigits, bankAccount.bankCode]);
+
+  const handleAccountNumberChange = (value: string) => {
+    // Only allow digits
+    const digitsOnly = value.replace(/\D/g, "");
+    // Limit to 10 digits
+    const limited = digitsOnly.slice(0, 10);
+    
+    onBankAccountChange({
+      ...bankAccount,
+      accountNumber: limited,
+      // Clear account name if account number changes
+      accountName: limited.length === 10 ? bankAccount.accountName : "",
+    });
+
+    // Reset preview if account number changes
+    if (limited.length !== 10) {
+      setPreviewedAccountName(null);
+    }
+  };
+
+  // Reset state when dialog closes
+  useEffect(() => {
+    if (!open) {
+      // Dialog is closing, reset all state
+      setPreviewedAccountName(null);
+      previewTriggeredRef.current = "";
+      setIsPreviewing(false);
+    }
+  }, [open]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog 
+      open={open} 
+      onOpenChange={(isOpen) => {
+        if (!isOpen) {
+          // Reset state when closing
+          setPreviewedAccountName(null);
+          previewTriggeredRef.current = "";
+          onBankAccountChange({
+            ...bankAccount,
+            accountNumber: "",
+            accountName: "",
+          });
+        }
+        onOpenChange(isOpen);
+      }}
+    >
       <DialogTrigger asChild>
         <Button size="sm" className="gap-2">
           <Plus className="w-4 h-4" />
           Add Account
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[90%] max-w-md">
+      <DialogContent className="sm:w-[90%] max-w-md">
         <DialogHeader>
           <DialogTitle>Add Bank Account</DialogTitle>
           <DialogDescription>
@@ -78,6 +191,7 @@ export function AddBankDialog({
                 onBankAccountChange({
                   ...bankAccount,
                   currency: v as SupportedCurrencyCode,
+                  accountName: "", // Clear account name when currency changes
                 })
               }
             >
@@ -95,7 +209,7 @@ export function AddBankDialog({
           </div>
           <div className="space-y-2">
             <Label>Bank Name</Label>
-            {isLoadingPaystackBanks ? (
+            {isLoadingBanks ? (
               <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 Loading banks...
@@ -104,7 +218,7 @@ export function AddBankDialog({
               <Select
                 value={bankAccount.bankCode}
                 onValueChange={(value) => {
-                  const selectedBank = paystackBanks.find(
+                  const selectedBank = banks.find(
                     (b) => b.code === value
                   );
                   if (selectedBank) {
@@ -112,7 +226,9 @@ export function AddBankDialog({
                       ...bankAccount,
                       bankName: selectedBank.name,
                       bankCode: selectedBank.code,
+                      accountName: "", // Clear account name when bank changes
                     });
+                    setPreviewedAccountName(null);
                   }
                 }}
               >
@@ -120,12 +236,12 @@ export function AddBankDialog({
                   <SelectValue placeholder="Select a bank" />
                 </SelectTrigger>
                 <SelectContent>
-                  {paystackBanks.length === 0 ? (
+                  {banks.length === 0 ? (
                     <div className="p-2 text-sm text-muted-foreground text-center">
                       No banks available for this currency
                     </div>
                   ) : (
-                    paystackBanks.map((bank) => (
+                    banks.map((bank) => (
                       <SelectItem key={bank.id} value={bank.code}>
                         {bank.name}
                       </SelectItem>
@@ -138,34 +254,68 @@ export function AddBankDialog({
           <div className="space-y-2">
             <Label>Account Number</Label>
             <Input
-              placeholder="Enter account number"
+              type="text"
+              inputMode="numeric"
+              placeholder="Enter 10-digit account number"
               value={bankAccount.accountNumber}
-              onChange={(e) =>
-                onBankAccountChange({
-                  ...bankAccount,
-                  accountNumber: e.target.value,
-                })
-              }
+              onChange={(e) => handleAccountNumberChange(e.target.value)}
+              maxLength={10}
             />
+            {accountNumberDigits.length > 0 && accountNumberDigits.length < 10 && (
+              <p className="text-xs text-muted-foreground">
+                {10 - accountNumberDigits.length} digit(s) remaining
+              </p>
+            )}
+            {accountNumberDigits.length === 10 && !previewedAccountName && !isPreviewing && !previewMutation.isPending && previewTriggeredRef.current && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                Verification failed. Please check the account number.
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label>Account Holder Name</Label>
-            <Input
-              placeholder="Enter account holder name"
-              value={bankAccount.accountName}
-              onChange={(e) =>
-                onBankAccountChange({
-                  ...bankAccount,
-                  accountName: e.target.value,
-                })
-              }
-            />
+            {previewedAccountName ? (
+              <div className="p-3 bg-secondary rounded-md border">
+                <p className="text-sm font-medium">{previewedAccountName}</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Account name verified
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 bg-muted rounded-md border border-dashed">
+                <p className="text-sm text-muted-foreground">
+                  {isPreviewing || previewMutation.isPending
+                    ? "Verifying account name..."
+                    : accountNumberDigits.length === 10 && previewTriggeredRef.current
+                    ? "Unable to verify account name. Please check the account number and try again."
+                    : accountNumberDigits.length === 10
+                    ? "Verifying account..."
+                    : "Enter 10-digit account number to verify"}
+                </p>
+              </div>
+            )}
+            {(isPreviewing || previewMutation.isPending) && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Verifying account...
+              </div>
+            )}
           </div>
         </div>
         <DialogFooter className="flex-col sm:flex-row gap-2">
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={() => {
+              // Reset all state when closing
+              setPreviewedAccountName(null);
+              previewTriggeredRef.current = "";
+              onBankAccountChange({
+                ...bankAccount,
+                accountNumber: "",
+                accountName: "",
+              });
+              onOpenChange(false);
+            }}
             className="w-full sm:w-auto"
           >
             Cancel
@@ -173,7 +323,7 @@ export function AddBankDialog({
           <Button
             onClick={onSubmit}
             className="w-full sm:w-auto"
-            disabled={isPending}
+            disabled={isPending || !previewedAccountName || accountNumberDigits.length !== 10}
           >
             {isPending ? (
               <>

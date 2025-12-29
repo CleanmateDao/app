@@ -47,7 +47,7 @@ export function EditTeamMemberDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Team Member</DialogTitle>
           <DialogDescription>

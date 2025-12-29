@@ -46,7 +46,6 @@ import { useSearchParams } from "react-router-dom";
 import { useUser } from "@/services/subgraph/queries";
 import {
   SUPPORTED_COUNTRIES,
-  getStatesForCountry,
   type SupportedCountryCode,
 } from "@/constants/supported";
 import { INTEREST_OPTIONS } from "@/constants/interests";
@@ -85,31 +84,13 @@ const steps = [
     id: 2,
     title: "Location",
     icon: MapPin,
-    description: "Where will you organize cleanups?",
+    description: "Where will you organize or join cleanups?",
   },
   {
     id: 3,
     title: "Wallet",
     icon: Wallet,
     description: "Get rewarded for your impact",
-  },
-];
-
-const achievements = [
-  {
-    icon: Leaf,
-    label: "First Cleanup",
-    description: "Organize your first cleanup event",
-  },
-  {
-    icon: Target,
-    label: "10 Participants",
-    description: "Have 10 people join your cleanup",
-  },
-  {
-    icon: Trophy,
-    label: "Impact Leader",
-    description: "Earn 1000 B3TR tokens",
   },
 ];
 
@@ -132,6 +113,11 @@ export default function Onboarding() {
     return { ...initialData, referralCode: refCode };
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Mark onboarding as visited when component mounts
+  useEffect(() => {
+    localStorage.setItem("hasSeenOnboarding", "true");
+  }, []);
 
   // Save referral code to localStorage when URL param changes
   useEffect(() => {
@@ -197,8 +183,6 @@ export default function Onboarding() {
   };
 
   const handleComplete = async () => {
-    console.log({ walletAddress });
-
     if (!walletAddress) {
       toast.error("Wallet not connected");
       return;
@@ -213,14 +197,13 @@ export default function Onboarding() {
     setIsSubmitting(true);
 
     try {
-      const userMetadata: UserProfileMetadata<SupportedCountryCode, false> = {
+      const userMetadata: UserProfileMetadata<SupportedCountryCode, true> = {
         name: data.fullName,
         bio: data.bio || undefined,
         location: {
           country: data.country,
           state: data.state,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
+        },
         interests: data.interests,
       };
 
@@ -247,6 +230,9 @@ export default function Onboarding() {
           });
         }
       }
+
+      // Mark onboarding as seen after successful completion
+      localStorage.setItem("hasSeenOnboarding", "true");
     } catch (error) {
       console.error("Error completing onboarding:", error);
       toast.error(
@@ -260,7 +246,7 @@ export default function Onboarding() {
   };
 
   const handleSkip = () => {
-    localStorage.setItem("skipOnboarding", "true");
+    localStorage.setItem("hasSeenOnboarding", "true");
     toast.info("You can complete your profile anytime in Settings.");
     navigate("/dashboard");
   };
@@ -396,7 +382,7 @@ export default function Onboarding() {
                       alt="African art"
                       className="w-full h-32 object-cover"
                     />
-                    <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 via-background/60 to-transparent" />
                     <div className="absolute bottom-4 left-4 right-4">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-full bg-primary/20 backdrop-blur-sm border-2 border-primary flex items-center justify-center">
@@ -404,10 +390,10 @@ export default function Onboarding() {
                         </div>
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            Join 500+ organizers
+                            Join 500+ changemakers
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Making impact across the Globe
+                            Making a difference across the globe
                           </p>
                         </div>
                       </div>
@@ -417,7 +403,9 @@ export default function Onboarding() {
                   <Card>
                     <CardContent className="pt-6 space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="fullName">Full Name *</Label>
+                        <Label htmlFor="fullName">
+                          Full Name or Organization Name *
+                        </Label>
                         <Input
                           id="fullName"
                           placeholder="Your name"
@@ -528,32 +516,6 @@ export default function Onboarding() {
               {/* Step 2: Location */}
               {currentStep === 2 && (
                 <div className="space-y-6">
-                  {/* Achievement Preview */}
-                  <div className="grid grid-cols-3 gap-3">
-                    {achievements.map((achievement, index) => {
-                      const Icon = achievement.icon;
-                      return (
-                        <motion.div
-                          key={achievement.label}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.1 }}
-                          className="rounded-xl bg-card border border-border p-4 text-center"
-                        >
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">
-                            <Icon className="w-5 h-5 text-primary" />
-                          </div>
-                          <p className="text-xs font-medium">
-                            {achievement.label}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">
-                            {achievement.description}
-                          </p>
-                        </motion.div>
-                      );
-                    })}
-                  </div>
-
                   <Card>
                     <CardContent className="pt-6 space-y-4">
                       <div className="space-y-2">
@@ -583,36 +545,17 @@ export default function Onboarding() {
                         </Select>
                       </div>
 
-                      {(() => {
-                        const states = getStatesForCountry(data.country);
-                        if (states.length === 0) return null;
-
-                        return (
-                          <div className="space-y-2">
-                            <Label htmlFor="state">State *</Label>
-                            <Select
-                              value={data.state}
-                              onValueChange={(value) =>
-                                updateData({ state: value })
-                              }
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select state" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {states.map((state) => (
-                                  <SelectItem
-                                    key={state.code}
-                                    value={state.name}
-                                  >
-                                    {state.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        );
-                      })()}
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State/Province/City *</Label>
+                        <Input
+                          id="state"
+                          placeholder="Enter state or province"
+                          value={data.state}
+                          onChange={(e) =>
+                            updateData({ state: e.target.value })
+                          }
+                        />
+                      </div>
                     </CardContent>
                   </Card>
                 </div>

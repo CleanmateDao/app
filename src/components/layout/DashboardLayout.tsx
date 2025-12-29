@@ -24,7 +24,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     location.pathname === "/ai-chat";
 
   // Hide topbar when recording video for streak or in map view
-  const hideTopbar = isRecording || isMapView;
+  const hideTopbar =
+    isRecording || isMapView || location.pathname === "/streaks/submit";
 
   // Check if we're in map view and update reactively
   useEffect(() => {
@@ -86,7 +87,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           )}
         </AnimatePresence>
         <main
-          className={`flex-1 overflow-auto overflow-x-hidden flex justify-center ${
+          className={`flex-1 overflow-y-auto overflow-x-hidden flex justify-center ${
             hideBottomNav ? "lg:pb-0" : "pb-20 lg:pb-0"
           }`}
         >

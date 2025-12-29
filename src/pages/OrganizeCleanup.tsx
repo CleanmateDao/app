@@ -244,7 +244,8 @@ export default function OrganizeCleanup() {
       const startTime = Math.floor(startDate.getTime() / 1000);
       const endTime = Math.floor(endDate.getTime() / 1000);
 
-      console.log({
+      // Prepare cleanup metadata
+      const cleanupData = {
         metadata: metadataJsonString,
         category: formData.category,
         location: {
@@ -258,7 +259,7 @@ export default function OrganizeCleanup() {
         startTime: startTime.toString(),
         endTime: endTime.toString(),
         maxParticipants: schedule.maxParticipants.toString(),
-      });
+      };
 
       // Submit to contract
       toast.info("Creating cleanup on blockchain...");

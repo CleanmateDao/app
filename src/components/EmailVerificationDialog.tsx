@@ -166,7 +166,7 @@ export function EmailVerificationDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md w-[90%] rounded-lg">
+      <DialogContent className="sm:max-w-md sm:w-[90%] rounded-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Mail className="w-5 h-5" />

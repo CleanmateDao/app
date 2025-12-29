@@ -3,11 +3,8 @@ import { motion } from "framer-motion";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   Plus,
-  Search,
   MoreHorizontal,
   Eye,
-  Trash2,
-  Download,
   MapPin,
   Calendar,
   Users,
@@ -40,16 +37,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import type { Cleanup, CleanupStatusUI } from "@/types/cleanup";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -60,6 +47,7 @@ import { Sheet, SheetContent } from "@/components/ui/sheet";
 import {
   useInfiniteCleanups,
   useUserCleanups,
+  useCleanups,
 } from "@/services/subgraph/queries";
 import { transformCleanup } from "@/services/subgraph/transformers";
 import { mapAppStatusToSubgraph } from "@/services/subgraph/utils";
@@ -122,8 +110,6 @@ export default function Cleanups() {
   const [activeTab, setActiveTab] = useState<
     CleanupStatusUI | "all" | "created"
   >(isValidTab(tabFromUrl) ? tabFromUrl : "all");
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [cleanupToDelete, setCleanupToDelete] = useState<Cleanup | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "map">(() => {
     const saved = localStorage.getItem("cleanups-view-mode");
     return saved === "list" || saved === "map" ? saved : "map";
@@ -145,7 +131,7 @@ export default function Cleanups() {
     return mapAppStatusToSubgraph(activeTab);
   }, [activeTab, isCreatedTab]);
 
-  // Fetch all cleanups with infinite scroll
+  // Fetch all cleanups with infinite scroll (for list view)
   const {
     data: infiniteCleanupsData,
     isLoading: isLoadingAll,
@@ -161,7 +147,20 @@ export default function Cleanups() {
       userAddress: walletAddress || undefined,
     },
     20,
-    { enabled: !isCreatedTab }
+    { enabled: !isCreatedTab && viewMode === "list" }
+  );
+
+  // Fetch all cleanups with 1000 limit (for map view)
+  const { data: mapCleanupsData, isLoading: isLoadingMap } = useCleanups(
+    {
+      where: {
+        ...(statusFilter !== undefined ? { status: statusFilter } : {}),
+        published: true,
+      },
+      first: 1000,
+      userAddress: walletAddress || undefined,
+    },
+    { enabled: !isCreatedTab && viewMode === "map" }
   );
 
   // For created tab, fetch user's cleanups without published filter to include unpublished
@@ -171,21 +170,35 @@ export default function Cleanups() {
     { enabled: isCreatedTab && !!walletAddress }
   );
 
-  // Transform and flatten infinite query data
-  const allCleanups = useMemo(() => {
+  // Transform and flatten infinite query data (for list view)
+  const allCleanupsList = useMemo(() => {
     if (!infiniteCleanupsData?.pages) return [];
     return infiniteCleanupsData.pages.flatMap((page) =>
       page.map((cleanup) => transformCleanup(cleanup))
     );
   }, [infiniteCleanupsData]);
 
+  // Transform map query data (for map view)
+  const allCleanupsMap = useMemo(() => {
+    if (!mapCleanupsData) return [];
+    return mapCleanupsData.map((cleanup) => transformCleanup(cleanup));
+  }, [mapCleanupsData]);
+
   const userCleanups = useMemo(() => {
     if (!userCleanupsData) return [];
     return userCleanupsData.map((cleanup) => transformCleanup(cleanup));
   }, [userCleanupsData]);
 
-  const cleanups = isCreatedTab ? userCleanups : allCleanups;
-  const isLoading = isCreatedTab ? isLoadingUser : isLoadingAll;
+  const cleanups = isCreatedTab
+    ? userCleanups
+    : viewMode === "map"
+    ? allCleanupsMap
+    : allCleanupsList;
+  const isLoading = isCreatedTab
+    ? isLoadingUser
+    : viewMode === "map"
+    ? isLoadingMap
+    : isLoadingAll;
 
   // Infinite scroll hook
   const sentinelRef = useInfiniteScroll({
@@ -200,14 +213,6 @@ export default function Cleanups() {
     // Dispatch custom event to notify DashboardLayout of view mode change
     window.dispatchEvent(new Event("cleanups-view-mode-changed"));
   }, [viewMode]);
-
-  const handleDeleteCleanup = () => {
-    // Note: This would need to call a contract function to delete
-    // For now, we'll just show a toast
-    toast.success("Cleanup deletion requires contract interaction");
-    setDeleteDialogOpen(false);
-    setCleanupToDelete(null);
-  };
 
   // Full screen map mode
   if (viewMode === "map") {
@@ -507,17 +512,6 @@ export default function Cleanups() {
                               <Eye className="w-4 h-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setCleanupToDelete(cleanup);
-                                setDeleteDialogOpen(true);
-                              }}
-                            >
-                              <Trash2 className="w-4 h-4 mr-2" />
-                              Delete
-                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -563,28 +557,6 @@ export default function Cleanups() {
           )}
         </Card>
       )}
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete cleanup?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to delete "{cleanupToDelete?.title}"? This
-              action cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteCleanup}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

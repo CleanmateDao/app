@@ -26,6 +26,8 @@ import type {
   SubmitStreakParams,
 } from "@/types/params";
 
+const SUBGRAPH_REFRESH_DELAY = 400;
+
 // Helper to create a clause for a contract function call
 function createClause(
   abi: readonly unknown[],
@@ -59,22 +61,28 @@ export function useRegisterUser(onTxConfirmedCallback?: () => void) {
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      toast.success("User registered successfully");
-      onTxConfirmedCallback?.();
+      setTimeout(() => {
+        toast.success("User registered successfully");
+        onTxConfirmedCallback?.();
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
         error instanceof Error ? error.message : error ?? "Unknown error";
       toast.error(`Registration failed: ${errorMessage}`);
     },
+    gasPadding: 0.1, // 10% padding
   });
 
   const execute = async (params: RegisterUserParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -117,13 +125,16 @@ export function useRegisterWithReferral(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      toast.success("User registered with referral successfully");
-      onTxConfirmedCallback?.();
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        toast.success("User registered with referral successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -133,7 +144,10 @@ export function useRegisterWithReferral(onTxConfirmedCallback?: () => void) {
   });
 
   const execute = async (params: RegisterWithReferralParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -176,13 +190,16 @@ export function useUpdateProfile(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      toast.success("Profile updated successfully");
-      onTxConfirmedCallback?.();
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        toast.success("Profile updated successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -192,7 +209,10 @@ export function useUpdateProfile(onTxConfirmedCallback?: () => void) {
   });
 
   const execute = async (metadata: string) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -232,7 +252,7 @@ function generateRandomReferralCode(): string {
   return code;
 }
 
-export function useSetReferralCode() {
+export function useSetReferralCode(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -247,12 +267,16 @@ export function useSetReferralCode() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      toast.success("Referral code set successfully");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        toast.success("Referral code set successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -262,7 +286,10 @@ export function useSetReferralCode() {
   });
 
   const execute = async (referralCode?: string) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -293,7 +320,7 @@ export function useSetReferralCode() {
   };
 }
 
-export function useAddTeamMember() {
+export function useAddTeamMember(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -308,15 +335,19 @@ export function useAddTeamMember() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.teamMemberships(),
-      });
-      toast.success("Team member added successfully");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.teamMemberships(),
+        });
+        toast.success("Team member added successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -326,7 +357,10 @@ export function useAddTeamMember() {
   });
 
   const execute = async (params: AddTeamMemberParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -354,7 +388,7 @@ export function useAddTeamMember() {
   };
 }
 
-export function useRemoveTeamMember() {
+export function useRemoveTeamMember(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -369,15 +403,19 @@ export function useRemoveTeamMember() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.teamMemberships(),
-      });
-      toast.success("Team member removed successfully");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.teamMemberships(),
+        });
+        toast.success("Team member removed successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -387,7 +425,10 @@ export function useRemoveTeamMember() {
   });
 
   const execute = async (member: string) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -415,7 +456,9 @@ export function useRemoveTeamMember() {
   };
 }
 
-export function useUpdateTeamMemberPermissions() {
+export function useUpdateTeamMemberPermissions(
+  onTxConfirmedCallback?: () => void
+) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -430,15 +473,19 @@ export function useUpdateTeamMemberPermissions() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.teamMemberships(),
-      });
-      toast.success("Team member permissions updated successfully");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.teamMemberships(),
+        });
+        toast.success("Team member permissions updated successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -448,7 +495,10 @@ export function useUpdateTeamMemberPermissions() {
   });
 
   const execute = async (params: UpdateTeamMemberPermissionsParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -491,13 +541,16 @@ export function useMarkKYCPending(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
-      queryClient.invalidateQueries({
-        queryKey: subgraphKeys.user(account?.address),
-      });
-      toast.success("KYC status updated to pending");
-      onTxConfirmedCallback?.();
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
+        queryClient.invalidateQueries({
+          queryKey: subgraphKeys.user(account?.address),
+        });
+        toast.success("KYC status updated to pending");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -507,7 +560,10 @@ export function useMarkKYCPending(onTxConfirmedCallback?: () => void) {
   });
 
   const execute = async () => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.USER_REGISTRY) {
       throw new Error("UserRegistry address not configured");
     }
@@ -551,10 +607,13 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 1, // 100% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
-      toast.success("Cleanup created successfully");
-      onTxConfirmedCallback?.();
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
+        toast.success("Cleanup created successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -564,7 +623,10 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
   });
 
   const execute = async (params: CreateCleanupParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -603,7 +665,7 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
   };
 }
 
-export function useApplyToCleanup() {
+export function useApplyToCleanup(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -618,9 +680,11 @@ export function useApplyToCleanup() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Note: cleanupId needs to be passed via closure or ref
       // This will be handled by the execute function
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -630,7 +694,10 @@ export function useApplyToCleanup() {
   });
 
   const execute = async (cleanupId: string) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -647,11 +714,13 @@ export function useApplyToCleanup() {
     await sendTransaction([clause]);
 
     // Invalidate queries after successful transaction
-    queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupId),
-    });
-    queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
-    toast.success("Application submitted successfully");
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.cleanup(cleanupId),
+      });
+      queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
+      toast.success("Application submitted successfully");
+    }, SUBGRAPH_REFRESH_DELAY);
   };
 
   return {
@@ -665,7 +734,7 @@ export function useApplyToCleanup() {
   };
 }
 
-export function useAcceptParticipant() {
+export function useAcceptParticipant(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -680,8 +749,10 @@ export function useAcceptParticipant() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -697,7 +768,10 @@ export function useAcceptParticipant() {
     cleanupId: string; // uint256 cleanup ID
     participant: string; // address
   }) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -713,10 +787,12 @@ export function useAcceptParticipant() {
 
     await sendTransaction([clause]);
 
-    queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupId),
-    });
-    toast.success("Participant accepted successfully");
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.cleanup(cleanupId),
+      });
+      toast.success("Participant accepted successfully");
+    }, SUBGRAPH_REFRESH_DELAY);
   };
 
   return {
@@ -730,7 +806,7 @@ export function useAcceptParticipant() {
   };
 }
 
-export function useRejectParticipant() {
+export function useRejectParticipant(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -745,8 +821,10 @@ export function useRejectParticipant() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -762,7 +840,10 @@ export function useRejectParticipant() {
     cleanupId: string; // uint256 cleanup ID
     participant: string; // address
   }) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -778,10 +859,12 @@ export function useRejectParticipant() {
 
     await sendTransaction([clause]);
 
-    queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupId),
-    });
-    toast.success("Participant rejected");
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.cleanup(cleanupId),
+      });
+      toast.success("Participant rejected");
+    }, SUBGRAPH_REFRESH_DELAY);
   };
 
   return {
@@ -795,7 +878,7 @@ export function useRejectParticipant() {
   };
 }
 
-export function useUpdateCleanupStatus() {
+export function useUpdateCleanupStatus(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -810,8 +893,10 @@ export function useUpdateCleanupStatus() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -827,7 +912,10 @@ export function useUpdateCleanupStatus() {
     cleanupId: string; // uint256 cleanup ID
     newStatus: number; // 0=UNPUBLISHED, 1=OPEN, 2=IN_PROGRESS, 3=COMPLETED, 4=REWARDED
   }) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -843,11 +931,13 @@ export function useUpdateCleanupStatus() {
 
     await sendTransaction([clause]);
 
-    queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupId),
-    });
-    queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
-    toast.success("Cleanup status updated successfully");
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.cleanup(cleanupId),
+      });
+      queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
+      toast.success("Cleanup status updated successfully");
+    }, SUBGRAPH_REFRESH_DELAY);
   };
 
   return {
@@ -876,6 +966,7 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       onTxConfirmedCallback?.();
     },
@@ -892,7 +983,10 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
   }: {
     cleanupId: string; // uint256 cleanup ID
   } & SubmitProofOfWorkParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -916,10 +1010,12 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
 
     await sendTransaction([clause]);
 
-    queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(cleanupId),
-    });
-    toast.success("Proof of work submitted successfully");
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.cleanup(cleanupId),
+      });
+      toast.success("Proof of work submitted successfully");
+    }, SUBGRAPH_REFRESH_DELAY);
     // Note: onTxConfirmedCallback is called in onTxConfirmed above
   };
 
@@ -934,7 +1030,7 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
   };
 }
 
-export function useAddCleanupUpdate() {
+export function useAddCleanupUpdate(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -949,8 +1045,10 @@ export function useAddCleanupUpdate() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
+      onTxConfirmedCallback?.();
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -960,7 +1058,10 @@ export function useAddCleanupUpdate() {
   });
 
   const execute = async (params: AddCleanupUpdatesParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.CLEANUP) {
       throw new Error("Cleanup contract address not configured");
     }
@@ -979,13 +1080,15 @@ export function useAddCleanupUpdate() {
 
     await sendTransaction([clause]);
 
-    queryClient.invalidateQueries({
-      queryKey: subgraphKeys.cleanup(params.cleanupId),
-    });
-    queryClient.invalidateQueries({
-      queryKey: [...subgraphKeys.cleanups(), params.cleanupId, "updates"],
-    });
-    toast.success("Update added successfully");
+    setTimeout(() => {
+      queryClient.invalidateQueries({
+        queryKey: subgraphKeys.cleanup(params.cleanupId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: [...subgraphKeys.cleanups(), params.cleanupId, "updates"],
+      });
+      toast.success("Update added successfully");
+    }, SUBGRAPH_REFRESH_DELAY);
   };
 
   return {
@@ -1000,7 +1103,7 @@ export function useAddCleanupUpdate() {
 }
 
 // RewardsManager Mutations
-export function useClaimRewards() {
+export function useClaimRewards(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -1015,9 +1118,13 @@ export function useClaimRewards() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.rewards() });
-      toast.success("Rewards claimed successfully");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.rewards() });
+        toast.success("Rewards claimed successfully");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -1027,7 +1134,10 @@ export function useClaimRewards() {
   });
 
   const execute = async (params: ClaimRewardsParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.REWARDS_MANAGER) {
       throw new Error("RewardsManager address not configured");
     }
@@ -1056,7 +1166,7 @@ export function useClaimRewards() {
 }
 
 // Streak Mutations
-export function useJoinStreak() {
+export function useJoinStreak(onTxConfirmedCallback?: () => void) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -1071,9 +1181,13 @@ export function useJoinStreak() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
-      toast.success("Successfully joined the streak program!");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
+        toast.success("Successfully joined the streak program!");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
@@ -1083,7 +1197,10 @@ export function useJoinStreak() {
   });
 
   const execute = async () => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.STREAK) {
       throw new Error("Streak contract address not configured");
     }
@@ -1111,7 +1228,10 @@ export function useJoinStreak() {
   };
 }
 
-export function useSubmitStreak() {
+export function useSubmitStreak(
+  onTxConfirmedCallback?: () => void,
+  onTxFailedOrCancelledCallback?: () => void
+) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -1126,19 +1246,27 @@ export function useSubmitStreak() {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
-      queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
-      toast.success("Streak submitted successfully!");
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
+        toast.success("Streak submitted successfully!");
+        onTxConfirmedCallback?.();
+      }, SUBGRAPH_REFRESH_DELAY);
     },
     onTxFailedOrCancelled: (error?: Error | string) => {
       const errorMessage =
         error instanceof Error ? error.message : error ?? "Unknown error";
       toast.error(`Failed to submit streak: ${errorMessage}`);
+      onTxFailedOrCancelledCallback?.();
     },
   });
 
   const execute = async (params: SubmitStreakParams) => {
-    if (!account) throw new Error("Wallet not connected");
+    if (!account) {
+      toast.error("Wallet not connected");
+      return;
+    }
     if (!CONTRACT_ADDRESSES.STREAK) {
       throw new Error("Streak contract address not configured");
     }

@@ -49,7 +49,7 @@ export function InviteTeamMemberDialog({
           Invite
         </Button>
       </DialogTrigger>
-      <DialogContent className="w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:w-[90%] max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Invite Team Member</DialogTitle>
           <DialogDescription>

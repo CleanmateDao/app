@@ -12,11 +12,11 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      ...(mode === "development"
-        ? {
-            "@cleanmate/cip-sdk": path.resolve(__dirname, "../sdk"),
-          }
-        : {}),
+      // ...(mode === "development"
+      //   ? {
+      //       "@cleanmate/cip-sdk": path.resolve(__dirname, "../sdk"),
+      //     }
+      //   : {}),
       buffer: "buffer",
       process: "process/browser",
       stream: "stream-browserify",
@@ -34,9 +34,6 @@ export default defineConfig(({ mode }) => ({
     minify: "esbuild",
     commonjsOptions: { transformMixedEsModules: true },
     chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      external: ["@privy-io/react-auth"],
-    },
   },
   optimizeDeps: {
     include: [

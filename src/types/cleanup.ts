@@ -145,6 +145,7 @@ export interface Cleanup {
 export interface RewardTransaction {
   id: string;
   type: "earned" | "claimed";
+  /** Amount in wei (as number). Convert to ether using toB3tr() before currency conversion. */
   amount: number;
   cleanupId: string | null;
   streakSubmissionId?: string | null;

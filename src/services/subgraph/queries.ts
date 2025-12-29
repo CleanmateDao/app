@@ -359,6 +359,7 @@ export function useTeamMembers(
         first: 100,
         where: {
           organizer: organizerAddress,
+          deleted: false,
         },
         orderBy: "addedAt",
         orderDirection: "desc",
@@ -501,7 +502,7 @@ export function useUserStreakStats(
       const response = await subgraphClient.getUserStreakStats(userAddress);
       return response.userStreakStats;
     },
-    enabled: !!userAddress,
+    enabled: !!userAddress && userAddress.length > 0,
     ...options,
   });
 }

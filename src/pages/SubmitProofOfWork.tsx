@@ -13,6 +13,7 @@ import {
   MapPin,
   Calendar,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,7 +32,6 @@ import { CleanupParticipant } from "@/types/cleanup";
 import { toast } from "sonner";
 import { useCleanup } from "@/services/subgraph/queries";
 import { transformCleanup } from "@/services/subgraph/transformers";
-import { Loader2 } from "lucide-react";
 import { useSubmitProofOfWork } from "@/services/contracts/mutations";
 import {
   uploadFilesToIPFS,

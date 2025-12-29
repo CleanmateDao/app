@@ -35,7 +35,7 @@ export interface GetBanksResponse {
   message?: string;
 }
 
-export interface PaystackBank {
+export interface Bank {
   id: number;
   name: string;
   code: string;
@@ -45,7 +45,7 @@ export interface PaystackBank {
 
 export interface GetBanksListResponse {
   success: boolean;
-  data?: PaystackBank[];
+  data?: Bank[];
   message?: string;
 }
 
@@ -60,13 +60,30 @@ export interface DeleteBankResponse {
   message?: string;
 }
 
+export interface PreviewBankAccountRequest {
+  accountNumber: string;
+  currency: SupportedCurrencyCode;
+  bankCode?: string;
+  bankName?: string;
+}
+
+export interface PreviewBankAccountResponse {
+  success: boolean;
+  data?: {
+    accountName: string;
+    accountNumber: string;
+    bankCode: string;
+  };
+  message?: string;
+}
+
 /**
  * Fetch all bank accounts for the current user
  */
 async function getBanks(userId: string): Promise<BankAccount[]> {
   try {
     const response = await bankClient.get<GetBanksResponse>(
-      `/banks?userId=${userId}`
+      `/api/banks?userId=${userId}`
     );
 
     if (response.data.success && response.data.data) {
@@ -87,14 +104,14 @@ async function getBanks(userId: string): Promise<BankAccount[]> {
 }
 
 /**
- * Fetch banks list by currency from Paystack (1 day cache)
+ * Fetch banks list by currency (1 day cache)
  */
 async function getBanksListByCurrency(
   currency: SupportedCurrencyCode
-): Promise<PaystackBank[]> {
+): Promise<Bank[]> {
   try {
     const response = await bankClient.get<GetBanksListResponse>(
-      `/banks/list/${currency}`
+      `/api/banks/list/${currency}`
     );
 
     if (response.data.success && response.data.data) {
@@ -121,9 +138,15 @@ async function createBankAccount(
   data: CreateBankAccountRequest & { userId: string }
 ): Promise<BankAccount> {
   try {
+    // Normalize account number (digits only) before sending
+    const normalizedData = {
+      ...data,
+      accountNumber: data.accountNumber.replace(/\D/g, ""),
+    };
+
     const response = await bankClient.post<CreateBankAccountResponse>(
-      `/banks`,
-      data
+      `/api/banks`,
+      normalizedData
     );
 
     if (response.data.success && response.data.data) {
@@ -149,7 +172,7 @@ async function createBankAccount(
 async function deleteBankAccount(id: string, userId: string): Promise<void> {
   try {
     const response = await bankClient.delete<DeleteBankResponse>(
-      `/banks/${id}?userId=${userId}`
+      `/api/banks/${id}?userId=${userId}`
     );
 
     if (!response.data.success) {
@@ -168,6 +191,35 @@ async function deleteBankAccount(id: string, userId: string): Promise<void> {
 }
 
 /**
+ * Preview bank account to get account name
+ */
+async function previewBankAccount(
+  data: PreviewBankAccountRequest
+): Promise<{ accountName: string; accountNumber: string; bankCode: string }> {
+  try {
+    const response = await bankClient.post<PreviewBankAccountResponse>(
+      `/api/banks/preview`,
+      data
+    );
+
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+
+    throw new Error(response.data.message || "Failed to preview bank account");
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      throw new Error(
+        error.response?.data?.message ||
+          error.message ||
+          "Failed to preview bank account"
+      );
+    }
+    throw error;
+  }
+}
+
+/**
  * Set a bank account as default
  */
 async function setDefaultBankAccount(
@@ -176,7 +228,7 @@ async function setDefaultBankAccount(
 ): Promise<BankAccount> {
   try {
     const response = await bankClient.patch<SetDefaultBankResponse>(
-      `/banks/${id}/default?userId=${userId}`
+      `/api/banks/${id}/default?userId=${userId}`
     );
 
     if (response.data.success && response.data.data) {
@@ -213,10 +265,14 @@ export function useBanks(userId: string | undefined) {
 /**
  * React hook for fetching banks list by currency (1 day cache)
  */
-export function useBanksListByCurrency(currency: SupportedCurrencyCode) {
+export function useBanksListByCurrency(
+  currency: SupportedCurrencyCode,
+  enabled: boolean = true
+) {
   return useQuery({
     queryKey: ["banks-list", currency],
     queryFn: () => getBanksListByCurrency(currency),
+    enabled: enabled && !!currency,
     staleTime: 1000 * 60 * 60 * 24, // 1 day
     gcTime: 1000 * 60 * 60 * 24 * 2, // 2 days
   });
@@ -255,6 +311,18 @@ export function useDeleteBankAccount() {
     },
     onError: (error: Error) => {
       toast.error(`Failed to delete bank account: ${error.message}`);
+    },
+  });
+}
+
+/**
+ * React hook for previewing bank account
+ */
+export function usePreviewBankAccount() {
+  return useMutation({
+    mutationFn: previewBankAccount,
+    onError: (error: Error) => {
+      toast.error(`Failed to preview bank account: ${error.message}`);
     },
   });
 }
