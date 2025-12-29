@@ -91,6 +91,7 @@ import { uploadFileToIPFS } from "@/services/ipfs";
 import {
   useMarkKYCPending,
   useUpdateProfile,
+  useRegisterUser,
   useSetReferralCode,
   useAddTeamMember,
   useRemoveTeamMember,
@@ -103,7 +104,6 @@ import {
 } from "@cleanmate/cip-sdk";
 import {
   SUPPORTED_COUNTRIES,
-  SUPPORTED_CURRENCIES,
   type SupportedCountryCode,
   type SupportedCurrencyCode,
   isBankSupported,
@@ -111,6 +111,7 @@ import {
 } from "@/constants/supported";
 import { INTEREST_OPTIONS } from "@/constants/interests";
 import { useExchangeRate } from "@/contexts/ExchangeRateContext";
+import fred from "@/assets/fred.png";
 
 const VALID_TABS = [
   "profile",
@@ -201,6 +202,7 @@ export default function Settings() {
   const submitKYCToAPIMutation = useSubmitKYCToAPI();
   const markKYCPendingMutation = useMarkKYCPending();
   const updateProfileMutation = useUpdateProfile();
+  const registerUserMutation = useRegisterUser();
   const { data: kycSubmission } = useKYCSubmission(walletAddress || null);
   const setReferralCodeMutation = useSetReferralCode();
 
@@ -392,8 +394,14 @@ export default function Settings() {
       return;
     }
 
-    if (!userProfile) {
-      toast.error("User not registered. Please complete onboarding first.");
+    // Validate required fields for registration
+    if (!userProfile && !profile.email) {
+      toast.error("Email is required to create your profile");
+      return;
+    }
+
+    if (!userProfile && !profile.name) {
+      toast.error("Name is required to create your profile");
       return;
     }
 
@@ -409,23 +417,40 @@ export default function Settings() {
         );
       }
 
-      const profileMetadata: UserProfileMetadata<SupportedCountryCode, false> =
-        {
-          name: profile.name,
-          bio: profile.bio || undefined,
-          photo: photoUrl,
-          location: {
-            country: profile.country,
-            state: profile.state,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any,
-          interests: profile.interests,
-        };
+      const profileMetadata: UserProfileMetadata<SupportedCountryCode, true> = {
+        name: profile.name,
+        bio: profile.bio || undefined,
+        photo:
+          photoUrl ||
+          (userProfile?.profileImage && !profilePhotoFile
+            ? userProfile.profileImage
+            : undefined),
+        location: {
+          country: profile.country,
+          state: profile.state,
+        },
+        interests: profile.interests,
+      };
 
-      toast.info("Updating profile on blockchain...");
-      await updateProfileMutation.sendTransaction(
-        stringifyUserProfileMetadata(profileMetadata)
-      );
+      const metadataString = stringifyUserProfileMetadata(profileMetadata);
+
+      if (!userProfile) {
+        // Register new user
+        if (!profile.email) {
+          toast.error("Email is required to create your profile");
+          return;
+        }
+
+        toast.info("Creating profile on blockchain...");
+        await registerUserMutation.sendTransaction({
+          metadata: metadataString,
+          email: profile.email,
+        });
+      } else {
+        // Update existing profile
+        toast.info("Updating profile on blockchain...");
+        await updateProfileMutation.sendTransaction(metadataString);
+      }
 
       if (profilePhotoFile && photoUrl) {
         setProfileImage(photoUrl);
@@ -460,11 +485,15 @@ export default function Settings() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Local preview only; upload happens when the user clicks "Update Profile".
+      // Local preview only; upload happens when the user clicks the save button.
       const previewUrl = URL.createObjectURL(file);
       setProfileImage(previewUrl);
       setProfilePhotoFile(file);
-      toast.success("Photo selected. Click Update Profile to upload.");
+      toast.success(
+        `Photo selected. Click ${
+          userProfile ? "Update" : "Create"
+        } Profile to upload.`
+      );
     }
   };
 
@@ -535,52 +564,46 @@ export default function Settings() {
 
         {/* Profile Tab */}
         <TabsContent value="profile" className="space-y-6">
+          {/* Registration Notice */}
+          {walletAddress && !userProfile && (
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">Create Your Profile</h3>
+                <p className="text-sm text-muted-foreground">
+                  Fill in your details below to create your profile. Email is
+                  required and cannot be changed after registration.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Email Verification Status */}
           {walletAddress && userData?.email?.length > 0 && (
-            <Card
-              className={cn(
-                "border-l-4",
-                isEmailVerified ? "border-l-green-500" : "border-l-primary"
-              )}
-            >
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <div
-                    className={cn(
-                      "w-12 h-12 rounded-full flex items-center justify-center shrink-0",
-                      isEmailVerified ? "bg-green-500/10" : "bg-primary/10"
-                    )}
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">
+                  {isEmailVerified ? "Email Verified" : "Verify Your Email"}
+                </h3>
+                <p className="text-sm text-muted-foreground">
+                  {isEmailVerified
+                    ? `Your email ${
+                        profile.email || ""
+                      } has been verified. You can now use referrals and apply for KYC.`
+                    : "Verify your email to unlock referrals and apply for KYC."}
+                </p>
+                {!isEmailVerified && (
+                  <Button
+                    size="sm"
+                    className="w-full sm:w-auto mt-2"
+                    onClick={() => setEmailVerificationOpen(true)}
                   >
-                    {isEmailVerified ? (
-                      <CheckCircle2 className="w-6 h-6 text-green-500" />
-                    ) : (
-                      <Mail className="w-6 h-6 text-primary" />
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold">
-                      {isEmailVerified ? "Email Verified" : "Verify Your Email"}
-                    </h3>
-                    <p className="text-sm text-muted-foreground">
-                      {isEmailVerified
-                        ? `Your email ${
-                            profile.email || ""
-                          } has been verified. You can now use referrals and apply for KYC.`
-                        : "Verify your email to unlock referrals and apply for KYC."}
-                    </p>
-                  </div>
-                  {!isEmailVerified && (
-                    <Button
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      onClick={() => setEmailVerificationOpen(true)}
-                    >
-                      Verify Email
-                    </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                    Verify Email
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
 
           {/* Profile Image */}
@@ -663,7 +686,7 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
+                  <Label htmlFor="name">Full Name or Organization Name</Label>
                   <Input
                     id="name"
                     value={profile.name}
@@ -682,7 +705,17 @@ export default function Settings() {
                       setProfile({ ...profile, email: e.target.value });
                     }}
                     disabled={userData?.email?.length > 0}
+                    placeholder={
+                      userData?.email?.length > 0
+                        ? "Email cannot be changed"
+                        : "Enter your email"
+                    }
                   />
+                  {!userProfile && (
+                    <p className="text-xs text-muted-foreground">
+                      Email is required and cannot be changed after registration
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
@@ -805,13 +838,20 @@ export default function Settings() {
             <Button
               onClick={handleSave}
               disabled={
-                !walletAddress || updateProfileMutation.isTransactionPending
+                !walletAddress ||
+                updateProfileMutation.isTransactionPending ||
+                registerUserMutation.isTransactionPending
               }
             >
               <Save className="w-4 h-4 mr-2" />
-              {updateProfileMutation.isTransactionPending
-                ? "Updating..."
-                : "Update Profile"}
+              {updateProfileMutation.isTransactionPending ||
+              registerUserMutation.isTransactionPending
+                ? userProfile
+                  ? "Updating..."
+                  : "Creating..."
+                : userProfile
+                ? "Update Profile"
+                : "Create Profile"}
             </Button>
           </div>
         </TabsContent>
@@ -819,71 +859,37 @@ export default function Settings() {
         {/* KYC Tab */}
         <TabsContent value="kyc" className="space-y-6">
           {/* KYC Status Banner */}
-          <Card
-            className={cn(
-              "border-l-4",
-              kycStatus === "not_started" && "border-l-muted-foreground",
-              kycStatus === "pending" && "border-l-yellow-500",
-              kycStatus === "verified" && "border-l-green-500",
-              kycStatus === "rejected" && "border-l-destructive"
-            )}
-          >
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div
-                  className={cn(
-                    "w-12 h-12 rounded-full flex items-center justify-center",
-                    kycStatus === "not_started" && "bg-muted",
-                    kycStatus === "pending" && "bg-yellow-500/10",
-                    kycStatus === "verified" && "bg-green-500/10",
-                    kycStatus === "rejected" && "bg-destructive/10"
-                  )}
-                >
-                  {kycStatus === "not_started" && (
-                    <Shield className="w-6 h-6 text-muted-foreground" />
-                  )}
-                  {kycStatus === "pending" && (
-                    <Clock className="w-6 h-6 text-yellow-500" />
-                  )}
-                  {kycStatus === "verified" && (
-                    <CheckCircle2 className="w-6 h-6 text-green-500" />
-                  )}
-                  {kycStatus === "rejected" && (
-                    <AlertCircle className="w-6 h-6 text-destructive" />
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-semibold">
-                    {kycStatus === "not_started" && "KYC Not Started"}
-                    {kycStatus === "pending" && "KYC Under Review"}
-                    {kycStatus === "verified" && "KYC Verified"}
-                    {kycStatus === "rejected" && "KYC Rejected"}
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    {kycStatus === "not_started" &&
-                      "Complete your KYC verification to unlock all features"}
-                    {kycStatus === "pending" &&
-                      "Your documents are being reviewed. This may take 1-3 business days."}
-                    {kycStatus === "verified" &&
-                      "Your identity has been verified successfully"}
-                    {kycStatus === "rejected" &&
-                      "Your KYC was rejected. Please resubmit with correct documents."}
+          <div className="flex items-start sm:items-center p-2 gap-2">
+            <img src={fred} className="w-16 h-16" />
+            <div className="flex-1">
+              <h3 className="font-semibold">
+                {kycStatus === "not_started" && "KYC Not Started"}
+                {kycStatus === "pending" && "KYC Under Review"}
+                {kycStatus === "verified" && "KYC Verified"}
+                {kycStatus === "rejected" && "KYC Rejected"}
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                {kycStatus === "not_started" &&
+                  "Complete your KYC verification to unlock all features"}
+                {kycStatus === "pending" &&
+                  "Your documents are being reviewed. This may take 1-3 business days."}
+                {kycStatus === "verified" &&
+                  "Your identity has been verified successfully"}
+                {kycStatus === "rejected" &&
+                  "Your KYC was rejected. Please resubmit with correct documents."}
+              </p>
+              {kycStatus === "rejected" && kycSubmission?.rejectionReason && (
+                <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
+                  <p className="text-sm font-medium text-destructive mb-1">
+                    Rejection Reason:
                   </p>
-                  {kycStatus === "rejected" &&
-                    kycSubmission?.rejectionReason && (
-                      <div className="mt-3 p-3 bg-destructive/10 border border-destructive/20 rounded-md">
-                        <p className="text-sm font-medium text-destructive mb-1">
-                          Rejection Reason:
-                        </p>
-                        <p className="text-sm text-foreground">
-                          {kycSubmission.rejectionReason}
-                        </p>
-                      </div>
-                    )}
+                  <p className="text-sm text-foreground">
+                    {kycSubmission.rejectionReason}
+                  </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
+              )}
+            </div>
+          </div>
 
           {/* KYC Form - Only show when status is not pending or verified */}
           {kycStatus !== "pending" && kycStatus !== "verified" && (
@@ -1011,29 +1017,23 @@ export default function Settings() {
 
           {/* Email Verification Warning */}
           {userProfile?.email?.length > 0 && !userProfile.isEmailVerified && (
-            <Card className="border-l-4 border-l-primary">
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                    <Mail className="w-6 h-6 text-primary" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-semibold">Verify Your Email</h3>
-                    <p className="text-sm text-muted-foreground">
-                      You need to verify your email address before you can refer
-                      others.
-                    </p>
-                  </div>
-                  <Button
-                    size="sm"
-                    className="w-full sm:w-auto"
-                    onClick={() => setEmailVerificationOpen(true)}
-                  >
-                    Verify Email
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">Verify Your Email</h3>
+                <p className="text-sm text-muted-foreground">
+                  You need to verify your email address before you can refer
+                  others.
+                </p>
+                <Button
+                  size="sm"
+                  className="w-full sm:w-auto mt-2"
+                  onClick={() => setEmailVerificationOpen(true)}
+                >
+                  Verify Email
+                </Button>
+              </div>
+            </div>
           )}
 
           {/* Referral Code */}
@@ -1255,156 +1255,134 @@ export default function Settings() {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {teamMembers.map((member) => (
-                      <Card key={member.id} className="border">
-                        <CardContent className="p-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-3 mb-2">
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                                  <User className="w-5 h-5 text-primary" />
+                    {teamMembers.map((member) => {
+                      const memberUser = member.memberUser;
+                      const displayName = memberUser?.email || member.member;
+                      const displayAddress = member.member;
+                      return (
+                        <Card key={member.id} className="border">
+                          <CardContent className="p-4">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                                    {memberUser?.email ? (
+                                      <Mail className="w-5 h-5 text-primary" />
+                                    ) : (
+                                      <User className="w-5 h-5 text-primary" />
+                                    )}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">
+                                      {memberUser?.email ||
+                                        `${displayAddress.slice(
+                                          0,
+                                          6
+                                        )}...${displayAddress.slice(-4)}`}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground font-mono truncate">
+                                      {displayAddress}
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">
-                                    {member.member.slice(0, 6)}...
-                                    {member.member.slice(-4)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground font-mono truncate">
-                                    {member.member}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex flex-wrap gap-2 mt-3">
-                                {member.canEditCleanups && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    Edit Cleanups
-                                  </Badge>
-                                )}
-                                {member.canManageParticipants && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    Manage Participants
-                                  </Badge>
-                                )}
-                                {member.canSubmitProof && (
-                                  <Badge
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    Submit Proof
-                                  </Badge>
-                                )}
-                                {!member.canEditCleanups &&
-                                  !member.canManageParticipants &&
-                                  !member.canSubmitProof && (
+                                <div className="flex flex-wrap gap-2 mt-3">
+                                  {member.canEditCleanups && (
                                     <Badge
-                                      variant="outline"
+                                      variant="secondary"
                                       className="text-xs"
                                     >
-                                      No permissions
+                                      Edit Cleanups
                                     </Badge>
                                   )}
+                                  {member.canManageParticipants && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      Manage Participants
+                                    </Badge>
+                                  )}
+                                  {member.canSubmitProof && (
+                                    <Badge
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      Submit Proof
+                                    </Badge>
+                                  )}
+                                  {!member.canEditCleanups &&
+                                    !member.canManageParticipants &&
+                                    !member.canSubmitProof && (
+                                      <Badge
+                                        variant="outline"
+                                        className="text-xs"
+                                      >
+                                        No permissions
+                                      </Badge>
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                  Added{" "}
+                                  {format(
+                                    new Date(member.addedAt * 1000),
+                                    "MMM d, yyyy"
+                                  )}
+                                </p>
                               </div>
-                              <p className="text-xs text-muted-foreground mt-2">
-                                Added{" "}
-                                {format(
-                                  new Date(member.addedAt * 1000),
-                                  "MMM d, yyyy"
-                                )}
-                              </p>
+                              <div className="flex items-center gap-2 shrink-0">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => {
+                                    setSelectedTeamMember(member);
+                                    setEditTeamMemberOpen(true);
+                                  }}
+                                  disabled={
+                                    updateTeamMemberPermissionsMutation.isTransactionPending
+                                  }
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive"
+                                  onClick={() => {
+                                    setSelectedTeamMember(member);
+                                    setRemoveTeamMemberOpen(true);
+                                  }}
+                                  disabled={
+                                    removeTeamMemberMutation.isTransactionPending
+                                  }
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </Button>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8"
-                                onClick={() => {
-                                  setSelectedTeamMember(member);
-                                  setEditTeamMemberOpen(true);
-                                }}
-                                disabled={
-                                  updateTeamMemberPermissionsMutation.isTransactionPending
-                                }
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-destructive hover:text-destructive"
-                                onClick={() => {
-                                  setSelectedTeamMember(member);
-                                  setRemoveTeamMemberOpen(true);
-                                }}
-                                disabled={
-                                  removeTeamMemberMutation.isTransactionPending
-                                }
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
                   </div>
                 )}
               </CardContent>
             </Card>
 
             {/* Team Help */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-medium">
-                  About Team Management
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-primary">1</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">Add Team Members</p>
-                      <p className="text-sm text-muted-foreground">
-                        Add team members by their wallet address. They must be
-                        registered users on the platform.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-primary">2</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">Set Permissions</p>
-                      <p className="text-sm text-muted-foreground">
-                        Grant specific permissions to each team member: edit
-                        cleanups, manage participants, or submit proof of work.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-bold text-primary">3</span>
-                    </div>
-                    <div>
-                      <p className="font-medium text-sm">Manage Access</p>
-                      <p className="text-sm text-muted-foreground">
-                        Update permissions or remove team members at any time.
-                        Changes take effect immediately.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">About Team Management</h3>
+                <p className="text-sm text-muted-foreground">
+                  Add team members by their wallet address. They must be
+                  registered users on the platform. Grant specific permissions
+                  to each team member: edit cleanups, manage participants, or
+                  submit proof of work. Update permissions or remove team
+                  members at any time. Changes take effect immediately.
+                </p>
+              </div>
+            </div>
           </TabsContent>
         )}
 
@@ -1422,46 +1400,34 @@ export default function Settings() {
               </CardContent>
             </Card>
           ) : !walletAddress ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <CreditCard className="w-12 h-12 text-muted-foreground/50" />
-                  <div className="text-center">
-                    <h3 className="font-medium text-muted-foreground">
-                      Connect Wallet
-                    </h3>
-                    <p className="text-sm text-muted-foreground/70 mt-1">
-                      Connect your wallet to manage bank accounts
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">Connect Wallet</h3>
+                <p className="text-sm text-muted-foreground">
+                  Connect your wallet to manage bank accounts
+                </p>
+              </div>
+            </div>
           ) : !isBankSupportedForUser || !userCurrency ? (
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-3">
-                  <CreditCard className="w-12 h-12 text-muted-foreground/50" />
-                  <div className="text-center">
-                    <h3 className="font-medium text-muted-foreground">
-                      Coming Soon
-                    </h3>
-                    <p className="text-sm text-muted-foreground/70 mt-1">
-                      Bank account management will be available soon for your
-                      country
-                    </p>
-                    {/* Temporary debug info - remove in production */}
-                    {process.env.NODE_ENV === "development" && (
-                      <p className="text-xs text-muted-foreground/50 mt-2">
-                        Debug: Country={userCountry || "undefined"}, Supported=
-                        {isBankSupportedForUser ? "yes" : "no"}, Currency=
-                        {userCurrency || "none"}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">Coming Soon</h3>
+                <p className="text-sm text-muted-foreground">
+                  Bank account management will be available soon for your
+                  country
+                </p>
+                {/* Temporary debug info - remove in production */}
+                {process.env.NODE_ENV === "development" && (
+                  <p className="text-xs text-muted-foreground/50 mt-2">
+                    Debug: Country={userCountry || "undefined"}, Supported=
+                    {isBankSupportedForUser ? "yes" : "no"}, Currency=
+                    {userCurrency || "none"}
+                  </p>
+                )}
+              </div>
+            </div>
           ) : (
             <>
               <Card>
@@ -1726,25 +1692,21 @@ export default function Settings() {
         {/* Account Tab */}
         <TabsContent value="account" className="space-y-6">
           {!walletAddress && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base font-medium flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Connect Wallet
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col items-center justify-center gap-4 py-4">
-                  <p className="text-sm text-muted-foreground text-center">
-                    Connect your wallet to access all settings and features
-                  </p>
+            <div className="flex items-start sm:items-center p-2 gap-2">
+              <img src={fred} className="w-16 h-16" />
+              <div className="flex-1">
+                <h3 className="font-semibold">Connect Wallet</h3>
+                <p className="text-sm text-muted-foreground">
+                  Connect your wallet to access all settings and features
+                </p>
+                <div className="mt-2">
                   <WalletButton
                     mobileVariant="iconAndDomain"
                     desktopVariant="iconAndDomain"
                   />
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           )}
           {walletAddress && (
             <Card>

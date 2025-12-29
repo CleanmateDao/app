@@ -326,7 +326,10 @@ export default function Streaks() {
       orderBy: "submittedAt",
       orderDirection: "desc",
     },
-    20 // pageSize
+    20, // pageSize
+    {
+      enabled: !!walletAddress,
+    }
   );
 
   // Flatten all pages into a single array
@@ -675,7 +678,7 @@ export default function Streaks() {
           open={rejectionDrawerOpen}
           onOpenChange={setRejectionDrawerOpen}
         >
-          <DrawerContent className="max-h-[90vh]">
+          <DrawerContent className="max-h-[80vh]">
             <DrawerHeader className="text-center">
               <div className="flex items-center justify-center gap-2 mb-2">
                 <XCircle className="h-6 w-6 text-status-rejected" />

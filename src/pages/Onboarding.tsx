@@ -197,14 +197,13 @@ export default function Onboarding() {
     setIsSubmitting(true);
 
     try {
-      const userMetadata: UserProfileMetadata<SupportedCountryCode, false> = {
+      const userMetadata: UserProfileMetadata<SupportedCountryCode, true> = {
         name: data.fullName,
         bio: data.bio || undefined,
         location: {
           country: data.country,
           state: data.state,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        } as any,
+        },
         interests: data.interests,
       };
 
@@ -404,7 +403,9 @@ export default function Onboarding() {
                   <Card>
                     <CardContent className="pt-6 space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="fullName">Full Name *</Label>
+                        <Label htmlFor="fullName">
+                          Full Name or Organization Name *
+                        </Label>
                         <Input
                           id="fullName"
                           placeholder="Your name"

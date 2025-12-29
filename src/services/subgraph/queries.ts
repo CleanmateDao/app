@@ -359,6 +359,7 @@ export function useTeamMembers(
         first: 100,
         where: {
           organizer: organizerAddress,
+          deleted: false,
         },
         orderBy: "addedAt",
         orderDirection: "desc",

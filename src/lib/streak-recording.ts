@@ -11,7 +11,7 @@ export interface RecordingConfig {
 const DEFAULT_CONFIG: RecordingConfig = {
   maxDuration: 5000, // 5 seconds
   minDuration: 2000, // 2 seconds
-  mimeType: "video/webm;codecs=vp8,opus",
+  mimeType: "video/webm;codecs=vp8", // Video only, no audio codec
 };
 
 export interface MediaItem {
@@ -77,7 +77,9 @@ export function processRecording(
         URL.revokeObjectURL(url);
         reject(
           new Error(
-            `Video must be at least ${minDuration / 1000} seconds long. Please record again.`
+            `Video must be at least ${
+              minDuration / 1000
+            } seconds long. Please record again.`
           )
         );
         return;
@@ -132,4 +134,3 @@ export function stopRecording(
     }
   });
 }
-

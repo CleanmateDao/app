@@ -11,6 +11,7 @@ import {
   Send,
   Video,
   Lightbulb,
+  ArrowLeft,
 } from "lucide-react";
 import { Swiper, SwiperSlide } from "swiper/react";
 import type { Swiper as SwiperType } from "swiper";
@@ -76,7 +77,19 @@ export default function StreakSubmit() {
   }, [streakStatsData]);
 
   // Submit streak mutation
-  const submitStreakMutation = useSubmitStreak();
+  const submitStreakMutation = useSubmitStreak(
+    () => {
+      setStep("success");
+      cleanupMediaItems(mediaItems);
+      setMediaItems([]);
+      navigate("/streaks");
+    },
+    () => {
+      setStep("record");
+      cleanupMediaItems(mediaItems);
+      setMediaItems([]);
+    }
+  );
 
   // Calculate if user can submit based on last submission time
   const canSubmit = useMemo(
@@ -238,12 +251,23 @@ export default function StreakSubmit() {
 
   // Play preview video when entering preview step
   useEffect(() => {
+    // Don't proceed if we're not in preview step or have no media items
+    if (step !== "preview" || mediaItems.length === 0) {
+      return;
+    }
+
+    // Ensure preview index is valid
+    if (currentPreviewIndexRef.current >= mediaItems.length) {
+      currentPreviewIndexRef.current = mediaItems.length - 1;
+    }
+
     const currentMedia = mediaItems[currentPreviewIndexRef.current];
-    if (step === "preview" && previewVideoRef.current && currentMedia) {
+    if (previewVideoRef.current && currentMedia) {
       const video = previewVideoRef.current;
       let isInitialized = false;
 
-      // Ensure source is set (it should already be from the video element)
+      // Ensure source is set (it should already be from the video element via JSX)
+      // Only update if it's different to avoid unnecessary reloads
       if (!video.src || video.src !== currentMedia.url) {
         video.src = currentMedia.url;
       }
@@ -306,8 +330,12 @@ export default function StreakSubmit() {
         video.removeEventListener("canplay", handleCanPlay);
         video.removeEventListener("ended", handleEnded);
       };
-    } else if (step !== "preview" && previewVideoRef.current) {
-      // Pause video when leaving preview step
+    }
+  }, [step, mediaItems]);
+
+  // Cleanup video when leaving preview step
+  useEffect(() => {
+    if (step !== "preview" && previewVideoRef.current) {
       const video = previewVideoRef.current;
       video.pause();
       video.currentTime = 0;
@@ -315,7 +343,7 @@ export default function StreakSubmit() {
       isVideoPlayingRef.current = false;
       setIsVideoPlaying(false);
     }
-  }, [step, mediaItems]);
+  }, [step]);
 
   // Pulse animation for record button
   useEffect(() => {
@@ -345,12 +373,16 @@ export default function StreakSubmit() {
 
         setMediaItems((prev) => {
           const newItems = [...prev, mediaItem];
-          if (prev.length === 0) {
-            setVideoDuration(mediaItem.duration || 0);
-          }
+          // Set current preview index to the newly added item (synchronous ref update)
+          currentPreviewIndexRef.current = newItems.length - 1;
+          // Update video duration for the current media item
+          setVideoDuration(mediaItem.duration || 0);
           return newItems;
         });
 
+        // Transition to preview step
+        // React will batch state updates, so both setMediaItems and setStep
+        // will be processed together, and the preview useEffect will run with correct state
         setStep("preview");
       } catch (error) {
         const errorMessage =
@@ -624,19 +656,6 @@ export default function StreakSubmit() {
         ipfsHashes,
         mimetypes,
       });
-
-      setStep("success");
-
-      cleanupMediaItems(mediaItems);
-      setMediaItems([]);
-
-      setTimeout(() => {
-        toast({
-          title: "Streak Submitted! 🔥",
-          description: "Your sustainable action has been recorded.",
-        });
-        navigate("/streaks");
-      }, 2500);
     } catch (error) {
       console.error("Failed to submit streak:", error);
       setStep("preview");
@@ -980,9 +999,9 @@ export default function StreakSubmit() {
               variant="ghost"
               size="icon"
               className="text-white hover:bg-white/20 rounded-full"
-              onClick={() => navigate("/streaks")}
+              onClick={() => setStep("record")}
             >
-              <X className="h-6 w-6" />
+              <ArrowLeft className="h-6 w-6" />
             </Button>
             <div className="flex items-center gap-2 px-4 py-2 bg-black/40 rounded-full backdrop-blur-sm">
               <CheckCircle className="h-4 w-4 text-status-approved" />

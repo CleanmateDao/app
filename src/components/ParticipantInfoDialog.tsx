@@ -151,7 +151,7 @@ export function ParticipantInfoDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="w-full">
+        <DrawerContent className="w-full max-h-[80vh]">
           <DrawerHeader>
             <DrawerTitle>Participant Details</DrawerTitle>
           </DrawerHeader>

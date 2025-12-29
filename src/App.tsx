@@ -27,7 +27,7 @@ import { useWalletAddress } from "./hooks/use-wallet-address";
 import { RecordingProvider } from "./contexts/RecordingContext";
 import { ExchangeRateProvider } from "./contexts/ExchangeRateContext";
 import { useUser } from "./services/subgraph/queries";
-import { useEffect } from "react";
+import { PopupHandler } from "./components/PopupHandler";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -88,6 +88,7 @@ const AppInner = () => {
 
   return (
     <QueryClientProvider client={queryClient}>
+      <PopupHandler />
       <VeChainKitProvider
         feeDelegation={{
           delegatorUrl: import.meta.env.VITE_DELEGATOR_URL!,
@@ -133,7 +134,6 @@ const AppInner = () => {
         loginModalUI={{
           description:
             "Choose between social login through VeChain or by connecting your wallet.",
-          // logo: "/logo.png",
         }}
         network={{ type: import.meta.env.VITE_VECHAIN_NETWORK }}
         allowCustomTokens={false}

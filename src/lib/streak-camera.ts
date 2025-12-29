@@ -19,14 +19,19 @@ export async function initCamera(
   config: CameraConfig = {}
 ): Promise<MediaStream | null> {
   try {
+    // Request only video (camera), explicitly no audio (microphone)
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: config.facingMode || "environment",
         width: config.width || { ideal: 1080 },
         height: config.height || { ideal: 1920 },
       },
-      audio: true,
+      audio: false, // Explicitly disable audio - only request camera permission
     });
+
+    // Defensive check: stop any audio tracks if they somehow exist
+    // (shouldn't happen since audio: false, but ensures no audio is captured)
+    stream.getAudioTracks().forEach((track) => track.stop());
 
     // Set zoom
     const videoTrack = stream.getVideoTracks()[0];

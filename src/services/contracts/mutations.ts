@@ -75,6 +75,7 @@ export function useRegisterUser(onTxConfirmedCallback?: () => void) {
         error instanceof Error ? error.message : error ?? "Unknown error";
       toast.error(`Registration failed: ${errorMessage}`);
     },
+    gasPadding: 0.1, // 10% padding
   });
 
   const execute = async (params: RegisterUserParams) => {
@@ -124,6 +125,7 @@ export function useRegisterWithReferral(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -188,6 +190,7 @@ export function useUpdateProfile(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -264,6 +267,7 @@ export function useSetReferralCode(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -331,6 +335,7 @@ export function useAddTeamMember(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -398,6 +403,7 @@ export function useRemoveTeamMember(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -467,6 +473,7 @@ export function useUpdateTeamMemberPermissions(
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -534,6 +541,7 @@ export function useMarkKYCPending(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.users() });
@@ -599,6 +607,7 @@ export function useCreateCleanup(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 1, // 100% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.cleanups() });
@@ -671,6 +680,7 @@ export function useApplyToCleanup(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Note: cleanupId needs to be passed via closure or ref
       // This will be handled by the execute function
@@ -739,6 +749,7 @@ export function useAcceptParticipant(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
       onTxConfirmedCallback?.();
@@ -810,6 +821,7 @@ export function useRejectParticipant(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
       onTxConfirmedCallback?.();
@@ -881,6 +893,7 @@ export function useUpdateCleanupStatus(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
       onTxConfirmedCallback?.();
@@ -953,6 +966,7 @@ export function useSubmitProofOfWork(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       onTxConfirmedCallback?.();
     },
@@ -1031,6 +1045,7 @@ export function useAddCleanupUpdate(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       // Handled in execute function
       onTxConfirmedCallback?.();
@@ -1103,6 +1118,7 @@ export function useClaimRewards(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.rewards() });
@@ -1165,6 +1181,7 @@ export function useJoinStreak(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
@@ -1211,7 +1228,10 @@ export function useJoinStreak(onTxConfirmedCallback?: () => void) {
   };
 }
 
-export function useSubmitStreak(onTxConfirmedCallback?: () => void) {
+export function useSubmitStreak(
+  onTxConfirmedCallback?: () => void,
+  onTxFailedOrCancelledCallback?: () => void
+) {
   const { account } = useWallet();
   const queryClient = useQueryClient();
   const { open } = useTransactionModal();
@@ -1226,6 +1246,7 @@ export function useSubmitStreak(onTxConfirmedCallback?: () => void) {
     error,
   } = useSendTransaction({
     signerAccountAddress: account?.address ?? null,
+    gasPadding: 0.1, // 10% padding
     onTxConfirmed: () => {
       setTimeout(() => {
         queryClient.invalidateQueries({ queryKey: subgraphKeys.streaks() });
@@ -1237,6 +1258,7 @@ export function useSubmitStreak(onTxConfirmedCallback?: () => void) {
       const errorMessage =
         error instanceof Error ? error.message : error ?? "Unknown error";
       toast.error(`Failed to submit streak: ${errorMessage}`);
+      onTxFailedOrCancelledCallback?.();
     },
   });
 

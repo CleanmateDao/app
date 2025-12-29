@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Flame, Loader2, CheckCircle } from "lucide-react";
+import fred from "@/assets/fred.png";
 import {
   Drawer,
   DrawerContent,
@@ -59,28 +60,21 @@ export function JoinStreakDrawer({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[90vh]">
-          <DrawerHeader className="text-center">
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <motion.div
-                animate={{ rotate: [0, -10, 10, 0] }}
-                transition={{
-                  duration: 0.5,
-                  repeat: Infinity,
-                  repeatDelay: 2,
-                }}
-              >
-                <Flame className="h-6 w-6 text-primary" />
-              </motion.div>
-              <DrawerTitle className="text-xl font-bold">
-                Join Streak Program
-              </DrawerTitle>
+        <DrawerContent className="max-h-[80vh]">
+          <DrawerHeader>
+            <div className="flex flex-col items-center gap-3 mb-4">
+              <img src={fred} className="w-14 h-14" />
+              <div className="text-center space-y-1">
+                <DrawerTitle className="text-xl font-bold">
+                  Join Streak Program
+                </DrawerTitle>
+                <DrawerDescription className="text-sm text-muted-foreground">
+                  {hasJoined
+                    ? "You've already joined the streak program!"
+                    : "Start your sustainable action journey and earn rewards"}
+                </DrawerDescription>
+              </div>
             </div>
-            <DrawerDescription className="text-sm text-muted-foreground">
-              {hasJoined
-                ? "You've already joined the streak program!"
-                : "Start your sustainable action journey and earn rewards"}
-            </DrawerDescription>
           </DrawerHeader>
 
           <div className="px-4 pb-4 space-y-4 overflow-y-auto">
@@ -195,26 +189,19 @@ export function JoinStreakDrawer({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
-          <div className="flex items-center justify-center gap-2 mb-2">
-            <motion.div
-              animate={{ rotate: [0, -10, 10, 0] }}
-              transition={{
-                duration: 0.5,
-                repeat: Infinity,
-                repeatDelay: 2,
-              }}
-            >
-              <Flame className="h-6 w-6 text-primary" />
-            </motion.div>
-            <DialogTitle className="text-xl font-bold">
-              Join Streak Program
-            </DialogTitle>
+          <div className="flex flex-col items-center gap-3 mb-4">
+            <img src={fred} className="w-20 h-20" />
+            <div className="text-center space-y-1">
+              <DialogTitle className="text-xl font-bold">
+                Join Streak Program
+              </DialogTitle>
+              <DialogDescription className="text-sm text-muted-foreground">
+                {hasJoined
+                  ? "You've already joined the streak program!"
+                  : "Start your sustainable action journey and earn rewards"}
+              </DialogDescription>
+            </div>
           </div>
-          <DialogDescription className="text-sm text-muted-foreground text-center">
-            {hasJoined
-              ? "You've already joined the streak program!"
-              : "Start your sustainable action journey and earn rewards"}
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-4">

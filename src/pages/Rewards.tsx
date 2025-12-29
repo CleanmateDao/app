@@ -339,14 +339,14 @@ export default function Rewards() {
         return;
       }
 
-      // Set deadline (1 hour from now)
-      const deadline = Math.floor(Date.now() / 1000) + 3600;
+      // Set deadline (10 mins from now)
+      const deadline = Math.floor(Date.now() / 1000) + 600;
 
       // Use VeChain Kit's requestTypedData for EIP-712 signing
       const domain = {
         name: "RewardsManager",
         version: "1",
-        chainId: Number(permitAddressInfo.chainId),
+        chainId: BigInt(permitAddressInfo.chainId),
         verifyingContract: permitAddressInfo.rewardsManagerAddress,
       };
 
@@ -373,6 +373,7 @@ export default function Rewards() {
 
       const signature = await signTypedData({
         primaryType: "Permit",
+        // @ts-expect-error - VeChain Kit types are not compatible with EIP-712
         domain,
         types,
         message,

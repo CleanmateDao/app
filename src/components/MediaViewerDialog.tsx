@@ -127,7 +127,7 @@ export function MediaViewerDialog({
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[90vh] flex flex-col">
+        <DrawerContent className="max-h-[80vh] flex flex-col">
           <DrawerHeader className="px-6 pt-6 pb-4 flex-shrink-0 border-b bg-background">
             <DrawerTitle className="text-lg font-semibold">
               {media.length > 1

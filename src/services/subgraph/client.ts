@@ -1,6 +1,7 @@
 import { GraphQLClient } from "graphql-request";
 import {
   GET_USER_QUERY,
+  GET_USERS_QUERY,
   GET_CLEANUP_QUERY,
   GET_CLEANUPS_QUERY,
   GET_CLEANUP_PARTICIPANTS_QUERY,
@@ -12,6 +13,7 @@ import {
   GET_USER_STREAK_STATS_QUERY,
   GET_CLEANUP_UPDATES_QUERY,
   type GetUserParams,
+  type GetUsersParams,
   type GetCleanupParams,
   type GetCleanupsParams,
   type GetCleanupParticipantsParams,
@@ -38,6 +40,7 @@ import {
   type TeamMembership_filter,
   type StreakSubmission_filter,
   type CleanupUpdate_filter,
+  type User_filter,
 } from "@cleanmate/cip-sdk";
 import type {
   GetUserResponse,
@@ -81,6 +84,29 @@ export const subgraphClient = {
       } as GetUserParams
     );
     return { user: response.user };
+  },
+
+  async getUsers(
+    params?: {
+      first?: number;
+      skip?: number;
+      where?: User_filter;
+      orderBy?: string;
+      orderDirection?: "asc" | "desc";
+    }
+  ): Promise<{ users: User[] }> {
+    const variables: GetUsersParams = {
+      first: params?.first ?? 5,
+      skip: params?.skip ?? 0,
+      where: params?.where,
+      orderBy: params?.orderBy as any,
+      orderDirection: params?.orderDirection ?? "desc",
+    };
+    const response = await client.request<{ users: User[] }>(
+      GET_USERS_QUERY,
+      variables
+    );
+    return { users: response.users };
   },
 
   async getCleanup(cleanupId: string): Promise<GetCleanupResponse> {
@@ -261,7 +287,16 @@ export const subgraphClient = {
       if (params.where.member) {
         where.member = normalizeAddress(params.where.member);
       }
+      // Filter out deleted memberships by default
+      if (params.where.deleted !== undefined) {
+        where.deleted = params.where.deleted;
+      } else {
+        where.deleted = false;
+      }
       variables.where = where;
+    } else {
+      // Default filter: only show non-deleted memberships
+      variables.where = { deleted: false };
     }
 
     const response = await client.request<{

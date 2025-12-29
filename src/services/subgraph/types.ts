@@ -59,6 +59,10 @@ export interface GetUserResponse {
   user: User | null;
 }
 
+export interface GetUsersResponse {
+  users: User[];
+}
+
 export interface GetCleanupResponse {
   cleanup: Cleanup | null;
 }
@@ -173,6 +177,23 @@ export interface GetNotificationsQueryParams {
 export interface TeamMembershipFilter {
   organizer?: string; // Bytes - address
   member?: string; // Bytes - address
+  deleted?: boolean;
+}
+
+export interface UserFilter {
+  id?: string; // Bytes - address
+  email?: string;
+  email_contains?: string;
+  email_starts_with?: string;
+  email_starts_with_nocase?: string;
+}
+
+export interface GetUsersQueryParams {
+  first?: number;
+  skip?: number;
+  where?: UserFilter;
+  orderBy?: User_orderBy;
+  orderDirection?: OrderDirection;
 }
 
 export interface GetTeamMembershipsQueryParams {
